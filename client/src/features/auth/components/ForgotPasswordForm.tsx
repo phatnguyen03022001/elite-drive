@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, ArrowRight, Loader2, LockKeyhole, Mail, ShieldCheck } from "lucide-react";
@@ -22,7 +22,7 @@ export function ForgotPasswordForm() {
     resolver: zodResolver(ForgotPasswordSchema),
     defaultValues: { email: "", code: "", newPassword: "" },
   });
-  const email = form.watch("email");
+  const email = useWatch({ control: form.control, name: "email" });
 
   useEffect(() => {
     if (countdown <= 0) return;
