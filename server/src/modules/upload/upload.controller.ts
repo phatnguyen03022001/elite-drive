@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   Controller,
   Post,
   UploadedFile,
@@ -9,6 +8,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBody, ApiConsumes, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { imageUploadOptions } from '../../common/upload/image-upload-options';
 import { UploadService } from './upload.service';
 
 @ApiTags('Upload')
@@ -30,20 +30,7 @@ export class UploadController {
       },
     },
   })
-  @UseInterceptors(
-    FileInterceptor('file', {
-      limits: { fileSize: 5 * 1024 * 1024, files: 1 },
-      fileFilter: (_req, file, callback) => {
-        const allowed = ['image/jpeg', 'image/png', 'image/webp'].includes(
-          file.mimetype,
-        );
-        callback(
-          allowed ? null : new BadRequestException('Định dạng ảnh không hợp lệ'),
-          allowed,
-        );
-      },
-    }),
-  )
+  @UseInterceptors(FileInterceptor('file', imageUploadOptions))
   async uploadImage(@UploadedFile() file: Express.Multer.File) {
     const url = await this.uploadService.uploadFile(file, 'cars');
     return { url };
