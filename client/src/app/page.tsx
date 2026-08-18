@@ -27,8 +27,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "https://elitedrive-demoversion.onrender.com";
-
 const formatDate = (date: Date) => date.toISOString().split("T")[0];
 
 const formatCurrency = (value?: number) =>
@@ -58,7 +56,7 @@ export default function HomePage() {
 
     async function loadFeaturedCars() {
       try {
-        const response = await fetch(`${API_BASE}/api/cars?limit=3`, {
+        const response = await fetch("/api/cars?limit=3", {
           signal: controller.signal,
           cache: "no-store",
         });
@@ -66,7 +64,7 @@ export default function HomePage() {
         const payload = await response.json();
         setFeaturedCars(Array.isArray(payload?.data) ? payload.data.slice(0, 3) : []);
       } catch {
-        // The landing page stays usable when the inventory API is temporarily unavailable.
+        // The landing page stays usable when inventory is temporarily unavailable.
       } finally {
         setInventoryLoading(false);
       }
@@ -131,18 +129,18 @@ export default function HomePage() {
         <div className="relative mx-auto grid max-w-7xl gap-12 px-5 pb-20 pt-28 lg:grid-cols-[1.05fr_.95fr] lg:px-8 lg:pt-36">
           <div className="max-w-3xl">
             <Badge className="mb-7 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-white backdrop-blur">
-              <Sparkles className="mr-2 h-3.5 w-3.5" /> Live premium car rental platform
+              <Sparkles className="mr-2 h-3.5 w-3.5" /> Premium car rental platform
             </Badge>
             <h1 className="text-5xl font-black leading-[.98] tracking-[-0.055em] sm:text-6xl lg:text-8xl">
               Drive something
               <span className="block text-white/45">worth remembering.</span>
             </h1>
             <p className="mt-7 max-w-2xl text-lg leading-8 text-white/65 sm:text-xl">
-              Discover verified vehicles, check real availability, book securely, and manage every trip from one account.
+              Discover verified vehicles, check availability, book securely, and manage every trip from one account.
             </p>
 
             <div className="mt-9 flex flex-wrap gap-3 text-sm text-white/70">
-              {["Real-time inventory", "Verified accounts", "Booking management", "Owner operations"].map((item) => (
+              {["Inventory search", "Verified accounts", "Booking management", "Owner operations"].map((item) => (
                 <span key={item} className="flex items-center gap-2 rounded-full border border-white/10 bg-black/25 px-4 py-2 backdrop-blur">
                   <Check className="h-4 w-4 text-white" /> {item}
                 </span>
@@ -154,7 +152,7 @@ export default function HomePage() {
             <div className="mb-6 flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.22em] text-white/45">Start your trip</p>
-                <h2 className="mt-2 text-2xl font-bold">Search live availability</h2>
+                <h2 className="mt-2 text-2xl font-bold">Search availability</h2>
               </div>
               <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-black">
                 <KeyRound className="h-5 w-5" />
@@ -213,7 +211,7 @@ export default function HomePage() {
             <Button type="submit" className="mt-5 h-12 w-full rounded-xl bg-white text-base font-bold text-black hover:bg-white/90">
               Search available cars <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
-            <p className="mt-4 text-center text-xs leading-5 text-white/40">Search criteria are passed to the live fleet API.</p>
+            <p className="mt-4 text-center text-xs leading-5 text-white/40">Search criteria are passed to the marketplace inventory API.</p>
           </form>
         </div>
       </section>
@@ -221,8 +219,8 @@ export default function HomePage() {
       <section id="fleet" className="mx-auto max-w-7xl px-5 py-24 lg:px-8">
         <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.24em] text-white/40">Live inventory</p>
-            <h2 className="mt-3 text-4xl font-black tracking-tight sm:text-5xl">Available now.</h2>
+            <p className="text-xs font-bold uppercase tracking-[0.24em] text-white/40">Marketplace inventory</p>
+            <h2 className="mt-3 text-4xl font-black tracking-tight sm:text-5xl">Available vehicles.</h2>
           </div>
           <Button asChild variant="outline" className="w-fit rounded-full border-white/20 bg-transparent text-white hover:bg-white hover:text-black">
             <Link href="/customer/cars">Browse the full fleet <ChevronRight className="ml-1 h-4 w-4" /></Link>
@@ -251,7 +249,11 @@ export default function HomePage() {
                     <p className="text-xs uppercase tracking-[0.18em] text-white/40">{car.transmission || "Vehicle"}</p>
                     <h3 className="mt-2 text-xl font-bold">{car.name || "Premium vehicle"}</h3>
                   </div>
-                  {car.rating ? <span className="flex items-center gap-1 text-sm"><Star className="h-4 w-4 fill-white" /> {car.rating}</span> : null}
+                  {car.averageRating > 0 ? (
+                    <span className="flex items-center gap-1 text-sm">
+                      <Star className="h-4 w-4 fill-white" /> {Number(car.averageRating).toFixed(1)}
+                    </span>
+                  ) : null}
                 </div>
                 <div className="mt-5 flex items-center justify-between border-t border-white/10 pt-5">
                   <div>
@@ -268,8 +270,8 @@ export default function HomePage() {
 
           {!inventoryLoading && featuredCars.length === 0 && (
             <div className="md:col-span-3 rounded-[1.75rem] border border-white/10 bg-white/[.03] p-10 text-center">
-              <p className="text-lg font-semibold">Live inventory is temporarily unavailable.</p>
-              <p className="mt-2 text-sm text-white/45">The platform remains accessible; try the fleet view again in a moment.</p>
+              <p className="text-lg font-semibold">Inventory is temporarily unavailable.</p>
+              <p className="mt-2 text-sm text-white/45">The marketplace remains accessible; try the fleet view again shortly.</p>
               <Button asChild className="mt-5 rounded-full bg-white text-black hover:bg-white/90">
                 <Link href="/customer/cars">Open fleet</Link>
               </Button>
@@ -287,7 +289,7 @@ export default function HomePage() {
 
           <div className="mt-12 grid gap-px overflow-hidden rounded-[2rem] border border-white/10 bg-white/10 md:grid-cols-2 lg:grid-cols-4">
             {[
-              { icon: CalendarDays, title: "Search & availability", body: "Filter the live fleet by dates, location, price and transmission." },
+              { icon: CalendarDays, title: "Search & availability", body: "Filter the marketplace by dates, location, price and transmission." },
               { icon: BadgeCheck, title: "Verified access", body: "Authentication and identity workflows separate renters, owners and administrators." },
               { icon: WalletCards, title: "Booking lifecycle", body: "Create bookings, track trip status and manage customer payment workflows." },
               { icon: ShieldCheck, title: "Owner operations", body: "Owners manage vehicles, bookings, calendars, trips, profile and wallet tools." },
@@ -356,7 +358,7 @@ export default function HomePage() {
           <p className="text-xs font-bold uppercase tracking-[0.24em] text-white/40">Ready when you are</p>
           <h2 className="mx-auto mt-3 max-w-3xl text-4xl font-black tracking-tight sm:text-5xl">Choose the car. Confirm the dates. Own the drive.</h2>
           <Button asChild size="lg" className="mt-8 rounded-full bg-white px-8 text-black hover:bg-white/90">
-            <Link href="/customer/cars">Browse live availability <ArrowRight className="ml-2 h-4 w-4" /></Link>
+            <Link href="/customer/cars">Browse availability <ArrowRight className="ml-2 h-4 w-4" /></Link>
           </Button>
         </div>
       </section>
