@@ -126,7 +126,7 @@ export const OwnerService = {
     return response.data;
   },
 
-  getCalendar: async (carId: string, params?: { page?: number; limit?: number }) => {
+  getCalendar: async (carId: string, params?: { start_date?: string; end_date?: string }) => {
     const response = await axios.get(`${BASE_URL}/cars/${carId}/calendar`, { params });
     return response.data;
   },
