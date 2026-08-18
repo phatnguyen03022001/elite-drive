@@ -27,14 +27,14 @@ export function QrPaymentBox({
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);
 
-  const confirmSandboxPayment = async () => {
+  const confirmTestPayment = async () => {
     setConfirming(true);
     try {
       await CustomerService.confirmPayment({
         bookingId,
-        transactionId: payment.transactionId || `SANDBOX-${payment.id}`,
+        transactionId: payment.transactionId || `TEST-${payment.id}`,
       });
-      toast.success("Payment recorded and booking confirmed");
+      toast.success("Payment state updated and booking confirmed");
       router.push("/customer/bookings");
       router.refresh();
     } catch (error: any) {
@@ -47,10 +47,9 @@ export function QrPaymentBox({
   return (
     <div className="space-y-6 py-1">
       <div>
-        <h2 className="text-lg font-semibold">Confirm sandbox transaction</h2>
+        <h2 className="text-lg font-semibold">Confirm test transaction</h2>
         <p className="mt-1 text-sm leading-6 text-muted-foreground">
-          Confirmation runs the backend transaction that marks the payment complete, moves the booking to confirmed,
-          records escrow, and creates the upcoming trip.
+          Confirmation marks the payment record complete and advances the approved booking into its confirmed trip workflow.
         </p>
       </div>
 
@@ -67,9 +66,9 @@ export function QrPaymentBox({
         </div>
       </div>
 
-      <Button className="w-full" onClick={confirmSandboxPayment} disabled={confirming}>
+      <Button className="w-full" onClick={confirmTestPayment} disabled={confirming}>
         {confirming ? <Loader2 className="animate-spin" /> : <CheckCircle2 />}
-        Complete sandbox payment
+        Complete test checkout
       </Button>
     </div>
   );
