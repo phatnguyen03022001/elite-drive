@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AdminService } from './admin.service';
+import { SecureAdminService } from './secure-admin.service';
 
 // Controllers
 import { AdminController } from './admin.controller';
@@ -9,8 +10,11 @@ import { AdminController } from './admin.controller';
 @Module({
   controllers: [AdminController],
   providers: [
-    AdminService,
-    // RedisService,
+    SecureAdminService,
+    {
+      provide: AdminService,
+      useExisting: SecureAdminService,
+    },
   ],
   exports: [AdminService],
 })
