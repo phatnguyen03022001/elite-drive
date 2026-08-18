@@ -86,7 +86,7 @@ export default function AdminOperationsDashboardPage() {
     if (!window.confirm("Reconcile pending MoMo payments with the provider now?")) return;
     setReconciling(true);
     try {
-      const response = await api.post("/api/admin/payments/momo/reconcile", { limit: 100 }) as { data?: ReconcileSummary };
+      const response = await api.post("/api/admin/payments/momo/reconcile?limit=100") as { data?: ReconcileSummary };
       const result = response.data ?? {};
       notify.success("MoMo reconciliation completed", {
         id: "admin-momo-reconcile",
