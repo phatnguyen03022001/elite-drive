@@ -1,38 +1,34 @@
-import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
 import { Logger, ValidationPipe } from '@nestjs/common';
+import { NestFactory } from '@nestjs/core';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { AppModule } from './app.module';
 import { AppSwaggerConfig } from './config/swagger/swagger.module';
 import { PrismaService } from './prisma/prisma.service';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const logger = new Logger('Bootstrap');
 
-  // --- Đoạn kiểm tra kết nối Mongo ---
   try {
     const prismaService = app.get(PrismaService);
     await prismaService.$connect();
-    logger.log('✅ [Database] Status: Connected to Prisma successfully');
+    logger.log('Database connection established');
   } catch (error) {
-    logger.error('❌ [Database] Status: Connection Failed', error);
+    logger.error('Database connection failed', error);
   }
-  // ----------------------------------
 
-  const config = new DocumentBuilder()
+  const swaggerConfig = new DocumentBuilder()
     .setTitle('Elite Drive API')
-    .setDescription('Elite Drive Backend API')
+    .setDescription('Elite Drive marketplace API')
     .setVersion('1.0.0')
     .addBearerAuth()
     .build();
 
-  const document = SwaggerModule.createDocument(app, config);
+  const swaggerDocument = SwaggerModule.createDocument(app, swaggerConfig);
+  SwaggerModule.setup('docs', app, swaggerDocument);
 
-  SwaggerModule.setup('docs', app, document);
-
-  // Optional: swagger json gốc
   app.getHttpAdapter().get('/docs-json', (_req, res) => {
-    res.json(document);
+    res.json(swaggerDocument);
   });
 
   AppSwaggerConfig.setup(app);
@@ -43,34 +39,38 @@ async function bootstrap() {
       whitelist: true,
     }),
   );
-  const allowedOrigins = [
-    'https://elite-drive-iota.vercel.app', // Đã sửa cho khớp với ảnh bạn gửi
-    'http://localhost:3000',
-    process.env.FRONTEND_URL,
-  ].filter(Boolean);
+
+  const configuredFrontendUrl = process.env.FRONTEND_URL;
+  const allowedOrigins = new Set(
+    [
+      'https://elite-drive-iota.vercel.app',
+      'http://localhost:3000',
+      configuredFrontendUrl,
+    ].filter((origin): origin is string => Boolean(origin)),
+  );
+  const allowVercelPreviews = process.env.ALLOW_VERCEL_PREVIEWS === 'true';
 
   app.enableCors({
     origin: (origin, callback) => {
-      // Logic kiểm tra linh hoạt hơn
       if (
         !origin ||
-        allowedOrigins.includes(origin) ||
-        origin.endsWith('.vercel.app')
+        allowedOrigins.has(origin) ||
+        (allowVercelPreviews && origin.endsWith('.vercel.app'))
       ) {
         callback(null, true);
-      } else {
-        callback(new Error('CORS Error: Origin not allowed'));
+        return;
       }
+
+      callback(new Error('CORS Error: Origin not allowed'));
     },
     credentials: true,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     allowedHeaders: 'Content-Type, Authorization, Accept',
   });
 
-  const port = 8000;
+  const port = Number(process.env.APP_PORT ?? 8000);
   await app.listen(port, '0.0.0.0');
-
-  logger.log(`🚀 App started on port ${port}`);
+  logger.log(`Elite Drive API listening on port ${port}`);
 }
 
 bootstrap();

@@ -44,7 +44,6 @@ jobs:
         run: npm run build
         env:
           BACKEND_URL: https://elitedrive-demoversion.onrender.com
-          NEXT_PUBLIC_API_URL: https://elitedrive-demoversion.onrender.com
           NEXT_PUBLIC_APP_URL: https://elite-drive-iota.vercel.app
 
   backend:
