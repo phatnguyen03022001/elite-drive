@@ -1,4 +1,4 @@
-import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { BookingStatus } from '@prisma/client';
 import { Type } from 'class-transformer';
 import {
@@ -35,107 +35,39 @@ export class KYCStatusResponseDto {
 }
 
 export class CreateCarDto {
-  @ApiProperty({ example: 'VinFast VF8' })
-  @IsNotEmpty()
-  @IsString()
-  name: string;
-
-  @ApiProperty({ example: 'VinFast' })
-  @IsNotEmpty()
-  @IsString()
-  brand: string;
-
-  @ApiProperty({ example: 'Plus' })
-  @IsNotEmpty()
-  @IsString()
-  model: string;
-
-  @ApiProperty({ example: 2023 })
-  @IsInt()
-  @Min(1900)
-  @Max(2100)
-  @Type(() => Number)
-  year: number;
-
-  @ApiProperty({ example: '51H-123.45' })
-  @IsNotEmpty()
-  @IsString()
-  licensePlate: string;
-
-  @ApiPropertyOptional({ example: 'Trắng' })
-  @IsOptional()
-  @IsString()
-  color?: string;
-
-  @ApiPropertyOptional({ example: 'Automatic' })
-  @IsOptional()
-  @IsString()
-  transmission?: string;
-
-  @ApiPropertyOptional({ example: 'Electric' })
-  @IsOptional()
-  @IsString()
-  fuelType?: string;
-
-  @ApiProperty({ example: 5 })
-  @IsInt()
-  @Min(1)
-  @Max(100)
-  @Type(() => Number)
-  seatCount: number;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  description?: string;
-
-  @ApiProperty({ example: 1000000 })
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  pricePerDay: number;
-
-  @ApiPropertyOptional({ example: 50000 })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(0)
-  pricePerHour?: number;
-
-  @ApiPropertyOptional({ example: 5000000 })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(0)
-  pricePerWeek?: number;
-
-  @ApiPropertyOptional({ example: 15000000 })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(0)
-  pricePerMonth?: number;
-
-  @ApiPropertyOptional({ description: 'ID danh mục xe' })
-  @IsOptional()
-  @IsString()
-  categoryId?: string;
-
-  @ApiPropertyOptional({ description: 'ID vị trí xe' })
-  @IsOptional()
-  @IsString()
-  locationId?: string;
+  @ApiProperty({ example: 'VinFast VF8' }) @IsNotEmpty() @IsString() name: string;
+  @ApiProperty({ example: 'VinFast' }) @IsNotEmpty() @IsString() brand: string;
+  @ApiProperty({ example: 'Plus' }) @IsNotEmpty() @IsString() model: string;
+  @ApiProperty({ example: 2023 }) @IsInt() @Min(1900) @Max(2100) @Type(() => Number) year: number;
+  @ApiProperty({ example: '51H-123.45' }) @IsNotEmpty() @IsString() licensePlate: string;
+  @ApiPropertyOptional({ example: 'Trắng' }) @IsOptional() @IsString() color?: string;
+  @ApiPropertyOptional({ example: 'Automatic' }) @IsOptional() @IsString() transmission?: string;
+  @ApiPropertyOptional({ example: 'Electric' }) @IsOptional() @IsString() fuelType?: string;
+  @ApiProperty({ example: 5 }) @IsInt() @Min(1) @Max(100) @Type(() => Number) seatCount: number;
+  @ApiPropertyOptional() @IsOptional() @IsString() description?: string;
+  @ApiProperty({ example: 1000000 }) @Type(() => Number) @IsInt() @Min(1) pricePerDay: number;
+  @ApiPropertyOptional({ example: 50000 }) @IsOptional() @Type(() => Number) @IsInt() @Min(0) pricePerHour?: number;
+  @ApiPropertyOptional({ example: 5000000 }) @IsOptional() @Type(() => Number) @IsInt() @Min(0) pricePerWeek?: number;
+  @ApiPropertyOptional({ example: 15000000 }) @IsOptional() @Type(() => Number) @IsInt() @Min(0) pricePerMonth?: number;
+  @ApiPropertyOptional({ description: 'ID danh mục xe' }) @IsOptional() @IsString() categoryId?: string;
+  @ApiPropertyOptional({ description: 'ID vị trí xe' }) @IsOptional() @IsString() locationId?: string;
 }
 
-export class UpdateCarDto extends PartialType(CreateCarDto) {
-  @ApiPropertyOptional() @IsOptional() @IsBoolean() isAvailable?: boolean;
+export class UpdateCarDto {
+  @ApiPropertyOptional() @IsOptional() @IsString() name?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() brand?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() model?: string;
+  @ApiPropertyOptional() @IsOptional() @Type(() => Number) @IsInt() @Min(1900) @Max(2100) year?: number;
+  @ApiPropertyOptional() @IsOptional() @IsString() licensePlate?: string;
+  @ApiPropertyOptional() @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) seatCount?: number;
+  @ApiPropertyOptional() @IsOptional() @Type(() => Number) @IsInt() @Min(1) pricePerDay?: number;
+  @ApiPropertyOptional() @IsOptional() @Type(() => Number) @IsInt() @Min(0) pricePerHour?: number;
+  @ApiPropertyOptional() @IsOptional() @IsString() categoryId?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() locationId?: string;
 }
 
 export class CreateCarDocumentDto {
-  @ApiProperty({ description: 'Ví dụ: Bảo hiểm, Đăng kiểm' })
-  @IsNotEmpty()
-  @IsString()
-  documentType: string;
+  @ApiProperty({ description: 'Ví dụ: Bảo hiểm, Đăng kiểm' }) @IsNotEmpty() @IsString() documentType: string;
   @ApiProperty() @IsNotEmpty() @IsUrl() documentUrl: string;
   @ApiPropertyOptional() @IsOptional() @IsDateString() expiryDate?: string;
 }
@@ -155,30 +87,17 @@ export class CreatePricingDto {
   @ApiPropertyOptional() @IsOptional() @Type(() => Number) @IsInt() @Min(0) pricePerWeek?: number;
   @ApiPropertyOptional() @IsOptional() @Type(() => Number) @IsInt() @Min(0) pricePerMonth?: number;
   @ApiPropertyOptional() @IsOptional() @IsNumber() @Min(0) @Max(100) discountPercentage?: number;
-  @ApiProperty() @IsNotEmpty() @IsDateString() effectiveFrom: string;
-  @ApiPropertyOptional() @IsOptional() @IsDateString() effectiveTo?: string;
 }
 
 export class BlockCalendarDto {
-  @ApiProperty({ example: '2026-02-14' })
-  @IsNotEmpty()
-  @IsDateString()
-  date: string;
+  @ApiProperty({ example: '2026-02-14' }) @IsNotEmpty() @IsDateString() date: string;
   @ApiPropertyOptional() @IsOptional() @IsString() blockedReason?: string;
-  @ApiPropertyOptional({ default: true })
-  @IsOptional()
-  @IsBoolean()
-  isBlocked?: boolean;
+  @ApiPropertyOptional({ default: true }) @IsOptional() @IsBoolean() isBlocked?: boolean;
 }
 
 export class GetCalendarDto {
-  @IsOptional()
-  @IsDateString()
-  start_date?: string;
-
-  @IsOptional()
-  @IsDateString()
-  end_date?: string;
+  @IsOptional() @IsDateString() start_date?: string;
+  @IsOptional() @IsDateString() end_date?: string;
 }
 
 export class CalendarResponseDto {
@@ -189,11 +108,7 @@ export class CalendarResponseDto {
 
 export class TripCheckinDto {
   @ApiProperty() @IsNumber() @Min(0) startOdometer: number;
-  @ApiProperty({ description: 'Phần trăm pin hoặc vạch xăng' })
-  @IsNumber()
-  @Min(0)
-  @Max(100)
-  startFuelLevel: number;
+  @ApiProperty({ description: 'Phần trăm pin hoặc vạch xăng' }) @IsNumber() @Min(0) @Max(100) startFuelLevel: number;
   @ApiPropertyOptional() @IsOptional() @IsString() pickupNotes?: string;
 }
 
@@ -204,10 +119,7 @@ export class TripCheckoutDto {
 }
 
 export class OwnerBookingQueryDto {
-  @ApiPropertyOptional({ enum: BookingStatus })
-  @IsOptional()
-  @IsEnum(BookingStatus)
-  status?: BookingStatus;
+  @ApiPropertyOptional({ enum: BookingStatus }) @IsOptional() @IsEnum(BookingStatus) status?: BookingStatus;
 }
 
 export class RejectBookingDto {
@@ -215,27 +127,15 @@ export class RejectBookingDto {
 }
 
 export class WithdrawRequestDto {
-  @ApiProperty({ example: 500000 })
-  @Type(() => Number)
-  @IsInt()
-  @Min(50000)
-  amount: number;
-
-  @ApiProperty({ description: 'UUID generated once per user withdrawal action' })
-  @IsUUID()
-  idempotencyKey: string;
-
+  @ApiProperty({ example: 500000 }) @Type(() => Number) @IsInt() @Min(50000) amount: number;
+  @ApiProperty({ description: 'UUID generated once per user withdrawal action' }) @IsUUID() idempotencyKey: string;
   @ApiPropertyOptional() @IsOptional() @IsString() bankAccountNumber?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() bankAccountName?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(500) description?: string;
 }
 
 export class RespondDisputeDto {
-  @ApiProperty()
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(4000)
-  message: string;
+  @ApiProperty() @IsString() @IsNotEmpty() @MaxLength(4000) message: string;
 }
 
 export class EarningResponseDto {
