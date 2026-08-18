@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const UserRole = z.enum(["CUSTOMER", "OWNER", "ADMIN"]);
-export const KYCStatus = z.enum(["PENDING", "APPROVED", "REJECTED"]);
+export const KYCStatus = z.enum(["NONE", "PENDING", "APPROVED", "REJECTED"]);
 export const BookingStatus = z.enum(["PENDING", "APPROVED", "REJECTED", "CONFIRMED", "COMPLETED", "CANCELLED"]);
 export const TripStatus = z.enum(["UPCOMING", "ONGOING", "COMPLETED"]);
 export const PaymentStatus = z.enum(["PENDING", "COMPLETED", "FAILED", "REFUNDED"]);
@@ -10,10 +10,7 @@ export const PaymentMethod = z.enum(["MOCK_QR", "MOMO"]);
 export const UpdateCustomerProfileSchema = z.object({
   firstName: z.string().min(2, "First name must be at least 2 characters.").optional(),
   lastName: z.string().min(2, "Last name must be at least 2 characters.").optional(),
-  phone: z
-    .string()
-    .regex(/^0\d{9}$/, "Phone number must start with 0 and contain 10 digits.")
-    .optional(),
+  phone: z.string().regex(/^0\d{9}$/, "Phone number must start with 0 and contain 10 digits.").optional(),
   avatar: z.union([z.string(), z.instanceof(File)]).optional(),
   dateOfBirth: z.string().optional().or(z.date()),
   address: z.string().min(1, "Address is required.").optional(),
@@ -43,7 +40,6 @@ export const CreateBookingSchema = z
 
 export const BookingQuerySchema = z.object({
   status: BookingStatus.optional(),
-  carId: z.string().optional(),
 });
 
 export const TripQuerySchema = z.object({
@@ -62,12 +58,6 @@ export const ConfirmPaymentSchema = z.object({
 
 export const SignContractSchema = z.object({
   signatureData: z.string().min(1, "Signature is required."),
-});
-
-export const WalletRefundSchema = z.object({
-  bookingId: z.string().min(1),
-  amount: z.number().min(0, "Refund amount is invalid."),
-  reason: z.string().min(1, "Refund reason is required."),
 });
 
 export const CreateReviewSchema = z.object({
@@ -96,9 +86,12 @@ export const WalletTransactionSchema = z.object({
 
 export const WalletTransactionListSchema = z.object({
   data: z.array(WalletTransactionSchema),
-  total: z.number(),
-  page: z.number(),
-  limit: z.number(),
+  meta: z.object({
+    total: z.number(),
+    page: z.number(),
+    lastPage: z.number(),
+    limit: z.number(),
+  }),
 });
 
 export const CreateWalletTopupSchema = z.object({
@@ -180,7 +173,6 @@ export type BookingQueryInput = z.infer<typeof BookingQuerySchema>;
 export type BookingDetailResponse = z.infer<typeof BookingDetailSchema>;
 export type CreatePaymentInput = z.infer<typeof CreatePaymentSchema>;
 export type SignContractInput = z.infer<typeof SignContractSchema>;
-export type WalletRefundInput = z.infer<typeof WalletRefundSchema>;
 export type CreateReviewInput = z.infer<typeof CreateReviewSchema>;
 export const CancelBookingResponseSchema = BookingDetailSchema;
 export type Wallet = z.infer<typeof WalletSchema>;
