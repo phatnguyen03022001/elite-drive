@@ -6,13 +6,13 @@ import { FlaskConical, ShieldCheck, Smartphone } from "lucide-react";
 import { PaymentMethodForm } from "@/features/customer/payments/[bookingId]/PaymentMethodForm";
 import { QrPaymentBox } from "@/features/customer/payments/[bookingId]/QrPaymentBox";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 
 type PaymentRecord = {
   id: string;
   amount: number;
   paymentMethod: "MOCK_QR" | "MOMO";
-  transactionId?: string | null;
+  transactionId?: string;
   mockQrUrl?: string;
 };
 
@@ -60,7 +60,7 @@ export default function PaymentPage() {
         </CardHeader>
         <CardContent>
           {!paymentResult ? (
-            <PaymentMethodForm bookingId={bookingId} onSuccess={setPaymentResult} />
+            <PaymentMethodForm bookingId={bookingId} onSuccess={(payment) => setPaymentResult({ ...payment, transactionId: payment.transactionId ?? undefined })} />
           ) : (
             <QrPaymentBox bookingId={bookingId} payment={paymentResult} />
           )}
