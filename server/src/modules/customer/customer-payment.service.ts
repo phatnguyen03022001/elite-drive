@@ -219,15 +219,15 @@ export class CustomerPaymentService {
     }
     this.assertMockPaymentsEnabled();
 
-    const wallet = await this.db.wallet.upsert({
+    await this.db.wallet.upsert({
       where: { userId },
       update: {},
       create: { userId },
     });
+
     return this.db.payment.create({
       data: {
         userId,
-        walletId: wallet.id,
         amount: dto.amount,
         paymentMethod,
         status: PaymentStatus.PENDING,
@@ -241,7 +241,12 @@ export class CustomerPaymentService {
 
     const result = await this.db.$transaction(async (tx) => {
       const payment = await tx.payment.findUnique({ where: { id: paymentId } });
-      if (!payment || !payment.walletId || payment.paymentMethod !== 'MOCK_QR') {
+      if (
+        !payment ||
+        payment.bookingId !== null ||
+        payment.paymentMethod !== 'MOCK_QR' ||
+        !payment.transactionId?.startsWith('TOPUP-')
+      ) {
         throw new BadRequestException('Giao dịch top-up không hợp lệ');
       }
 
@@ -250,6 +255,7 @@ export class CustomerPaymentService {
           id: paymentId,
           status: PaymentStatus.PENDING,
           paymentMethod: 'MOCK_QR',
+          bookingId: null,
         },
         data: { status: PaymentStatus.COMPLETED, paidAt: new Date() },
       });
@@ -257,13 +263,18 @@ export class CustomerPaymentService {
         throw new BadRequestException('Giao dịch top-up đã được xử lý');
       }
 
-      await tx.wallet.update({
-        where: { id: payment.walletId },
-        data: { balance: { increment: payment.amount } },
+      const wallet = await tx.wallet.upsert({
+        where: { userId: payment.userId },
+        create: {
+          userId: payment.userId,
+          balance: payment.amount,
+          currency: 'VND',
+        },
+        update: { balance: { increment: payment.amount } },
       });
       await tx.walletTransaction.create({
         data: {
-          walletId: payment.walletId,
+          walletId: wallet.id,
           amount: payment.amount,
           type: 'TOPUP',
           description: 'Wallet top-up',
