@@ -2,15 +2,17 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowRight, Banknote, Car, CreditCard, Gavel, RefreshCw, ShieldCheck, Vault } from "lucide-react";
+import { ArrowRight, Banknote, Car, CreditCard, Gavel, Loader2, RefreshCw, ShieldCheck, Vault } from "lucide-react";
+import api from "@/lib/axios";
 import { AdminService } from "@/features/admin/admin.service";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { notifyError } from "@/lib/notifications";
+import { notify, notifyError } from "@/lib/notifications";
 
 type CollectionLike = { data?: unknown[]; items?: unknown[]; total?: number };
+type ReconcileSummary = { scanned?: number; completed?: number; failed?: number; pending?: number };
 type DashboardState = {
   totalUsers: number;
   totalCars: number;
@@ -23,19 +25,8 @@ type DashboardState = {
   releasesPending: number;
 };
 
-const emptyState: DashboardState = {
-  totalUsers: 0,
-  totalCars: 0,
-  activeBookings: 0,
-  platformBalance: 0,
-  kycPending: 0,
-  carsPending: 0,
-  withdrawalsPending: 0,
-  disputesOpen: 0,
-  releasesPending: 0,
-};
-
-const money = new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 0 });
+const emptyState: DashboardState = { totalUsers: 0, totalCars: 0, activeBookings: 0, platformBalance: 0, kycPending: 0, carsPending: 0, withdrawalsPending: 0, disputesOpen: 0, releasesPending: 0 };
+const money = new Intl.NumberFormat("en-US", { style: "currency", currency: "VND", maximumFractionDigits: 0 });
 
 function collectionCount(value: unknown) {
   if (Array.isArray(value)) return value.length;
@@ -51,6 +42,7 @@ export default function AdminOperationsDashboardPage() {
   const [state, setState] = useState(emptyState);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [reconciling, setReconciling] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async (background = false) => {
@@ -78,8 +70,8 @@ export default function AdminOperationsDashboardPage() {
         releasesPending: collectionCount(releases),
       });
     } catch (requestError: unknown) {
-      setError("Một hoặc nhiều hàng đợi vận hành chưa tải được. Không có trạng thái nào bị thay đổi.");
-      notifyError("Không thể tải operations dashboard", requestError, "Hãy thử làm mới trước khi thực hiện tác vụ quản trị.", { id: "admin-operations-load" });
+      setError("One or more operational queues could not be loaded. No administrative state was changed.");
+      notifyError("Operations dashboard could not be loaded", requestError, "Refresh the dashboard before taking administrative action.", { id: "admin-operations-load" });
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -88,37 +80,52 @@ export default function AdminOperationsDashboardPage() {
 
   useEffect(() => { void load(); }, [load]);
 
-  const attentionTotal = useMemo(
-    () => state.kycPending + state.carsPending + state.withdrawalsPending + state.disputesOpen + state.releasesPending,
-    [state],
-  );
+  const attentionTotal = useMemo(() => state.kycPending + state.carsPending + state.withdrawalsPending + state.disputesOpen + state.releasesPending, [state]);
+
+  const runReconciliation = async () => {
+    if (!window.confirm("Reconcile pending MoMo payments with the provider now?")) return;
+    setReconciling(true);
+    try {
+      const response = await api.post("/api/admin/payments/momo/reconcile", { limit: 100 }) as { data?: ReconcileSummary };
+      const result = response.data ?? {};
+      notify.success("MoMo reconciliation completed", {
+        id: "admin-momo-reconcile",
+        description: `Scanned ${result.scanned ?? 0}; completed ${result.completed ?? 0}; failed ${result.failed ?? 0}; still pending ${result.pending ?? 0}.`,
+      });
+      await load(true);
+    } catch (requestError: unknown) {
+      notifyError("MoMo reconciliation failed", requestError, "No redirect is treated as payment proof. Retry when the provider is available.", { id: "admin-momo-reconcile" });
+    } finally {
+      setReconciling(false);
+    }
+  };
 
   const queues = [
-    ["KYC chờ duyệt", state.kycPending, "/admin/kyc", ShieldCheck, "Identity evidence cần quyết định."],
-    ["Xe chờ duyệt", state.carsPending, "/admin/cars", Car, "Nguồn cung chưa được publish."],
-    ["Yêu cầu rút tiền", state.withdrawalsPending, "/admin/withdraws", Banknote, "Owner payout cần xử lý."],
-    ["Tranh chấp mở", state.disputesOpen, "/admin/disputes", Gavel, "Case cần phản hồi hoặc resolution."],
-    ["Escrow chờ release", state.releasesPending, "/admin/escrow", Vault, "Trip hoàn tất đang giữ tiền."],
+    ["KYC awaiting review", state.kycPending, "/admin/kyc", ShieldCheck, "Identity evidence needs a decision."],
+    ["Vehicles awaiting review", state.carsPending, "/admin/cars", Car, "Supply cannot be published yet."],
+    ["Withdrawal requests", state.withdrawalsPending, "/admin/withdraws", Banknote, "Owner payouts need processing."],
+    ["Open disputes", state.disputesOpen, "/admin/disputes", Gavel, "Cases need a response or resolution."],
+    ["Escrow awaiting release", state.releasesPending, "/admin/escrow", Vault, "Completed trips are still holding funds."],
   ] as const;
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-8 py-2">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <div className="flex items-center gap-2">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Admin operations</p>
-            {!loading ? <Badge variant="secondary">{attentionTotal} cần chú ý</Badge> : null}
-          </div>
+          <div className="flex items-center gap-2"><p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Admin operations</p>{!loading ? <Badge variant="secondary">{attentionTotal} need attention</Badge> : null}</div>
           <h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">Operations dashboard</h1>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">Ưu tiên queue ảnh hưởng trực tiếp tới trust, nguồn cung và dòng tiền thay vì chỉ xem KPI tổng.</p>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">Prioritize queues that affect marketplace trust, supply and money movement instead of treating the admin area as a passive KPI dashboard.</p>
         </div>
-        <Button variant="outline" onClick={() => void load(true)} disabled={loading || refreshing}><RefreshCw className={refreshing ? "animate-spin" : ""} />Làm mới</Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => void load(true)} disabled={loading || refreshing}><RefreshCw className={refreshing ? "animate-spin" : ""} />Refresh</Button>
+          <Button onClick={() => void runReconciliation()} disabled={reconciling}>{reconciling ? <Loader2 className="animate-spin" /> : <CreditCard />}Reconcile MoMo</Button>
+        </div>
       </div>
 
-      {error ? <Card className="border-destructive/30"><CardHeader><CardTitle className="text-base">Dashboard chưa đầy đủ</CardTitle><CardDescription>{error}</CardDescription></CardHeader><CardContent><Button onClick={() => void load()}>Thử lại</Button></CardContent></Card> : null}
+      {error ? <Card className="border-destructive/30"><CardHeader><CardTitle className="text-base">Dashboard is incomplete</CardTitle><CardDescription>{error}</CardDescription></CardHeader><CardContent><Button onClick={() => void load()}>Try again</Button></CardContent></Card> : null}
 
       <section className="space-y-4">
-        <div><h2 className="text-xl font-semibold">Needs attention</h2><p className="mt-1 text-sm text-muted-foreground">Mở trực tiếp queue cần xử lý.</p></div>
+        <div><h2 className="text-xl font-semibold">Needs attention</h2><p className="mt-1 text-sm text-muted-foreground">Open the operational queue directly and resolve the item at its source.</p></div>
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
           {queues.map(([title, value, href, Icon, description]) => (
             <Link key={href} href={href} className="group rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
@@ -132,22 +139,18 @@ export default function AdminOperationsDashboardPage() {
       </section>
 
       <section className="space-y-4">
-        <div><h2 className="text-xl font-semibold">Platform health</h2><p className="mt-1 text-sm text-muted-foreground">Chỉ số tổng để định hướng; ledger mới là nguồn điều tra giao dịch.</p></div>
+        <div><h2 className="text-xl font-semibold">Platform health</h2><p className="mt-1 text-sm text-muted-foreground">High-level indicators provide direction; payment and wallet ledgers remain the investigation source.</p></div>
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <Metric label="Users" value={state.totalUsers.toLocaleString("vi-VN")} loading={loading} />
-          <Metric label="Vehicles" value={state.totalCars.toLocaleString("vi-VN")} loading={loading} />
-          <Metric label="Active bookings" value={state.activeBookings.toLocaleString("vi-VN")} loading={loading} />
+          <Metric label="Users" value={state.totalUsers.toLocaleString("en-US")} loading={loading} />
+          <Metric label="Vehicles" value={state.totalCars.toLocaleString("en-US")} loading={loading} />
+          <Metric label="Active bookings" value={state.activeBookings.toLocaleString("en-US")} loading={loading} />
           <Metric label="Platform wallet" value={money.format(state.platformBalance)} loading={loading} />
         </div>
       </section>
 
       <Card>
-        <CardHeader><CardTitle className="text-lg">Payment operations</CardTitle><CardDescription>MoMo redirect không phải bằng chứng thanh toán. Ledger, escrow và reconciliation là các công cụ điều tra/khôi phục trạng thái.</CardDescription></CardHeader>
-        <CardContent className="flex flex-wrap gap-2">
-          <Button asChild variant="outline"><Link href="/admin/reports"><CreditCard />Payment ledger</Link></Button>
-          <Button asChild variant="outline"><Link href="/admin/escrow"><Vault />Escrow</Link></Button>
-          <Button asChild variant="outline"><Link href="/admin/settlements"><Banknote />Settlements</Link></Button>
-        </CardContent>
+        <CardHeader><CardTitle className="text-lg">Payment operations</CardTitle><CardDescription>A MoMo redirect is never payment proof. Use the ledger for transaction investigation, escrow for held funds, and reconciliation for stale provider states.</CardDescription></CardHeader>
+        <CardContent className="flex flex-wrap gap-2"><Button asChild variant="outline"><Link href="/admin/reports"><CreditCard />Payment ledger</Link></Button><Button asChild variant="outline"><Link href="/admin/escrow"><Vault />Escrow</Link></Button><Button asChild variant="outline"><Link href="/admin/settlements"><Banknote />Settlements</Link></Button></CardContent>
       </Card>
     </div>
   );
