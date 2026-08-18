@@ -12,29 +12,26 @@ import {
 } from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { Roles } from '../../common/decorators/roles.decorator';
-import { DisputeStatus, UserRole } from '@prisma/client';
+import { UserRole } from '@prisma/client';
 import { ApiResponse } from '../../common/dto/response.dto';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 import {
-  // Reports
   ReportDateRangeDto,
-  // Promotions
   CreatePromotionDto,
   PromotionQueryDto,
   UpdatePromotionDto,
-  // Payments & Settlements
   PaymentQueryDto,
   RunSettlementDto,
   SettlementHistoryQueryDto,
-  // KYC
+  ReleasePaymentDto,
+  RefundPaymentDto,
   AdminKYCQueryDto,
   RejectKYCDto,
-  // Master Data
   CreateCategoryDto,
   CreateLocationDto,
-  // Disputes
-
-  // Cars
+  ResolveDisputeDto,
+  UpdateUserStatusDto,
+  RejectWithdrawDto,
 } from './dto/admin.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -42,14 +39,16 @@ import {
   CustomerProfileResponseDto,
   UpdateCustomerProfileDto,
 } from '../customer/dto/customer.dto';
+import { CustomerService } from '../customer/customer.service';
 
 @Controller('api/admin')
 @Roles(UserRole.ADMIN)
 export class AdminController {
-  customerService: any;
-  constructor(private readonly adminService: AdminService) {}
+  constructor(
+    private readonly adminService: AdminService,
+    private readonly customerService: CustomerService,
+  ) {}
 
-  // Profile
   @Get('profile')
   async getProfile(
     @CurrentUser('id') userId: string,
@@ -63,9 +62,8 @@ export class AdminController {
   async updateProfile(
     @CurrentUser('id') userId: string,
     @Body() dto: UpdateCustomerProfileDto,
-    @UploadedFile() avatarFile?: Express.Multer.File, // Đổi tên biến cho rõ ràng
+    @UploadedFile() avatarFile?: Express.Multer.File,
   ): Promise<ApiResponse<CustomerProfileResponseDto>> {
-    // Style giống KYC: Truyền userId, dto, và file vào service
     const updated = await this.customerService.updateProfile(
       userId,
       dto,
@@ -73,10 +71,6 @@ export class AdminController {
     );
     return ApiResponse.success(updated, 'Cập nhật thành công');
   }
-
-  // ===========================================================================
-  // 1. REPORTS & ANALYTICS
-  // ===========================================================================
 
   @Get('reports/overview')
   async getOverviewReport() {
@@ -96,10 +90,6 @@ export class AdminController {
     return ApiResponse.success(revenue);
   }
 
-  // ===========================================================================
-  // 2. CAR MANAGEMENT
-  // ===========================================================================
-
   @Get('cars/pending')
   async getPendingCars() {
     const cars = await this.adminService.getPendingCars();
@@ -114,7 +104,6 @@ export class AdminController {
 
   @Get('cars/all')
   async getAllCars(@Query('status') status?: string) {
-    // Ép kiểu hoặc validate status dựa trên Enum CarStatus nếu cần
     const cars = await this.adminService.getAllCars(status);
     return ApiResponse.success(cars);
   }
@@ -122,15 +111,11 @@ export class AdminController {
   @Post('cars/:car_id/reject')
   async rejectCar(
     @Param('car_id') carId: string,
-    @Body('reason') reason: string, // Nhận reason từ RejectCarDialog gửi lên
+    @Body('reason') reason: string,
   ) {
     await this.adminService.rejectCar(carId, reason);
     return ApiResponse.success(null, 'Đã từ chối phê duyệt xe');
   }
-
-  // ===========================================================================
-  // 3. KYC CUSTOMERS
-  // ===========================================================================
 
   @Get('kyc/customers')
   async getKycCustomers(@Query() query: PaginationDto & AdminKYCQueryDto) {
@@ -149,10 +134,6 @@ export class AdminController {
     await this.adminService.rejectKyc(userId, dto);
     return ApiResponse.success(null, 'KYC đã bị từ chối');
   }
-
-  // ===========================================================================
-  // 4. PROMOTIONS
-  // ===========================================================================
 
   @Post('promotions')
   async createPromotion(@Body() dto: CreatePromotionDto) {
@@ -175,10 +156,6 @@ export class AdminController {
     return ApiResponse.success(promotions);
   }
 
-  // ===========================================================================
-  // 5. PAYMENTS & SETTLEMENTS
-  // ===========================================================================
-
   @Get('payments')
   async getPayments(@Query() query: PaginationDto & PaymentQueryDto) {
     const payments = await this.adminService.getPayments(query);
@@ -199,36 +176,20 @@ export class AdminController {
     return ApiResponse.success(history);
   }
 
-  // ===========================================================================
-  // 6. DISPUTES
-  // ===========================================================================
-
   @Get('disputes')
-  @Roles(UserRole.ADMIN)
   async getAll(@Query() query: PaginationDto) {
     return this.adminService.getAllDisputes(query);
   }
 
-  // API xác nhận bắt đầu xử lý
   @Patch('disputes/:id/process')
-  @Roles(UserRole.ADMIN)
   async startProcessing(@Param('id') id: string) {
     return this.adminService.updateToInProgress(id);
   }
 
-  // API đóng/hoàn tất khiếu nại
   @Post('disputes/:id/resolve')
-  @Roles(UserRole.ADMIN)
-  async resolve(
-    @Param('id') id: string,
-    @Body() dto: { resolution: string; status: DisputeStatus },
-  ) {
+  async resolve(@Param('id') id: string, @Body() dto: ResolveDisputeDto) {
     return this.adminService.resolveDispute(id, dto);
   }
-
-  // ===========================================================================
-  // 7. MASTER DATA
-  // ===========================================================================
 
   @Post('categories')
   async createCategory(@Body() dto: CreateCategoryDto) {
@@ -243,13 +204,7 @@ export class AdminController {
   }
 
   @Post('payments/release')
-  async releasePayment(
-    @Body()
-    dto: {
-      bookingId: string;
-      platformFeePercent?: number;
-    },
-  ) {
+  async releasePayment(@Body() dto: ReleasePaymentDto) {
     const result = await this.adminService.releasePayment(dto);
     return ApiResponse.success(
       result,
@@ -258,14 +213,7 @@ export class AdminController {
   }
 
   @Post('payments/refund')
-  async refundPayment(
-    @Body()
-    dto: {
-      bookingId: string;
-      refundPercent?: number;
-      reason: string;
-    },
-  ) {
+  async refundPayment(@Body() dto: RefundPaymentDto) {
     const result = await this.adminService.refundPayment(dto);
     return ApiResponse.success(
       result,
@@ -273,14 +221,10 @@ export class AdminController {
     );
   }
 
-  // ================= PLATFORM WALLET =================
-
   @Get('wallets/platform')
   async getPlatformWallet() {
     return ApiResponse.success(await this.adminService.getPlatformWallet());
   }
-
-  // ================= GLOBAL LIST =================
 
   @Get('bookings/all')
   async getAllBookings(@Query() query: PaginationDto) {
@@ -292,8 +236,6 @@ export class AdminController {
     return ApiResponse.success(await this.adminService.getAllContracts(query));
   }
 
-  // ================= USERS =================
-
   @Get('users')
   async getUsers(@Query() query: PaginationDto) {
     return ApiResponse.success(await this.adminService.getUsers(query));
@@ -302,14 +244,11 @@ export class AdminController {
   @Patch('users/:id/status')
   async updateUserStatus(
     @Param('id') userId: string,
-    @Body('status') status: 'ACTIVE' | 'INACTIVE',
+    @Body() dto: UpdateUserStatusDto,
   ) {
-    const isActive = status === 'ACTIVE';
-    await this.adminService.updateUserStatus(userId, isActive);
+    await this.adminService.updateUserStatus(userId, dto.status === 'ACTIVE');
     return ApiResponse.success(null, 'Trạng thái user đã cập nhật');
   }
-
-  // ================= AUDIT =================
 
   @Get('escrow/pending-release')
   async getPendingReleaseTrips(@Query() query: PaginationDto) {
@@ -317,7 +256,6 @@ export class AdminController {
     return ApiResponse.success(result);
   }
 
-  // ================= WITHDRAW MANAGEMENT =================
   @Get('withdraws/pending')
   async getPendingWithdraws(@Query() query: PaginationDto) {
     const result = await this.adminService.getPendingWithdraws(query);
@@ -331,15 +269,11 @@ export class AdminController {
   }
 
   @Post('withdraws/:id/reject')
-  async rejectWithdraw(
-    @Param('id') id: string,
-    @Body('reason') reason: string,
-  ) {
-    await this.adminService.rejectWithdraw(id, reason);
+  async rejectWithdraw(@Param('id') id: string, @Body() dto: RejectWithdrawDto) {
+    await this.adminService.rejectWithdraw(id, dto.reason);
     return ApiResponse.success(null, 'Đã từ chối rút tiền');
   }
 
-  // ================= AUTO OPERATIONS =================
   @Post('settlements/auto-release')
   async autoReleasePayments() {
     const result = await this.adminService.autoReleaseCompletedTrips();
