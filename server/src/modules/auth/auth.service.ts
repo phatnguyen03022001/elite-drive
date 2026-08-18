@@ -4,12 +4,13 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  TooManyRequestsException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
-import { randomInt } from 'crypto';
+import { createHmac, randomInt } from 'crypto';
 
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -24,6 +25,9 @@ import { MailService } from '../mail/mail.service';
 
 @Injectable()
 export class AuthService {
+  private static readonly OTP_TTL_MS = 5 * 60 * 1000;
+  private static readonly OTP_RESEND_COOLDOWN_MS = 60 * 1000;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
@@ -38,20 +42,15 @@ export class AuthService {
     if (type === 'LOGIN' || type === 'FORGOT_PASSWORD') {
       const user = await this.prisma.user.findUnique({
         where: { email: dto.email },
+        select: { id: true },
       });
-      if (!user) throw new NotFoundException('Email không tồn tại');
+
+      // Return the same response for unknown accounts to avoid account enumeration.
+      if (!user) return this.otpSentResponse(type);
     }
 
     await this.createOtp(dto.email, type);
-
-    const action =
-      type === 'REGISTER'
-        ? 'đăng ký'
-        : type === 'LOGIN'
-          ? 'đăng nhập'
-          : 'đặt lại mật khẩu';
-
-    return { message: `OTP ${action} đã được gửi` };
+    return this.otpSentResponse(type);
   }
 
   async register(dto: RegisterDto) {
@@ -102,10 +101,11 @@ export class AuthService {
   }
 
   async verifyRegisterOtp(dto: VerifyOtpDto) {
-    await this.verifyOtp(dto.email, dto.code, 'REGISTER', true);
+    await this.consumeOtp(dto.email, dto.code, 'REGISTER');
 
-    await this.prisma.oTP.deleteMany({
-      where: { email: dto.email, type: 'REGISTER' },
+    await this.prisma.user.updateMany({
+      where: { email: dto.email, isVerified: false },
+      data: { isVerified: true },
     });
 
     return { message: 'Xác thực đăng ký thành công!' };
@@ -135,7 +135,7 @@ export class AuthService {
   }
 
   async verifyLoginOtp(dto: VerifyOtpDto) {
-    await this.verifyOtp(dto.email, dto.code, 'LOGIN');
+    await this.consumeOtp(dto.email, dto.code, 'LOGIN');
 
     const user = await this.prisma.user.findUnique({
       where: { email: dto.email },
@@ -143,15 +143,11 @@ export class AuthService {
 
     if (!user) throw new NotFoundException('Tài khoản không tồn tại');
 
-    await this.prisma.oTP.deleteMany({
-      where: { email: dto.email, type: 'LOGIN' },
-    });
-
     return this.generateTokens(user);
   }
 
   async forgotPassword(dto: ForgotPasswordDto) {
-    await this.verifyOtp(dto.email, dto.code, 'FORGOT_PASSWORD');
+    await this.consumeOtp(dto.email, dto.code, 'FORGOT_PASSWORD');
 
     const hashedPassword = await bcrypt.hash(dto.newPassword, 10);
 
@@ -160,19 +156,11 @@ export class AuthService {
       data: { password: hashedPassword },
     });
 
-    await this.prisma.oTP.deleteMany({
-      where: { email: dto.email, type: 'FORGOT_PASSWORD' },
-    });
-
     return { message: 'Mật khẩu đã được cập nhật thành công' };
   }
 
   async verifyForgotOtp(dto: VerifyOtpDto) {
-    await this.verifyOtp(dto.email, dto.code, 'FORGOT_PASSWORD');
-
-    await this.prisma.oTP.deleteMany({
-      where: { email: dto.email, type: 'FORGOT_PASSWORD' },
-    });
+    await this.assertOtpValid(dto.email, dto.code, 'FORGOT_PASSWORD');
 
     return {
       message: 'OTP hợp lệ, bạn có thể đặt lại mật khẩu',
@@ -180,52 +168,89 @@ export class AuthService {
     };
   }
 
+  private otpSentResponse(type: string) {
+    const action =
+      type === 'REGISTER'
+        ? 'đăng ký'
+        : type === 'LOGIN'
+          ? 'đăng nhập'
+          : 'đặt lại mật khẩu';
+
+    return { message: `Nếu email hợp lệ, OTP ${action} sẽ được gửi` };
+  }
+
   private async createOtp(email: string, type: string) {
+    const previousOtp = await this.prisma.oTP.findFirst({
+      where: { email, type },
+      orderBy: { createdAt: 'desc' },
+      select: { createdAt: true },
+    });
+
+    if (
+      previousOtp &&
+      Date.now() - previousOtp.createdAt.getTime() <
+        AuthService.OTP_RESEND_COOLDOWN_MS
+    ) {
+      throw new TooManyRequestsException(
+        'Vui lòng chờ trước khi yêu cầu OTP mới',
+      );
+    }
+
     const code = randomInt(100000, 1000000).toString();
+    const codeDigest = this.hashOtp(email, type, code);
 
     await this.prisma.oTP.deleteMany({ where: { email, type } });
 
-    const otp = await this.prisma.oTP.create({
+    await this.prisma.oTP.create({
       data: {
         email,
-        code,
+        code: codeDigest,
         type,
-        expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+        expiresAt: new Date(Date.now() + AuthService.OTP_TTL_MS),
       },
     });
 
     await this.mailService.sendOtp(email, code, type);
-
-    return otp;
   }
 
-  private async verifyOtp(
-    email: string,
-    code: string,
-    type: string,
-    markRegistrationVerified = false,
-  ) {
+  private async assertOtpValid(email: string, code: string, type: string) {
+    const codeDigest = this.hashOtp(email, type, code);
     const otp = await this.prisma.oTP.findFirst({
       where: {
         email,
-        code,
+        code: codeDigest,
         type,
         expiresAt: { gt: new Date() },
       },
+      select: { id: true },
     });
 
     if (!otp) {
       throw new BadRequestException('OTP không hợp lệ hoặc đã hết hạn');
     }
+  }
 
-    if (markRegistrationVerified) {
-      await this.prisma.user.updateMany({
-        where: { email, isVerified: false },
-        data: { isVerified: true },
-      });
+  private async consumeOtp(email: string, code: string, type: string) {
+    const codeDigest = this.hashOtp(email, type, code);
+    const result = await this.prisma.oTP.deleteMany({
+      where: {
+        email,
+        code: codeDigest,
+        type,
+        expiresAt: { gt: new Date() },
+      },
+    });
+
+    if (result.count !== 1) {
+      throw new BadRequestException('OTP không hợp lệ hoặc đã hết hạn');
     }
+  }
 
-    return otp;
+  private hashOtp(email: string, type: string, code: string) {
+    const secret = this.config.getOrThrow<string>('OTP_HASH_SECRET');
+    return createHmac('sha256', secret)
+      .update(`${email.toLowerCase()}:${type}:${code}`)
+      .digest('hex');
   }
 
   private generateTokens(user: { id: string; email: string; role: string }) {
