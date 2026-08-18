@@ -20,7 +20,7 @@ import { PaymentService } from './payment.service';
 
 @Controller('api/payments/momo')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.CUSTOMER, UserRole.OWNER, UserRole.ADMIN)
+@Roles(UserRole.CUSTOMER)
 export class MomoController {
   constructor(private readonly paymentService: PaymentService) {}
 
