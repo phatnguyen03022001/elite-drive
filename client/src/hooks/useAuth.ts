@@ -10,25 +10,45 @@ interface DecodedToken {
   sub: string;
   email: string;
 }
+
+function getSafeReturnTo(role: DecodedToken["role"]) {
+  if (typeof window === "undefined") return null;
+
+  const candidate = new URLSearchParams(window.location.search).get("returnTo");
+  if (!candidate || !candidate.startsWith("/") || candidate.startsWith("//")) return null;
+
+  // Marketplace discovery is public and safe for every authenticated role.
+  if (candidate === "/customer/cars" || candidate.startsWith("/customer/cars/")) return candidate;
+
+  if (role === "CUSTOMER" && candidate.startsWith("/customer/")) return candidate;
+  if (role === "OWNER" && candidate.startsWith("/owner/")) return candidate;
+  if (role === "ADMIN" && candidate.startsWith("/admin/")) return candidate;
+
+  return null;
+}
+
 export const useAuth = () => {
   const router = useRouter();
   const authQueries = useAuthQueries();
 
-  // Helper logic để xử lý sau khi có Token (Dùng chung cho cả Login mật khẩu và Login OTP)
   const handleAuthSuccess = (token: string) => {
     Cookies.set("token", token, { expires: 7, path: "/" });
-    toast.success("Đăng nhập thành công!");
 
     const decoded = jwtDecode<DecodedToken>(token);
+    const returnTo = getSafeReturnTo(decoded.role);
 
-    // Điều hướng dựa trên Role
-    if (decoded.role === "ADMIN") {
+    toast.success("Signed in successfully");
+
+    if (returnTo) {
+      router.push(returnTo);
+    } else if (decoded.role === "ADMIN") {
       router.push("/admin/kyc");
     } else if (decoded.role === "OWNER") {
       router.push("/owner/cars");
     } else {
       router.push("/customer/cars");
     }
+
     router.refresh();
   };
 
@@ -39,13 +59,12 @@ export const useAuth = () => {
         if (token) handleAuthSuccess(token);
       },
       onError: (err: any) => {
-        const msg = err.response?.data?.message || "Đăng nhập thất bại";
-        toast.error(typeof msg === "string" ? msg : "Sai thông tin đăng nhập");
+        const message = err.response?.data?.message;
+        toast.error(typeof message === "string" ? message : "Unable to sign in with those credentials");
       },
     });
   };
 
-  // --- MỚI: Xử lý Verify OTP Đăng nhập ---
   const handleVerifyLoginOtp = (data: { email: string; code: string }) => {
     authQueries.otp.verify.login.mutate(data, {
       onSuccess: (res: any) => {
@@ -53,22 +72,22 @@ export const useAuth = () => {
         if (token) handleAuthSuccess(token);
       },
       onError: (err: any) => {
-        const msg = err.response?.data?.message || "Mã OTP không đúng hoặc đã hết hạn";
-        toast.error(msg);
+        const message = err.response?.data?.message;
+        toast.error(typeof message === "string" ? message : "The verification code is invalid or has expired");
       },
     });
   };
 
   const handleLogout = () => {
     Cookies.remove("token");
-    toast.success("Đã đăng xuất");
+    toast.success("Signed out");
     router.push("/login");
     router.refresh();
   };
 
   return {
     login: handleLogin,
-    verifyLoginOtp: handleVerifyLoginOtp, // Trả ra hàm mới này
+    verifyLoginOtp: handleVerifyLoginOtp,
     logout: handleLogout,
     register: authQueries.register.mutate,
     resetPassword: authQueries.resetPassword.mutate,
@@ -80,7 +99,7 @@ export const useAuth = () => {
     verifyRegisterOtpLoading: authQueries.otp.verify.register.isPending,
     sendOtpRegisterLoading: authQueries.otp.send.register.isPending,
 
-    isLoading: authQueries.login.isPending || authQueries.otp.verify.login.isPending, // Thêm state loading cho verify login
+    isLoading: authQueries.login.isPending || authQueries.otp.verify.login.isPending,
     isOtpLoading:
       authQueries.otp.send.login.isPending ||
       authQueries.otp.send.register.isPending ||
