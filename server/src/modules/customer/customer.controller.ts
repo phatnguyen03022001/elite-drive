@@ -44,6 +44,7 @@ import {
 import { ApplyPromotionDto } from './dto/promotion.dto';
 import { CustomerBookingService } from './customer-booking.service';
 import { CustomerCancellationService } from './customer-cancellation.service';
+import { CustomerContractService } from './customer-contract.service';
 import { CustomerPaymentService } from './customer-payment.service';
 import { CustomerPromotionService } from './customer-promotion.service';
 import { CustomerReviewService } from './customer-review.service';
@@ -60,6 +61,7 @@ export class CustomerController {
     private readonly promotionService: CustomerPromotionService,
     private readonly cancellationService: CustomerCancellationService,
     private readonly reviewService: CustomerReviewService,
+    private readonly contractService: CustomerContractService,
   ) {}
 
   @Get('profile')
@@ -189,7 +191,7 @@ export class CustomerController {
 
   @Get('contracts/:booking_id')
   async getContract(@CurrentUser('id') userId: string, @Param('booking_id') bookingId: string): Promise<ApiResponse<ContractResponseDto>> {
-    return ApiResponse.success(await this.customerService.getContract(userId, bookingId));
+    return ApiResponse.success(await this.contractService.getContract(userId, bookingId));
   }
 
   @Post('contracts/:booking_id/sign')
@@ -198,7 +200,7 @@ export class CustomerController {
     @Param('booking_id') bookingId: string,
     @Body() dto: SignContractDto,
   ): Promise<ApiResponse<ContractResponseDto>> {
-    return ApiResponse.success(await this.customerService.signContract(userId, bookingId, dto), 'Contract signed');
+    return ApiResponse.success(await this.contractService.signContract(userId, bookingId, dto), 'Contract signed');
   }
 
   @Get('wallet')
