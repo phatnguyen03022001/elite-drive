@@ -5,10 +5,10 @@ import {
   IsIn,
   IsInt,
   IsNotEmpty,
-  IsNumber,
   IsOptional,
   IsString,
   Max,
+  MaxLength,
   Min,
 } from 'class-validator';
 import { BookingStatus, KYCStatus, TripStatus, UserRole } from '@prisma/client';
@@ -149,11 +149,11 @@ export class WalletTransactionResponseDto {
 }
 
 export class CreateReviewDto {
-  @ApiProperty() @IsString() carId: string;
-  @ApiPropertyOptional() @IsOptional() @IsString() bookingId?: string;
-  @ApiProperty({ minimum: 1, maximum: 5 }) @IsNumber() @Min(1) @Max(5) rating: number;
-  @ApiPropertyOptional() @IsOptional() @IsString() title?: string;
-  @ApiPropertyOptional() @IsOptional() @IsString() content?: string;
+  @ApiProperty() @IsNotEmpty() @IsString() carId: string;
+  @ApiProperty() @IsNotEmpty() @IsString() bookingId: string;
+  @ApiProperty({ minimum: 1, maximum: 5 }) @IsInt() @Min(1) @Max(5) rating: number;
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(120) title?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(2000) content?: string;
 }
 
 export class CreateWalletTopupDto {
