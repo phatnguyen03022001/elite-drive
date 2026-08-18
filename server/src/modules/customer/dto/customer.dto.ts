@@ -1,26 +1,25 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
-  IsString,
+  IsDateString,
+  IsEnum,
+  IsIn,
+  IsInt,
   IsNotEmpty,
   IsNumber,
-  Min,
-  Max,
   IsOptional,
-  IsEnum,
-  IsDateString,
-  IsInt,
+  IsString,
+  Max,
+  Min,
 } from 'class-validator';
-import { TripStatus, BookingStatus, UserRole, KYCStatus } from '@prisma/client';
+import { BookingStatus, KYCStatus, TripStatus, UserRole } from '@prisma/client';
 import { Optional } from '@nestjs/common';
 import { Type } from 'class-transformer';
-
-// --- GROUP 1: PROFILE & KYC ---
 
 export class UpdateCustomerProfileDto {
   @ApiPropertyOptional() @IsOptional() @IsString() firstName?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() lastName?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() phone?: string;
-  @ApiPropertyOptional() @IsOptional() avatar?: any;
+  @ApiPropertyOptional() @IsOptional() @IsString() avatar?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() licenseNumber?: string;
   @ApiPropertyOptional() @IsOptional() @IsDateString() licenseExpiry?: string;
   @ApiPropertyOptional() @IsOptional() @IsDateString() dateOfBirth?: string;
@@ -59,27 +58,20 @@ export class CustomerProfileResponseDto {
 export class CreateKYCDto {
   @ApiProperty() @IsNotEmpty() @IsString() documentType: string;
   @ApiProperty() @IsNotEmpty() @IsString() documentNumber: string;
-  // @ApiProperty() @IsNotEmpty() @IsString() documentFrontUrl: string; // Đổi tên
-  // @ApiProperty() @IsNotEmpty() @IsString() documentBackUrl: string; // Thêm mới
-  // @ApiProperty() @IsNotEmpty() @IsString() faceImageUrl: string;
 }
 
 export class KYCStatusResponseDto {
   @ApiProperty({ enum: ['NONE', 'PENDING', 'APPROVED', 'REJECTED'] })
   status: 'NONE' | 'PENDING' | 'APPROVED' | 'REJECTED';
 
-  // Thêm các trường này để trả về thông tin đã gửi
   @ApiProperty() @Optional() documentType?: string;
   @ApiProperty() @Optional() documentNumber?: string;
   @ApiProperty() @Optional() documentFrontUrl?: string;
   @ApiProperty() @Optional() documentBackUrl?: string;
   @ApiProperty() @Optional() faceImageUrl?: string;
-
   @ApiProperty() @Optional() rejectionReason?: string;
-  @ApiProperty() @Optional() submittedAt?: Date | null; // Cho phép null nếu status là NONE
+  @ApiProperty() @Optional() submittedAt?: Date | null;
 }
-
-// --- GROUP 2: BOOKING & TRIPS ---
 
 export class CreateBookingDto {
   @ApiProperty() @IsNotEmpty() @IsString() carId: string;
@@ -92,18 +84,20 @@ export class CreateBookingDto {
 
 export class BookingQueryDto {
   @IsOptional()
-  @Type(() => Number) // Chuyển đổi String sang Number
+  @Type(() => Number)
   @IsInt()
   @Min(1)
   page?: number;
 
   @IsOptional()
-  @Type(() => Number) // Chuyển đổi String sang Number
+  @Type(() => Number)
   @IsInt()
   @Min(1)
+  @Max(50)
   limit?: number;
 
   @IsOptional()
+  @IsEnum(BookingStatus)
   status?: BookingStatus;
 }
 
@@ -130,16 +124,17 @@ export class TripStatusResponseDto {
   @ApiPropertyOptional() checkoutTime?: Date;
 }
 
-// --- GROUP 3: PAYMENT & CONTRACT ---
-
 export class CreatePaymentDto {
-  @ApiProperty() @IsString() bookingId: string;
-  @ApiProperty() @IsString() paymentMethod: string;
+  @ApiProperty() @IsNotEmpty() @IsString() bookingId: string;
+  @ApiProperty({ enum: ['MOCK_QR', 'MOMO'] })
+  @IsString()
+  @IsIn(['MOCK_QR', 'MOMO'])
+  paymentMethod: string;
 }
 
 export class ConfirmPaymentDto {
-  @ApiProperty() @IsString() bookingId: string;
-  @ApiProperty() @IsString() transactionId: string;
+  @ApiProperty() @IsNotEmpty() @IsString() bookingId: string;
+  @ApiProperty() @IsNotEmpty() @IsString() transactionId: string;
 }
 
 export class PaymentBookingParamDto {
@@ -160,8 +155,6 @@ export class ContractResponseDto {
   @ApiProperty() status: string;
   @ApiPropertyOptional() customerSignedAt?: Date;
 }
-
-// --- GROUP 4: WALLET & REVIEWS ---
 
 export class WalletRefundDto {
   @ApiProperty() @IsNotEmpty() @IsString() bookingId: string;
@@ -190,15 +183,36 @@ export class CreateReviewDto {
 }
 
 export class CreateWalletTopupDto {
-  @IsNumber()
+  @Type(() => Number)
+  @IsInt()
   @Min(1000)
   amount: number;
 
   @IsString()
-  paymentMethod: string; // MOCK_QR | VNPAY | MOMO...
+  @IsIn(['MOCK_QR'])
+  paymentMethod: string;
 
   @IsOptional()
+  @IsString()
   description?: string;
+}
+
+export class CreateDisputeDto {
+  @IsString()
+  @IsNotEmpty()
+  type: string;
+
+  @IsOptional()
+  @IsString()
+  bookingId?: string;
+
+  @IsString()
+  @IsNotEmpty()
+  title: string;
+
+  @IsString()
+  @IsNotEmpty()
+  description: string;
 }
 
 export class SearchCarQueryDto {
@@ -219,10 +233,13 @@ export class SearchCarQueryDto {
   @IsOptional()
   @Type(() => Number)
   @IsInt()
+  @Min(1)
   page?: number = 1;
 
   @IsOptional()
   @Type(() => Number)
   @IsInt()
+  @Min(1)
+  @Max(50)
   limit?: number = 20;
 }
