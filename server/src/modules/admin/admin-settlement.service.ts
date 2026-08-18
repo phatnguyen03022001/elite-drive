@@ -48,7 +48,13 @@ export class AdminSettlementService {
           ownerId: { in: ownerIds },
           type: 'WITHDRAW',
           status: 'completed',
-          updatedAt: { gte: start, lt: end },
+          OR: [
+            { processedAt: { gte: start, lt: end } },
+            {
+              processedAt: null,
+              updatedAt: { gte: start, lt: end },
+            },
+          ],
         },
         _sum: { amount: true },
       }),
