@@ -13,7 +13,7 @@ describe('AdminWithdrawalService invariants', () => {
     expect(db.$transaction).not.toHaveBeenCalled();
   });
 
-  it('records the external reference and explicit processed time on approval', async () => {
+  it('records the external reference and supports legacy records without processedAt', async () => {
     const tx = {
       ownerTransaction: {
         findUnique: jest.fn().mockResolvedValue({
@@ -47,7 +47,10 @@ describe('AdminWithdrawalService invariants', () => {
         id: 'withdraw-1',
         type: 'WITHDRAW',
         status: 'pending',
-        processedAt: null,
+        OR: [
+          { processedAt: null },
+          { processedAt: { isSet: false } },
+        ],
       },
       data: {
         status: 'completed',
