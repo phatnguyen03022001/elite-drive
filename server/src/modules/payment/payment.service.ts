@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { BookingStatus, PaymentStatus } from '@prisma/client';
+import { assertVndAmount } from '../../common/money/vnd';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MomoIpnDto } from './dto/momo.dto';
 import { MomoGatewayService } from './momo-gateway.service';
@@ -42,6 +43,7 @@ export class PaymentService {
     if (!payment.transactionId) {
       throw new BadRequestException('Payment thiếu merchant order id');
     }
+    assertVndAmount(payment.amount, { min: 1000, field: 'Số tiền MoMo' });
 
     const requestId = this.checkoutRequestId(payment.id);
     const result = await this.momo.createCheckout({
@@ -73,11 +75,13 @@ export class PaymentService {
     if (!payment.transactionId) {
       throw new BadRequestException('Payment thiếu merchant order id');
     }
+    assertVndAmount(payment.amount, { min: 1000, field: 'Số tiền MoMo' });
 
     const result = await this.momo.queryStatus(
       payment.transactionId,
       `QUERY-${payment.id}`,
     );
+    this.assertProviderAmount(payment.amount, result.amount);
 
     const localStatus = await this.applyProviderResult(
       payment.id,
@@ -126,10 +130,12 @@ export class PaymentService {
       if (!payment.transactionId) continue;
       summary.checked += 1;
       try {
+        assertVndAmount(payment.amount, { min: 1000, field: 'Số tiền MoMo' });
         const result = await this.momo.queryStatus(
           payment.transactionId,
           `RECON-${payment.id}`,
         );
+        this.assertProviderAmount(payment.amount, result.amount);
         const status = await this.applyProviderResult(
           payment.id,
           payment.status,
@@ -155,6 +161,7 @@ export class PaymentService {
     if (!this.momo.verifyIpn(payload)) {
       throw new UnauthorizedException('Chữ ký MoMo không hợp lệ');
     }
+    assertVndAmount(payload.amount, { min: 1000, field: 'Số tiền MoMo IPN' });
 
     const payment = await this.db.payment.findFirst({
       where: { transactionId: payload.orderId },
@@ -162,6 +169,7 @@ export class PaymentService {
     if (!payment) {
       throw new NotFoundException('Không tìm thấy payment tương ứng MoMo order');
     }
+    assertVndAmount(payment.amount, { min: 1000, field: 'Số tiền payment' });
 
     if (
       payment.transactionId !== payload.orderId ||
@@ -230,6 +238,14 @@ export class PaymentService {
     return payment;
   }
 
+  private assertProviderAmount(localAmount: number, providerAmount?: number) {
+    if (providerAmount === undefined) return;
+    assertVndAmount(providerAmount, { min: 1000, field: 'Số tiền MoMo response' });
+    if (providerAmount !== localAmount) {
+      throw new BadRequestException('Số tiền MoMo không khớp payment local');
+    }
+  }
+
   private async completePayment(paymentId: string, providerTransactionId?: number) {
     return this.db.$transaction(async (tx) => {
       const payment = await tx.payment.findUnique({
@@ -238,6 +254,16 @@ export class PaymentService {
       });
       if (!payment || !payment.booking) {
         throw new NotFoundException('Payment hoặc booking không tồn tại');
+      }
+      assertVndAmount(payment.amount, { min: 1000, field: 'Số tiền payment' });
+      assertVndAmount(payment.booking.totalPrice, {
+        min: 1000,
+        field: 'Tổng tiền booking',
+      });
+      if (payment.amount !== payment.booking.totalPrice) {
+        throw new BadRequestException(
+          'Số tiền payment không khớp tổng tiền booking',
+        );
       }
 
       if (payment.status === PaymentStatus.COMPLETED) return payment;
