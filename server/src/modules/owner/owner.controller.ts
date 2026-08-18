@@ -13,6 +13,7 @@ import {
 } from '@nestjs/common';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { UserRole } from '@prisma/client';
+import { OwnerBookingService } from './owner-booking.service';
 import { OwnerFinanceService } from './owner-finance.service';
 import { OwnerService } from './owner.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -49,6 +50,7 @@ export class OwnerController {
   constructor(
     private readonly ownerService: OwnerService,
     private readonly financeService: OwnerFinanceService,
+    private readonly bookingService: OwnerBookingService,
   ) {}
 
   @Get('profile')
@@ -230,7 +232,7 @@ export class OwnerController {
     @CurrentUser('id') userId: string,
     @Query() query: PaginationDto & OwnerBookingQueryDto,
   ) {
-    const { data, total, page, limit } = await this.ownerService.getBookings(
+    const { data, total, page, limit } = await this.bookingService.getBookings(
       userId,
       query,
     );
@@ -242,7 +244,7 @@ export class OwnerController {
     @CurrentUser('id') userId: string,
     @Param('booking_id') bookingId: string,
   ) {
-    const booking = await this.ownerService.approveBooking(userId, bookingId);
+    const booking = await this.bookingService.approveBooking(userId, bookingId);
     return ApiResponse.success(booking, 'Booking approved');
   }
 
@@ -252,7 +254,7 @@ export class OwnerController {
     @Param('booking_id') bookingId: string,
     @Body() dto: RejectBookingDto,
   ) {
-    const booking = await this.ownerService.rejectBooking(userId, bookingId, dto);
+    const booking = await this.bookingService.rejectBooking(userId, bookingId, dto);
     return ApiResponse.success(booking, 'Booking declined');
   }
 
