@@ -3,6 +3,24 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { OwnerFinanceService } from './owner-finance.service';
 
 describe('OwnerFinanceService invariants', () => {
+  it('rejects fractional VND withdraw amounts before database access', async () => {
+    const db = {
+      ownerTransaction: { findUnique: jest.fn() },
+      $transaction: jest.fn(),
+    } as unknown as PrismaService;
+    const service = new OwnerFinanceService(db);
+
+    await expect(
+      service.requestWithdraw('owner-1', {
+        amount: 50000.5,
+        idempotencyKey: '550e8400-e29b-41d4-a716-446655440000',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(
+      (db as unknown as { $transaction: jest.Mock }).$transaction,
+    ).not.toHaveBeenCalled();
+  });
+
   it('does not create a withdraw when atomic balance reservation fails', async () => {
     const tx = {
       wallet: {
@@ -33,7 +51,7 @@ describe('OwnerFinanceService invariants', () => {
     expect(tx.walletTransaction.create).not.toHaveBeenCalled();
   });
 
-  it('returns an existing withdraw for the same idempotency key', async () => {
+  it('returns an existing withdraw for the same idempotency key and amount', async () => {
     const existing = {
       id: '507f1f77bcf86cd799439011',
       ownerId: 'owner-1',
@@ -55,7 +73,32 @@ describe('OwnerFinanceService invariants', () => {
     });
 
     expect(result).toBe(existing);
-    expect((db as unknown as { $transaction: jest.Mock }).$transaction).not.toHaveBeenCalled();
+    expect(
+      (db as unknown as { $transaction: jest.Mock }).$transaction,
+    ).not.toHaveBeenCalled();
+  });
+
+  it('rejects replaying an idempotency key with a different amount', async () => {
+    const db = {
+      ownerTransaction: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: '507f1f77bcf86cd799439011',
+          ownerId: 'owner-1',
+          type: 'WITHDRAW',
+          amount: 100000,
+          status: 'pending',
+        }),
+      },
+      $transaction: jest.fn(),
+    } as unknown as PrismaService;
+    const service = new OwnerFinanceService(db);
+
+    await expect(
+      service.requestWithdraw('owner-1', {
+        amount: 150000,
+        idempotencyKey: '550e8400-e29b-41d4-a716-446655440000',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('calculates total earnings from all matching rows, not only current page', async () => {
