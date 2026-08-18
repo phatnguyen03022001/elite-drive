@@ -17,6 +17,7 @@ import {
   Users,
   Vault,
   Wallet,
+  WalletCards,
 } from "lucide-react";
 
 export const ROLE_NAV_CONFIG = {
@@ -61,6 +62,7 @@ export const ROLE_NAV_CONFIG = {
     { label: "Finance", items: [
       { title: "Platform finance", href: "/admin/escrow", icon: Vault },
       { title: "Payment ledger", href: "/admin/reports", icon: CreditCard },
+      { title: "Wallet reconciliation", href: "/admin/wallets", icon: WalletCards },
       { title: "Settlements", href: "/admin/settlements", icon: DollarSign },
       { title: "Withdrawals", href: "/admin/withdraws", icon: Banknote },
     ] },
