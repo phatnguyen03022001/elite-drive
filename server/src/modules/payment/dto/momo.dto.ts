@@ -22,7 +22,7 @@ export class MomoIpnDto {
   requestId: string;
 
   @Type(() => Number)
-  @IsNumber()
+  @IsInt()
   @Min(0)
   amount: number;
 
