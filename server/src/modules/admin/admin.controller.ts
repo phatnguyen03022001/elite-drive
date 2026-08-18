@@ -28,6 +28,7 @@ import { CustomerService } from '../customer/customer.service';
 import { AdminFinanceService } from './admin-finance.service';
 import { AdminPromotionService } from './admin-promotion.service';
 import { AdminRefundService } from './admin-refund.service';
+import { AdminSettlementService } from './admin-settlement.service';
 import { AdminService } from './admin.service';
 import {
   AdminKYCQueryDto,
@@ -59,6 +60,7 @@ export class AdminController {
     private readonly financeService: AdminFinanceService,
     private readonly promotionService: AdminPromotionService,
     private readonly refundService: AdminRefundService,
+    private readonly settlementService: AdminSettlementService,
     private readonly customerService: CustomerService,
   ) {}
 
@@ -156,12 +158,12 @@ export class AdminController {
 
   @Post('settlements/run')
   async runSettlement(@Body() dto: RunSettlementDto) {
-    return ApiResponse.success(await this.financeService.runSettlement(dto), 'Settlement đã chạy');
+    return ApiResponse.success(await this.settlementService.run(dto), 'Settlement đã chạy');
   }
 
   @Get('settlements/history')
   async getSettlementHistory(@Query() query: PaginationDto & SettlementHistoryQueryDto) {
-    return ApiResponse.success(await this.financeService.getSettlementHistory(query));
+    return ApiResponse.success(await this.settlementService.getHistory(query));
   }
 
   @Get('disputes')
