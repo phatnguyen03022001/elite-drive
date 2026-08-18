@@ -1,17 +1,11 @@
 import { Module } from '@nestjs/common';
-
-import { OwnerService } from './owner.service';
-import { SecureOwnerService } from './secure-owner.service';
 import { OwnerController } from './owner.controller';
+import { OwnerFinanceService } from './owner-finance.service';
+import { OwnerService } from './owner.service';
 
 @Module({
   controllers: [OwnerController],
-  providers: [
-    SecureOwnerService,
-    {
-      provide: OwnerService,
-      useExisting: SecureOwnerService,
-    },
-  ],
+  providers: [OwnerService, OwnerFinanceService],
+  exports: [OwnerService, OwnerFinanceService],
 })
 export class OwnerModule {}
