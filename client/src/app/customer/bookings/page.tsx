@@ -1,490 +1,287 @@
 "use client";
 
-import {
-  Clock,
-  MapPin,
-  Star,
-  AlertCircle,
-  Loader2,
-  CreditCard,
-  QrCode,
-  CheckCircle2,
-  XCircle,
-  Send,
-} from "lucide-react";
-import { useEffect, useState } from "react";
-import axios from "axios";
-import Cookies from "js-cookie";
+import Link from "next/link";
+import Image from "next/image";
+import { useEffect, useMemo, useState } from "react";
+import { CalendarDays, Car, CreditCard, Loader2, MapPin, Star, XCircle } from "lucide-react";
 import { toast } from "sonner";
-
+import { CustomerService } from "@/features/customer/customer.service";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogDescription,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import Image from "next/image";
-
 import { Textarea } from "@/components/ui/textarea";
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-const API_CUSTOMER = `${BASE_URL}/api/customer`;
-
-// 2. Khởi tạo Instance với API_CUSTOMER
-const axiosInstance = axios.create({
-  baseURL: API_CUSTOMER, // Luôn sử dụng URL tuyệt đối từ biến môi trường
-  withCredentials: true, // Cần thiết để làm việc với Cookie/Session trên Render
-  headers: {
-    "Content-Type": "application/json",
-  },
+const currency = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "VND",
+  maximumFractionDigits: 0,
 });
 
-// 3. Interceptor gắn Token
-axiosInstance.interceptors.request.use((config) => {
-  if (typeof window !== "undefined") {
-    const token = Cookies.get("token");
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-  }
-  return config;
+const dateFormatter = new Intl.DateTimeFormat("en-US", {
+  day: "2-digit",
+  month: "short",
+  year: "numeric",
 });
 
-// 4. Hàm gọi API rút gọn
-const callAPI = async (endpoint: string, options: any = {}) => {
-  try {
-    const response = await axiosInstance({
-      url: endpoint, // endpoint truyền vào ví dụ: "/bookings"
-      method: options.method || "GET",
-      data: options.body, // KHÔNG dùng JSON.stringify ở đây, Axios sẽ tự xử lý
-      params: options.params,
-    });
-    return response.data;
-  } catch (error: any) {
-    const message = error.response?.data?.message || error.message || "API Error";
-    throw new Error(message);
-  }
+const statusLabel: Record<string, string> = {
+  PENDING: "Awaiting owner",
+  APPROVED: "Ready for payment",
+  REJECTED: "Declined",
+  CONFIRMED: "Confirmed",
+  COMPLETED: "Completed",
+  CANCELLED: "Cancelled",
 };
 
+function statusVariant(status: string): "default" | "secondary" | "destructive" | "outline" {
+  if (["REJECTED", "CANCELLED"].includes(status)) return "destructive";
+  if (["CONFIRMED", "COMPLETED"].includes(status)) return "outline";
+  if (status === "APPROVED") return "default";
+  return "secondary";
+}
+
 export default function MyBookingsPage() {
-  const [loading, setLoading] = useState(true);
   const [bookings, setBookings] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("all");
   const [selectedBooking, setSelectedBooking] = useState<any>(null);
-  const [paymentData, setPaymentData] = useState<any>(null);
-  const [showPayment, setShowPayment] = useState(false);
-
   const [showReviewDialog, setShowReviewDialog] = useState(false);
   const [reviewData, setReviewData] = useState({ rating: 0, content: "" });
-  const [hoveredRating, setHoveredRating] = useState(0);
   const [submittingReview, setSubmittingReview] = useState(false);
 
   const fetchBookings = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-      const res = await callAPI("/bookings");
-      setBookings(res.data || []);
+      const result = await CustomerService.getBookings({ page: 1, limit: 50 });
+      setBookings(Array.isArray(result) ? result : result?.data ?? []);
     } catch (error: any) {
-      toast.error("Không thể tải lịch sử đặt xe");
+      toast.error(error?.message || "Could not load your bookings");
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchBookings();
+    void fetchBookings();
   }, []);
 
-  const getBadgeVariant = (status: string) => {
-    switch (status) {
-      case "PENDING":
-        return "secondary"; // vàng nhạt
-      case "APPROVED":
-        return "default"; // primary/blue
-      case "CONFIRMED":
-      case "COMPLETED":
-        return "outline"; // xanh lá nhạt hoặc outline
-      case "CANCELLED":
-        return "destructive";
-      default:
-        return "secondary";
+  const filteredBookings = useMemo(() => {
+    if (activeTab === "active") {
+      return bookings.filter((booking) => ["PENDING", "APPROVED", "CONFIRMED"].includes(booking.status));
     }
-  };
+    if (activeTab === "completed") return bookings.filter((booking) => booking.status === "COMPLETED");
+    return bookings;
+  }, [activeTab, bookings]);
 
-  const getStatusLabel = (status: string) => {
-    switch (status) {
-      case "PENDING":
-        return "Chờ xác nhận";
-      case "APPROVED":
-        return "Đã duyệt - Chờ thanh toán";
-      case "CONFIRMED":
-        return "Đã thanh toán";
-      case "CANCELLED":
-        return "Đã hủy";
-      case "COMPLETED":
-        return "Hoàn thành";
-      default:
-        return status;
-    }
-  };
-
-  const filteredBookings = bookings.filter((b) => {
-    if (activeTab === "all") return true;
-    if (activeTab === "pending") return b.status === "PENDING";
-    if (activeTab === "approved") return b.status === "APPROVED";
-    if (activeTab === "completed") return ["COMPLETED", "CONFIRMED"].includes(b.status);
-    return true;
-  });
-
-  const handleCreatePayment = async (booking: any) => {
-    if (booking.status !== "APPROVED") {
-      toast.error("Chỉ có thể thanh toán khi Owner đã duyệt đơn");
-      return;
-    }
-
-    setLoading(true);
+  const cancelBooking = async (bookingId: string) => {
+    if (!window.confirm("Cancel this booking? Any eligible refund will be returned to your Elite Drive wallet.")) return;
     try {
-      const res = await callAPI("/payments/create", {
-        method: "POST",
-        body: JSON.stringify({
-          bookingId: booking.id,
-          paymentMethod: "VNPAY",
-        }),
-      });
-
-      if (res.success) {
-        setSelectedBooking(booking);
-        setPaymentData(res.data);
-        setShowPayment(true);
-      }
-    } catch (err: any) {
-      toast.error(err.message || "Không thể tạo thanh toán");
-    } finally {
-      setLoading(false);
+      await CustomerService.cancelBooking(bookingId);
+      toast.success("Booking cancelled");
+      await fetchBookings();
+    } catch (error: any) {
+      toast.error(error?.message || "Could not cancel this booking");
     }
   };
 
-  const handleMockScan = async () => {
-    setLoading(true);
-    try {
-      await fetch(paymentData.mockQrUrl);
-      toast.success("Thanh toán thành công!");
-      setShowPayment(false);
-      setPaymentData(null);
-      setSelectedBooking(null);
-      fetchBookings();
-    } catch {
-      toast.error("Lỗi xác nhận thanh toán");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleCancelBooking = async (bookingId: string) => {
-    if (!confirm("Bạn có chắc muốn hủy đơn này?")) return;
-
-    setLoading(true);
-    try {
-      await callAPI(`/bookings/${bookingId}/cancel`, { method: "PUT" });
-      toast.success("Đã hủy đơn đặt xe");
-      fetchBookings();
-    } catch (err: any) {
-      toast.error(err.message || "Không thể hủy đơn");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleOpenReview = (booking: any) => {
+  const openReview = (booking: any) => {
     setSelectedBooking(booking);
     setReviewData({ rating: 0, content: "" });
     setShowReviewDialog(true);
   };
 
-  const onSubmitReview = async () => {
-    if (reviewData.rating === 0) return toast.error("Vui lòng chọn số sao");
-    if (reviewData.content.length < 10) return toast.error("Nội dung đánh giá quá ngắn");
+  const submitReview = async () => {
+    if (!selectedBooking) return;
+    if (reviewData.rating < 1) {
+      toast.error("Choose a star rating");
+      return;
+    }
+    if (reviewData.content.trim().length < 10) {
+      toast.error("Write at least 10 characters about your trip");
+      return;
+    }
 
     setSubmittingReview(true);
     try {
-      await callAPI("/reviews", {
-        method: "POST",
-        body: JSON.stringify({
-          bookingId: selectedBooking.id,
-          carId: selectedBooking.carId,
-          rating: reviewData.rating,
-          content: reviewData.content,
-          title: `Đánh giá chuyến đi ${selectedBooking.car?.name}`,
-        }),
+      await CustomerService.createReview({
+        bookingId: selectedBooking.id,
+        carId: selectedBooking.carId || selectedBooking.car?.id,
+        rating: reviewData.rating,
+        title: `Trip with ${selectedBooking.car?.name || "Elite Drive"}`,
+        content: reviewData.content.trim(),
       });
-
-      toast.success("Cảm ơn bạn đã đánh giá!");
+      toast.success("Review submitted");
       setShowReviewDialog(false);
-      fetchBookings(); // Load lại để cập nhật trạng thái nếu cần
-    } catch (err: any) {
-      toast.error(err.message || "Không thể gửi đánh giá");
+      await fetchBookings();
+    } catch (error: any) {
+      toast.error(error?.message || "Could not submit your review");
     } finally {
       setSubmittingReview(false);
     }
   };
 
-  if (loading && bookings.length === 0) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <Loader2 className="h-10 w-10 animate-spin" />
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen py-8">
-      <div className="max-w-5xl mx-auto px-4 md:px-6">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold tracking-tight">Lịch sử đặt xe</h1>
-          <p className="text-muted-foreground mt-1">Theo dõi hành trình và quản lý các giao dịch của bạn</p>
-        </div>
+    <div className="mx-auto w-full max-w-6xl space-y-8 py-2">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Trips</p>
+        <h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">My bookings</h1>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+          Follow each rental from owner approval through payment, handover, completion, and review.
+        </p>
+      </div>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="all">Tất cả</TabsTrigger>
-            <TabsTrigger value="pending">Chờ duyệt</TabsTrigger>
-            {/* <TabsTrigger value="approved">Đã duyệt</TabsTrigger> */}
-            <TabsTrigger value="completed">Hoàn thành</TabsTrigger>
-          </TabsList>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+        <TabsList className="grid w-full max-w-lg grid-cols-3">
+          <TabsTrigger value="all">All</TabsTrigger>
+          <TabsTrigger value="active">Active</TabsTrigger>
+          <TabsTrigger value="completed">Completed</TabsTrigger>
+        </TabsList>
 
-          <TabsContent value={activeTab} className="space-y-6">
-            {loading ? (
-              <div className="space-y-4">
-                {[...Array(3)].map((_, i) => (
-                  <Card key={i}>
-                    <CardContent className="p-6">
-                      <div className="flex flex-col md:flex-row gap-6">
-                        <Skeleton className="h-24 w-24 rounded-xl" />
-                        <div className="flex-1 space-y-3">
-                          <Skeleton className="h-5 w-3/4" />
-                          <Skeleton className="h-4 w-full" />
-                          <Skeleton className="h-4 w-2/3" />
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            ) : filteredBookings.length === 0 ? (
-              <Card>
-                <CardContent className="py-20 text-center">
-                  <p className="text-muted-foreground">Không có đơn đặt xe nào</p>
+        <TabsContent value={activeTab} className="space-y-4">
+          {loading ? (
+            Array.from({ length: 3 }).map((_, index) => (
+              <Card key={index}>
+                <CardContent className="flex gap-5 p-6">
+                  <Skeleton className="h-24 w-24 shrink-0 rounded-xl" />
+                  <div className="flex-1 space-y-3">
+                    <Skeleton className="h-5 w-1/2" />
+                    <Skeleton className="h-4 w-3/4" />
+                    <Skeleton className="h-4 w-1/3" />
+                  </div>
                 </CardContent>
               </Card>
-            ) : (
-              filteredBookings.map((booking) => (
-                <Card key={booking.id} className="overflow-hidden">
-                  <div className="flex flex-col md:flex-row">
-                    <div className="flex-1 p-6 flex gap-5">
-                      <div className="w-24 h-24 rounded-xl overflow-hidden flex-shrink-0 bg-muted relative">
-                        {booking.car?.mainImageUrl ? (
-                          <Image
-                            src={booking.car.mainImageUrl}
-                            alt={booking.car.name}
-                            fill
-                            className="object-cover"
-                            sizes="96px"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-                            <QrCode size={40} />
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="flex-1 space-y-3">
-                        <div className="flex items-center gap-3 flex-wrap">
-                          <Badge variant={getBadgeVariant(booking.status)}>{getStatusLabel(booking.status)}</Badge>
-                          <span className="text-xs text-muted-foreground font-mono">#{booking.id.slice(-8)}</span>
+            ))
+          ) : filteredBookings.length === 0 ? (
+            <Card>
+              <CardContent className="flex flex-col items-center py-16 text-center">
+                <div className="rounded-2xl bg-muted p-4 text-muted-foreground">
+                  <Car className="h-7 w-7" />
+                </div>
+                <h2 className="mt-5 text-lg font-semibold">No bookings here yet</h2>
+                <p className="mt-2 max-w-md text-sm text-muted-foreground">Find an available vehicle and choose your rental dates to start a booking.</p>
+                <Button asChild className="mt-5">
+                  <Link href="/customer/cars">Browse vehicles</Link>
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            filteredBookings.map((booking) => (
+              <Card key={booking.id} className="overflow-hidden p-0">
+                <div className="grid md:grid-cols-[1fr_260px]">
+                  <div className="flex gap-5 p-5 sm:p-6">
+                    <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-xl bg-muted">
+                      {booking.car?.mainImageUrl ? (
+                        <Image src={booking.car.mainImageUrl} alt={booking.car?.name || "Rental vehicle"} fill className="object-cover" sizes="96px" />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+                          <Car className="h-7 w-7" />
                         </div>
-
-                        <h3 className="font-semibold text-lg leading-tight">{booking.car?.name}</h3>
-
-                        <div className="space-y-1.5 text-sm text-muted-foreground">
-                          <div className="flex items-center gap-2">
-                            <Clock className="h-4 w-4" />
-                            {new Date(booking.startDate).toLocaleDateString("vi-VN")} —{" "}
-                            {new Date(booking.endDate).toLocaleDateString("vi-VN")}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <MapPin className="h-4 w-4" />
-                            {booking.pickupLocation || "Elite Company"}
-                          </div>
-                        </div>
-                      </div>
+                      )}
                     </div>
 
-                    <div className="md:w-64 bg-muted/40 p-6 flex flex-col justify-between border-t md:border-t-0 md:border-l">
-                      <div className="text-right space-y-1">
-                        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                          Tổng thanh toán
-                        </p>
-                        <p className="text-2xl font-bold">{booking.totalPrice?.toLocaleString("vi-VN")} ₫</p>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant={statusVariant(booking.status)}>{statusLabel[booking.status] || booking.status}</Badge>
+                        <span className="font-mono text-xs text-muted-foreground">#{booking.id?.slice(-8).toUpperCase()}</span>
                       </div>
-
-                      <div className="mt-6 space-y-3">
-                        {booking.status === "APPROVED" && (
-                          <Button onClick={() => handleCreatePayment(booking)} disabled={loading} className="w-full">
-                            {loading ? (
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            ) : (
-                              <CreditCard className="mr-2 h-4 w-4" />
-                            )}
-                            Thanh toán ngay
-                          </Button>
-                        )}
-
-                        {(booking.status === "PENDING" || booking.status === "APPROVED") && (
-                          <Button
-                            variant="outline"
-                            onClick={() => handleCancelBooking(booking.id)}
-                            disabled={loading}
-                            className="w-full border-destructive text-destructive hover:bg-destructive/10">
-                            <XCircle className="mr-2 h-4 w-4" />
-                            Hủy đơn
-                          </Button>
-                        )}
-
-                        {booking.status === "COMPLETED" && (
-                          <Button
-                            variant="secondary"
-                            className="w-full bg-yellow-50 text-yellow-700 hover:bg-yellow-100 border-yellow-200"
-                            onClick={() => handleOpenReview(booking)}>
-                            <Star className="mr-2 h-4 w-4 fill-yellow-500 text-yellow-500" />
-                            Đánh giá ngay
-                          </Button>
-                        )}
-                        {booking.status === "PENDING" && (
-                          <p className="text-xs text-center text-muted-foreground">Đang chờ chủ xe xác nhận</p>
-                        )}
-
-                        {booking.status === "CONFIRMED" && (
-                          <p className="text-xs text-center text-green-600 font-medium">Đã thanh toán thành công</p>
-                        )}
+                      <h2 className="mt-3 truncate text-lg font-semibold">{booking.car?.name || "Elite Drive vehicle"}</h2>
+                      <div className="mt-3 space-y-2 text-sm text-muted-foreground">
+                        <div className="flex items-center gap-2">
+                          <CalendarDays className="h-4 w-4" />
+                          {dateFormatter.format(new Date(booking.startDate))} — {dateFormatter.format(new Date(booking.endDate))}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <MapPin className="h-4 w-4" />
+                          {booking.pickupLocation || "Pickup location confirmed with owner"}
+                        </div>
                       </div>
                     </div>
                   </div>
 
-                  {booking.trip?.status === "ONGOING" && (
-                    <div className="bg-primary text-primary-foreground px-6 py-3 text-sm flex items-center gap-3">
-                      <AlertCircle className="h-5 w-5" />
-                      <span>Bạn đang trong hành trình. Chúc bạn lái xe an toàn!</span>
+                  <div className="flex flex-col justify-between gap-5 border-t bg-muted/30 p-5 md:border-l md:border-t-0 sm:p-6">
+                    <div>
+                      <div className="text-xs font-semibold uppercase tracking-[0.15em] text-muted-foreground">Booking total</div>
+                      <div className="mt-2 text-2xl font-bold">{currency.format(Number(booking.totalPrice || 0))}</div>
                     </div>
-                  )}
-                </Card>
-              ))
-            )}
-          </TabsContent>
-        </Tabs>
-      </div>
 
-      {/* Payment Dialog */}
-      <Dialog open={showPayment} onOpenChange={setShowPayment}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center justify-center gap-2 text-xl">
-              <QrCode className="h-6 w-6" />
-              Quét mã thanh toán
-            </DialogTitle>
-          </DialogHeader>
+                    <div className="space-y-2">
+                      {booking.status === "APPROVED" ? (
+                        <Button asChild className="w-full">
+                          <Link href={`/customer/payments/${booking.id}`}>
+                            <CreditCard />
+                            Continue to payment
+                          </Link>
+                        </Button>
+                      ) : null}
 
-          <div className="py-6">
-            <div className="bg-muted/50 border-2 border-dashed rounded-xl p-6 text-center">
-              <div className="mx-auto w-48 h-48 bg-background rounded-lg flex flex-col items-center justify-center gap-4 shadow-sm">
-                <QrCode className="h-28 w-28 text-muted-foreground" />
-                <p className="text-xs text-muted-foreground">Mã GD: #{paymentData?.id?.slice(0, 12)}</p>
-              </div>
-            </div>
+                      {["PENDING", "APPROVED"].includes(booking.status) ? (
+                        <Button variant="outline" className="w-full hover:border-destructive/30 hover:text-destructive" onClick={() => cancelBooking(booking.id)}>
+                          <XCircle />
+                          Cancel booking
+                        </Button>
+                      ) : null}
 
-            <Alert className="mt-6">
-              <AlertCircle className="h-4 w-4" />
-              <AlertTitle>Sau khi thanh toán</AlertTitle>
-              <AlertDescription className="text-sm">
-                • Booking chuyển sang CONFIRMED
-                <br />
-                • Tự động tạo Trip (UPCOMING)
-                <br />• Xe sẵn sàng cho chuyến đi
-              </AlertDescription>
-            </Alert>
-          </div>
+                      {booking.status === "COMPLETED" ? (
+                        <Button variant="outline" className="w-full" onClick={() => openReview(booking)}>
+                          <Star />
+                          Leave a review
+                        </Button>
+                      ) : null}
 
-          <DialogFooter className="flex-col sm:flex-row gap-3">
-            <Button onClick={handleMockScan} disabled={loading} className="w-full sm:w-auto">
-              {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
-              Giả lập đã thanh toán
-            </Button>
-            <Button variant="outline" onClick={() => setShowPayment(false)} className="w-full sm:w-auto">
-              Đóng
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+                      {booking.status === "PENDING" ? <p className="text-center text-xs text-muted-foreground">Waiting for the vehicle owner to respond.</p> : null}
+                      {booking.status === "CONFIRMED" ? <p className="text-center text-xs font-medium">Payment recorded. Your trip is confirmed.</p> : null}
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            ))
+          )}
+        </TabsContent>
+      </Tabs>
 
       <Dialog open={showReviewDialog} onOpenChange={setShowReviewDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Đánh giá chuyến đi</DialogTitle>
-            <DialogDescription>Chia sẻ trải nghiệm của bạn về xe {selectedBooking?.car?.name}</DialogDescription>
+            <DialogTitle>Review your trip</DialogTitle>
+            <DialogDescription>Share useful feedback about {selectedBooking?.car?.name || "this vehicle"}.</DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-6 py-4">
-            {/* Star Rating */}
-            <div className="flex flex-col items-center gap-3">
-              <div className="flex gap-2">
+          <div className="space-y-5 py-3">
+            <div>
+              <div className="mb-2 text-sm font-medium">Rating</div>
+              <div className="flex gap-1" aria-label="Star rating">
                 {[1, 2, 3, 4, 5].map((star) => (
                   <button
                     key={star}
-                    onMouseEnter={() => setHoveredRating(star)}
-                    onMouseLeave={() => setHoveredRating(0)}
-                    onClick={() => setReviewData({ ...reviewData, rating: star })}
-                    className="transition-transform hover:scale-110">
-                    <Star
-                      className={`h-10 w-10 ${
-                        (hoveredRating || reviewData.rating) >= star
-                          ? "fill-yellow-400 text-yellow-400"
-                          : "text-gray-200"
-                      }`}
-                    />
+                    type="button"
+                    onClick={() => setReviewData((current) => ({ ...current, rating: star }))}
+                    className="rounded-md p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    aria-label={`${star} star${star > 1 ? "s" : ""}`}>
+                    <Star className={reviewData.rating >= star ? "fill-current" : "text-muted-foreground"} />
                   </button>
                 ))}
               </div>
-              <p className="text-sm font-medium text-muted-foreground">
-                {reviewData.rating > 0 ? `${reviewData.rating}/5 sao` : "Chọn mức độ hài lòng"}
-              </p>
             </div>
-
             <div className="space-y-2">
-              <label className="text-sm font-medium">Bình luận chi tiết</label>
+              <label htmlFor="review-content" className="text-sm font-medium">Trip feedback</label>
               <Textarea
-                placeholder="Xe chạy êm, sạch sẽ, chủ xe nhiệt tình..."
+                id="review-content"
+                placeholder="Vehicle condition, pickup experience, owner communication..."
                 value={reviewData.content}
-                onChange={(e) => setReviewData({ ...reviewData, content: e.target.value })}
-                className="min-h-[100px]"
+                onChange={(event) => setReviewData((current) => ({ ...current, content: event.target.value }))}
+                className="min-h-28"
               />
-              <p className="text-[10px] text-muted-foreground italic">Tối thiểu 10 ký tự</p>
+              <p className="text-xs text-muted-foreground">Minimum 10 characters.</p>
             </div>
           </div>
 
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setShowReviewDialog(false)}>
-              Hủy
-            </Button>
-            <Button onClick={onSubmitReview} disabled={submittingReview} className="bg-primary">
-              {submittingReview ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-              Gửi đánh giá
+            <Button variant="ghost" onClick={() => setShowReviewDialog(false)}>Cancel</Button>
+            <Button onClick={submitReview} disabled={submittingReview}>
+              {submittingReview ? <Loader2 className="animate-spin" /> : <Star />}
+              Submit review
             </Button>
           </DialogFooter>
         </DialogContent>
