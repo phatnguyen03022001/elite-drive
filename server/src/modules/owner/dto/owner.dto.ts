@@ -1,21 +1,20 @@
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
-import {
-  IsString,
-  IsNotEmpty,
-  IsInt,
-  IsOptional,
-  IsNumber,
-  IsBoolean,
-  IsDateString,
-  IsUrl,
-  IsEnum,
-  Min,
-} from 'class-validator';
 import { BookingStatus } from '@prisma/client';
 import { Type } from 'class-transformer';
-import { Optional } from '@nestjs/common';
-
-// --- GROUP 1: CAR MANAGEMENT ---
+import {
+  IsBoolean,
+  IsDateString,
+  IsEnum,
+  IsInt,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+  IsUrl,
+  IsUUID,
+  Max,
+  Min,
+} from 'class-validator';
 
 export class CreateKYCDto {
   @ApiProperty() @IsNotEmpty() @IsString() documentType: string;
@@ -25,16 +24,13 @@ export class CreateKYCDto {
 export class KYCStatusResponseDto {
   @ApiProperty({ enum: ['NONE', 'PENDING', 'APPROVED', 'REJECTED'] })
   status: 'NONE' | 'PENDING' | 'APPROVED' | 'REJECTED';
-
-  // Thêm các trường này để trả về thông tin đã gửi
-  @ApiProperty() @Optional() documentType?: string;
-  @ApiProperty() @Optional() documentNumber?: string;
-  @ApiProperty() @Optional() documentFrontUrl?: string;
-  @ApiProperty() @Optional() documentBackUrl?: string;
-  @ApiProperty() @Optional() faceImageUrl?: string;
-
-  @ApiProperty() @Optional() rejectionReason?: string;
-  @ApiProperty() @Optional() submittedAt?: Date | null; // Cho phép null nếu status là NONE
+  @ApiPropertyOptional() documentType?: string;
+  @ApiPropertyOptional() documentNumber?: string;
+  @ApiPropertyOptional() documentFrontUrl?: string;
+  @ApiPropertyOptional() documentBackUrl?: string;
+  @ApiPropertyOptional() faceImageUrl?: string;
+  @ApiPropertyOptional() rejectionReason?: string;
+  @ApiPropertyOptional() submittedAt?: Date | null;
 }
 
 export class CreateCarDto {
@@ -55,7 +51,9 @@ export class CreateCarDto {
 
   @ApiProperty({ example: 2023 })
   @IsInt()
-  @Type(() => Number) // Convert từ string sang number
+  @Min(1900)
+  @Max(2100)
+  @Type(() => Number)
   year: number;
 
   @ApiProperty({ example: '51H-123.45' })
@@ -80,6 +78,8 @@ export class CreateCarDto {
 
   @ApiProperty({ example: 5 })
   @IsInt()
+  @Min(1)
+  @Max(100)
   @Type(() => Number)
   seatCount: number;
 
@@ -91,25 +91,28 @@ export class CreateCarDto {
   @ApiProperty({ example: 1000000 })
   @IsNotEmpty()
   @IsNumber()
+  @Min(0)
   @Type(() => Number)
   pricePerDay: number;
 
   @ApiPropertyOptional({ example: 50000 })
   @IsOptional()
   @IsNumber()
+  @Min(0)
   @Type(() => Number)
   pricePerHour?: number;
 
-  // THÊM 2 DÒNG NÀY VÀO:
   @ApiPropertyOptional({ example: 5000000 })
   @IsOptional()
   @IsNumber()
+  @Min(0)
   @Type(() => Number)
   pricePerWeek?: number;
 
   @ApiPropertyOptional({ example: 15000000 })
   @IsOptional()
   @IsNumber()
+  @Min(0)
   @Type(() => Number)
   pricePerMonth?: number;
 
@@ -146,14 +149,12 @@ export class CarDocumentResponseDto {
   @ApiProperty() uploadedAt: Date;
 }
 
-// --- GROUP 2: PRICING & CALENDAR ---
-
 export class CreatePricingDto {
   @ApiProperty() @IsNotEmpty() @IsNumber() @Min(0) pricePerDay: number;
-  @ApiPropertyOptional() @IsOptional() @IsNumber() pricePerHour?: number;
-  @ApiPropertyOptional() @IsOptional() @IsNumber() pricePerWeek?: number;
-  @ApiPropertyOptional() @IsOptional() @IsNumber() pricePerMonth?: number;
-  @ApiPropertyOptional() @IsOptional() @IsNumber() discountPercentage?: number;
+  @ApiPropertyOptional() @IsOptional() @IsNumber() @Min(0) pricePerHour?: number;
+  @ApiPropertyOptional() @IsOptional() @IsNumber() @Min(0) pricePerWeek?: number;
+  @ApiPropertyOptional() @IsOptional() @IsNumber() @Min(0) pricePerMonth?: number;
+  @ApiPropertyOptional() @IsOptional() @IsNumber() @Min(0) @Max(100) discountPercentage?: number;
   @ApiProperty() @IsNotEmpty() @IsDateString() effectiveFrom: string;
   @ApiPropertyOptional() @IsOptional() @IsDateString() effectiveTo?: string;
 }
@@ -186,19 +187,19 @@ export class CalendarResponseDto {
   @ApiProperty() blockedReason: string | null;
 }
 
-// --- GROUP 3: TRIP OPERATIONS (CHECKIN/OUT) ---
-
 export class TripCheckinDto {
   @ApiProperty() @IsNumber() @Min(0) startOdometer: number;
   @ApiProperty({ description: 'Phần trăm pin hoặc vạch xăng' })
   @IsNumber()
+  @Min(0)
+  @Max(100)
   startFuelLevel: number;
   @ApiPropertyOptional() @IsOptional() @IsString() pickupNotes?: string;
 }
 
 export class TripCheckoutDto {
   @ApiProperty() @IsNumber() @Min(0) endOdometer: number;
-  @ApiProperty() @IsNumber() endFuelLevel: number;
+  @ApiProperty() @IsNumber() @Min(0) @Max(100) endFuelLevel: number;
   @ApiPropertyOptional() @IsOptional() @IsString() dropoffNotes?: string;
 }
 
@@ -213,14 +214,17 @@ export class RejectBookingDto {
   @ApiPropertyOptional() @IsOptional() @IsString() reason?: string;
 }
 
-// --- GROUP 4: FINANCE & EARNINGS ---
-
 export class WithdrawRequestDto {
   @ApiProperty({ example: 500000 })
   @IsNotEmpty()
   @IsNumber()
   @Min(50000)
   amount: number;
+
+  @ApiProperty({ description: 'UUID generated once per user withdrawal action' })
+  @IsUUID()
+  idempotencyKey: string;
+
   @ApiPropertyOptional() @IsOptional() @IsString() bankAccountNumber?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() bankAccountName?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() description?: string;
