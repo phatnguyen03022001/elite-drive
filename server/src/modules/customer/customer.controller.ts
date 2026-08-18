@@ -20,6 +20,7 @@ import { PaginationDto } from '../../common/dto/pagination.dto';
 import { ApiResponse, PaginatedResponseDto } from '../../common/dto/response.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { imageUploadOptions } from '../../common/upload/image-upload-options';
 import {
   BookingDetailResponseDto,
   BookingQueryDto,
@@ -61,7 +62,7 @@ export class CustomerController {
   }
 
   @Put('profile')
-  @UseInterceptors(FileInterceptor('avatar'))
+  @UseInterceptors(FileInterceptor('avatar', imageUploadOptions))
   async updateProfile(
     @CurrentUser('id') userId: string,
     @Body() dto: UpdateCustomerProfileDto,
@@ -73,11 +74,14 @@ export class CustomerController {
 
   @Post('kyc')
   @UseInterceptors(
-    FileFieldsInterceptor([
-      { name: 'documentFront', maxCount: 1 },
-      { name: 'documentBack', maxCount: 1 },
-      { name: 'faceImage', maxCount: 1 },
-    ]),
+    FileFieldsInterceptor(
+      [
+        { name: 'documentFront', maxCount: 1 },
+        { name: 'documentBack', maxCount: 1 },
+        { name: 'faceImage', maxCount: 1 },
+      ],
+      imageUploadOptions,
+    ),
   )
   async submitKyc(
     @CurrentUser('id') userId: string,
