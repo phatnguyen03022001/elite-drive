@@ -3,9 +3,9 @@
 import { useSearchParams, useRouter } from "next/navigation";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { OtpForm } from "@/features/auth/components/OtpForm";
-import { useMutation } from "@tanstack/react-query"; // Đảm bảo đã import useMutation
-import axios from "axios"; // Hoặc library bạn dùng để call API
-import { toast } from "sonner"; // Hoặc thư viện thông báo của bạn
+import { useMutation } from "@tanstack/react-query";
+import axios from "axios";
+import { toast } from "sonner";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://elitedrive-demoversion.onrender.com";
 
@@ -33,9 +33,8 @@ const useVerifyLoginOtp = () => {
       const { data } = await axios.post(`${API_URL}/api/auth/otp/login`, payload);
       return data;
     },
-    onSuccess: (data) => {
+    onSuccess: () => {
       toast.success("Đăng nhập thành công!");
-      // Lưu token vào cookie/localStorage ở đây nếu cần
       router.push("/dashboard");
     },
     onError: (error: any) => {
@@ -64,8 +63,6 @@ const useVerifyForgotOtp = () => {
 export default function OtpPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
-
-  // ✅ Hooks ALWAYS first
   const verifyRegisterOtp = useVerifyRegisterOtp();
   const verifyLoginOtp = useVerifyLoginOtp();
   const verifyForgotOtp = useVerifyForgotOtp();
@@ -79,7 +76,6 @@ export default function OtpPage() {
   }
 
   const verifyOtp = type === "register" ? verifyRegisterOtp : type === "login" ? verifyLoginOtp : verifyForgotOtp;
-
   const titles = {
     register: "Xác thực đăng ký",
     login: "Xác thực đăng nhập",
@@ -94,7 +90,6 @@ export default function OtpPage() {
           Mã OTP đã được gửi đến <strong>{email}</strong>
         </CardDescription>
       </CardHeader>
-
       <OtpForm email={email} onVerify={(payload) => verifyOtp.mutate(payload)} isLoading={verifyOtp.isPending} />
     </Card>
   );
