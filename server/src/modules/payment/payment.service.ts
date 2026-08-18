@@ -12,6 +12,12 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { MomoIpnDto } from './dto/momo.dto';
 import { MomoGatewayService } from './momo-gateway.service';
 
+const MOMO_SUCCESS_CODES = new Set([0, 9000]);
+const MOMO_FINAL_FAILURE_CODES = new Set([
+  98, 99, 1001, 1002, 1003, 1004, 1005, 1006, 1007, 1017, 1026, 2019,
+  4001, 4002, 4100,
+]);
+
 @Injectable()
 export class PaymentService {
   private readonly logger = new Logger(PaymentService.name);
@@ -73,18 +79,76 @@ export class PaymentService {
       `QUERY-${payment.id}`,
     );
 
-    if (result.resultCode === 0 && payment.status === PaymentStatus.PENDING) {
-      await this.completePayment(payment.id, result.transId);
-    }
+    const localStatus = await this.applyProviderResult(
+      payment.id,
+      payment.status,
+      result.resultCode,
+      result.message,
+      result.transId,
+    );
 
     return {
       paymentId: payment.id,
-      localStatus:
-        result.resultCode === 0 ? PaymentStatus.COMPLETED : payment.status,
+      localStatus,
       providerResultCode: result.resultCode,
       providerMessage: result.message,
       providerTransactionId: result.transId,
     };
+  }
+
+  async reconcilePendingMomoPayments(limit = 50) {
+    if (!this.momo.isEnabled()) {
+      throw new BadRequestException('MoMo sandbox chưa được bật');
+    }
+
+    const safeLimit = Math.max(1, Math.min(Math.trunc(limit), 100));
+    const cutoff = new Date(Date.now() - 2 * 60 * 1000);
+    const payments = await this.db.payment.findMany({
+      where: {
+        status: PaymentStatus.PENDING,
+        paymentMethod: 'MOMO',
+        transactionId: { not: null },
+        createdAt: { lte: cutoff },
+      },
+      orderBy: { createdAt: 'asc' },
+      take: safeLimit,
+    });
+
+    const summary = {
+      checked: 0,
+      completed: 0,
+      failed: 0,
+      pending: 0,
+      providerErrors: 0,
+    };
+
+    for (const payment of payments) {
+      if (!payment.transactionId) continue;
+      summary.checked += 1;
+      try {
+        const result = await this.momo.queryStatus(
+          payment.transactionId,
+          `RECON-${payment.id}`,
+        );
+        const status = await this.applyProviderResult(
+          payment.id,
+          payment.status,
+          result.resultCode,
+          result.message,
+          result.transId,
+        );
+        if (status === PaymentStatus.COMPLETED) summary.completed += 1;
+        else if (status === PaymentStatus.FAILED) summary.failed += 1;
+        else summary.pending += 1;
+      } catch (error) {
+        summary.providerErrors += 1;
+        this.logger.warn(
+          `MoMo reconciliation failed for payment ${payment.id}: ${error instanceof Error ? error.message : 'unknown error'}`,
+        );
+      }
+    }
+
+    return summary;
   }
 
   async handleMomoIpn(payload: MomoIpnDto) {
@@ -107,17 +171,50 @@ export class PaymentService {
       throw new BadRequestException('MoMo notification không khớp payment');
     }
 
-    if (payload.resultCode === 0) {
-      if (payment.status === PaymentStatus.PENDING) {
-        await this.completePayment(payment.id, payload.transId);
+    await this.applyProviderResult(
+      payment.id,
+      payment.status,
+      payload.resultCode,
+      payload.message,
+      payload.transId,
+    );
+    this.logger.log(
+      `Accepted MoMo IPN for payment ${payment.id}, resultCode=${payload.resultCode}`,
+    );
+  }
+
+  private async applyProviderResult(
+    paymentId: string,
+    currentStatus: PaymentStatus,
+    resultCode: number,
+    providerMessage: string,
+    providerTransactionId?: number,
+  ): Promise<PaymentStatus> {
+    if (MOMO_SUCCESS_CODES.has(resultCode)) {
+      if (currentStatus === PaymentStatus.PENDING) {
+        await this.completePayment(paymentId, providerTransactionId);
       }
-      this.logger.log(`Accepted MoMo IPN for payment ${payment.id}`);
-      return;
+      return PaymentStatus.COMPLETED;
     }
 
-    this.logger.warn(
-      `MoMo payment ${payment.id} resultCode=${payload.resultCode}: ${payload.message}`,
-    );
+    if (
+      currentStatus === PaymentStatus.PENDING &&
+      MOMO_FINAL_FAILURE_CODES.has(resultCode)
+    ) {
+      const updated = await this.db.payment.updateMany({
+        where: { id: paymentId, status: PaymentStatus.PENDING },
+        data: {
+          status: PaymentStatus.FAILED,
+          failureReason: `MOMO_${resultCode}: ${providerMessage}`.slice(0, 500),
+        },
+      });
+      if (updated.count === 1) {
+        this.logger.warn(`MoMo payment ${paymentId} marked FAILED (${resultCode})`);
+        return PaymentStatus.FAILED;
+      }
+    }
+
+    return currentStatus;
   }
 
   private checkoutRequestId(paymentId: string) {
