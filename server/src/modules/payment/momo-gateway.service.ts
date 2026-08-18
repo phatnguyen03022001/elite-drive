@@ -13,6 +13,7 @@ interface CreateCheckoutInput {
   requestId: string;
   amount: number;
   orderInfo: string;
+  returnReference?: string;
   extraData?: Record<string, string>;
 }
 
@@ -60,7 +61,7 @@ export class MomoGatewayService {
     this.assertEnabled();
     const partnerCode = this.required('MOMO_PARTNER_CODE');
     const accessKey = this.required('MOMO_ACCESS_KEY');
-    const redirectUrl = this.required('MOMO_REDIRECT_URL');
+    const redirectUrl = this.buildRedirectUrl(input.returnReference);
     const ipnUrl = this.required('MOMO_IPN_URL');
     const requestType = 'payWithMethod';
     const extraData = input.extraData
@@ -171,6 +172,20 @@ export class MomoGatewayService {
     const expected = Buffer.from(this.sign(rawSignature), 'hex');
     const actual = Buffer.from(payload.signature, 'hex');
     return expected.length === actual.length && timingSafeEqual(expected, actual);
+  }
+
+  private buildRedirectUrl(returnReference?: string) {
+    const configured = this.required('MOMO_REDIRECT_URL');
+    if (!returnReference) return configured;
+
+    let url: URL;
+    try {
+      url = new URL(configured);
+    } catch {
+      throw new ServiceUnavailableException('MOMO_REDIRECT_URL không hợp lệ');
+    }
+    url.searchParams.set('paymentId', returnReference);
+    return url.toString();
   }
 
   private async post<T>(path: string, body: unknown): Promise<T> {
