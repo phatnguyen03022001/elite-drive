@@ -14,6 +14,7 @@ import {
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { UserRole } from '@prisma/client';
 import { OwnerBookingService } from './owner-booking.service';
+import { OwnerDisputeService } from './owner-dispute.service';
 import { OwnerFinanceService } from './owner-finance.service';
 import { OwnerService } from './owner.service';
 import { OwnerTripService } from './owner-trip.service';
@@ -53,6 +54,7 @@ export class OwnerController {
     private readonly financeService: OwnerFinanceService,
     private readonly bookingService: OwnerBookingService,
     private readonly tripService: OwnerTripService,
+    private readonly disputeService: OwnerDisputeService,
   ) {}
 
   @Get('profile')
@@ -318,12 +320,12 @@ export class OwnerController {
     @Param('dispute_id') disputeId: string,
     @Body() dto: RespondDisputeDto,
   ) {
-    const dispute = await this.ownerService.respondDispute(
+    const message = await this.disputeService.respond(
       userId,
       disputeId,
       dto.message,
     );
-    return ApiResponse.success(dispute, 'Dispute response submitted');
+    return ApiResponse.success(message, 'Dispute response submitted');
   }
 
   @Get('trips')
