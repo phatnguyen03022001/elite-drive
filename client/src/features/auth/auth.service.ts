@@ -1,38 +1,37 @@
 import axios from "@/lib/axios";
 import {
-  LoginRequestSchema,
-  LoginResponseSchema,
-  LoginRequest,
-  LoginResponse,
-  RegisterPasswordBody,
-  ForgotPasswordSchema,
-  ForgotPasswordInput,
   EmailSchema,
+  ForgotPasswordInput,
+  ForgotPasswordSchema,
+  LoginRequest,
+  LoginRequestSchema,
+  LoginResponse,
+  LoginResponseSchema,
   OtpSchema,
+  RegisterPasswordBody,
 } from "./auth.schema";
 
 export const authService = {
-  // --- LOGIN ---
   login: async (payload: LoginRequest): Promise<LoginResponse> => {
     const validatedPayload = LoginRequestSchema.parse(payload);
     const res = await axios.post("/api/auth/login", validatedPayload);
     return LoginResponseSchema.parse(res);
   },
 
-  // --- REGISTER ---
+  logout: async () => {
+    return axios.post("/api/auth/logout");
+  },
+
   register: async (data: RegisterPasswordBody) => {
     return axios.post("/api/auth/register", data);
   },
 
-  // --- FORGOT & RESET PASSWORD ---
   resetPassword: async (data: ForgotPasswordInput) => {
     ForgotPasswordSchema.parse(data);
     return axios.post("/api/auth/forgot-password", data);
   },
 
-  // --- OTP SERVICES (Gom tất cả các loại OTP về đây) ---
   otp: {
-    // Gửi OTP cho từng mục đích
     send: {
       register: (email: string) => {
         EmailSchema.parse({ email });
@@ -47,8 +46,6 @@ export const authService = {
         return axios.post("/api/auth/otp/forgot-password", { email });
       },
     },
-
-    // Xác thực OTP cho từng mục đích
     verify: {
       register: (email: string, code: string) => {
         OtpSchema.parse({ email, code });
@@ -64,8 +61,6 @@ export const authService = {
       },
     },
   },
-
-  // --- REFRESH TOKEN ---
 
   getProfile: async () => {
     const res = await axios.get("/api/profile");
