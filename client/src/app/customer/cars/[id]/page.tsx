@@ -43,6 +43,16 @@ function initialDates() {
   return { startDate: dateInputValue(start), endDate: dateInputValue(end) };
 }
 
+function normalizeDates(startDate: string, endDate: string) {
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
+    const nextEnd = new Date(start.getTime() + DAY_MS);
+    return { startDate, endDate: dateInputValue(nextEnd) };
+  }
+  return { startDate, endDate };
+}
+
 export default function CarDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -67,9 +77,9 @@ export default function CarDetailPage() {
   const checkAvailability = useCallback(
     async (nextDates = dates) => {
       if (!id) return;
-      if (new Date(nextDates.endDate) < new Date(nextDates.startDate)) {
+      if (new Date(nextDates.endDate) <= new Date(nextDates.startDate)) {
         setAvailable(false);
-        toast.error("Return date must be on or after the pick-up date.");
+        toast.error("Return date must be after the pick-up date.");
         return;
       }
 
@@ -98,10 +108,10 @@ export default function CarDetailPage() {
     const controller = new AbortController();
 
     const params = new URLSearchParams(window.location.search);
-    const requestedDates = {
-      startDate: params.get("startDate") || defaults.startDate,
-      endDate: params.get("endDate") || defaults.endDate,
-    };
+    const requestedDates = normalizeDates(
+      params.get("startDate") || defaults.startDate,
+      params.get("endDate") || defaults.endDate,
+    );
     setDates(requestedDates);
 
     async function loadCar() {
@@ -151,8 +161,8 @@ export default function CarDetailPage() {
       return;
     }
 
-    if (available === false) {
-      toast.error("This vehicle is not available for the selected dates.");
+    if (available !== true) {
+      toast.error("Check availability before creating a booking request.");
       return;
     }
 
@@ -173,6 +183,13 @@ export default function CarDetailPage() {
         }),
       });
       const payload = await response.json();
+
+      if (response.status === 403) {
+        toast.error("Complete identity verification before requesting a booking.");
+        router.push("/customer/kyc");
+        return;
+      }
+
       if (!response.ok) throw new Error(payload?.message || "Unable to create this booking.");
 
       toast.success("Booking request created.");
@@ -183,6 +200,16 @@ export default function CarDetailPage() {
     } finally {
       setBooking(false);
     }
+  };
+
+  const updateStartDate = (startDate: string) => {
+    setDates((current) => normalizeDates(startDate, current.endDate));
+    setAvailable(null);
+  };
+
+  const updateEndDate = (endDate: string) => {
+    setDates((current) => normalizeDates(current.startDate, endDate));
+    setAvailable(null);
   };
 
   if (loading) {
@@ -365,22 +392,16 @@ export default function CarDetailPage() {
                       type="date"
                       min={dateInputValue(new Date())}
                       value={dates.startDate}
-                      onChange={(event) => {
-                        setDates((value) => ({ ...value, startDate: event.target.value }));
-                        setAvailable(null);
-                      }}
+                      onChange={(event) => updateStartDate(event.target.value)}
                     />
                   </label>
                   <label>
                     <span className="mb-2 block text-[11px] font-bold uppercase tracking-wider text-black/45">Return</span>
                     <Input
                       type="date"
-                      min={dates.startDate}
+                      min={dateInputValue(new Date(new Date(dates.startDate).getTime() + DAY_MS))}
                       value={dates.endDate}
-                      onChange={(event) => {
-                        setDates((value) => ({ ...value, endDate: event.target.value }));
-                        setAvailable(null);
-                      }}
+                      onChange={(event) => updateEndDate(event.target.value)}
                     />
                   </label>
                 </div>
@@ -416,7 +437,7 @@ export default function CarDetailPage() {
                   </div>
                 )}
 
-                <Button className="h-12 w-full font-bold" onClick={createBooking} disabled={booking || available === false}>
+                <Button className="h-12 w-full font-bold" onClick={createBooking} disabled={booking || available !== true}>
                   {booking ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Car className="mr-2 h-4 w-4" />}
                   Create booking request
                 </Button>
