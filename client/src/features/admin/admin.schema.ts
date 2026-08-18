@@ -141,8 +141,16 @@ export const WithdrawQuerySchema = z.object({
   limit: z.number().optional(),
 });
 
+export const ApproveWithdrawSchema = z.object({
+  externalReference: z
+    .string()
+    .trim()
+    .min(3, "Payout reference phải có ít nhất 3 ký tự")
+    .max(200, "Payout reference tối đa 200 ký tự"),
+});
+
 export const RejectWithdrawSchema = z.object({
-  reason: z.string().min(1, "Vui lòng nhập lý do từ chối"),
+  reason: z.string().trim().min(1, "Vui lòng nhập lý do từ chối").max(1000),
 });
 
 export const CreateCategorySchema = z.object({
@@ -174,6 +182,7 @@ export type SettlementHistoryQueryInput = z.infer<typeof SettlementHistoryQueryS
 export type ResolveDisputeInput = z.infer<typeof ResolveDisputeSchema>;
 export type DisputeQueryInput = z.infer<typeof DisputeQuerySchema>;
 export type WithdrawQueryInput = z.infer<typeof WithdrawQuerySchema>;
+export type ApproveWithdrawInput = z.infer<typeof ApproveWithdrawSchema>;
 export type RejectWithdrawInput = z.infer<typeof RejectWithdrawSchema>;
 export type CreateCategoryInput = z.infer<typeof CreateCategorySchema>;
 export type CreateLocationInput = z.infer<typeof CreateLocationSchema>;
