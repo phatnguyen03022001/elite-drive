@@ -3,9 +3,10 @@ import { AdminController } from './admin.controller';
 import { AdminFinanceService } from './admin-finance.service';
 import { AdminService } from './admin.service';
 import { CustomerModule } from '../customer/customer.module';
+import { PaymentModule } from '../payment/payment.module';
 
 @Module({
-  imports: [CustomerModule],
+  imports: [CustomerModule, PaymentModule],
   controllers: [AdminController],
   providers: [AdminService, AdminFinanceService],
   exports: [AdminService, AdminFinanceService],
