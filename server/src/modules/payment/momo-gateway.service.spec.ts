@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHmac } from 'crypto';
 import { MomoIpnDto } from './dto/momo.dto';
@@ -9,6 +10,8 @@ describe('MomoGatewayService', () => {
     MOMO_PARTNER_CODE: 'MOMO_TEST',
     MOMO_ACCESS_KEY: 'access-key',
     MOMO_SECRET_KEY: 'secret-key',
+    MOMO_REDIRECT_URL: 'http://localhost:3000/customer/payment-result',
+    MOMO_IPN_URL: 'https://example.test/api/payments/momo/ipn',
   };
   const config = {
     get: jest.fn((key: string) => values[key]),
@@ -53,5 +56,22 @@ describe('MomoGatewayService', () => {
 
     expect(gateway.verifyIpn(payload)).toBe(true);
     expect(gateway.verifyIpn({ ...payload, amount: 150001 })).toBe(false);
+  });
+
+  it('rejects a payWithMethod amount below the MoMo minimum before network I/O', async () => {
+    const gateway = new MomoGatewayService(config);
+    const fetchSpy = jest.spyOn(globalThis, 'fetch');
+
+    await expect(
+      gateway.createCheckout({
+        orderId: 'PAY-LOW-AMOUNT',
+        requestId: 'REQ-LOW-AMOUNT',
+        amount: 999,
+        orderInfo: 'Low amount test',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    fetchSpy.mockRestore();
   });
 });
