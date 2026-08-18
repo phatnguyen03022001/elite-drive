@@ -1,9 +1,7 @@
-// src/services/owner/owner.service.ts
 import axios from "@/lib/axios";
 import {
   BlockCalendarInput,
   CreateCarDocumentInput,
-  CreateCarInput,
   CreateKYCInput,
   CreatePricingInput,
   RejectBookingInput,
