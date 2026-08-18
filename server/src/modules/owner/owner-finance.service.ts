@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { createHash } from 'crypto';
 import { PaginationDto } from '../../common/dto/pagination.dto';
+import { assertVndAmount } from '../../common/money/vnd';
 import { PrismaService } from '../../prisma/prisma.service';
 import { WithdrawRequestDto } from './dto/owner.dto';
 
@@ -44,9 +45,7 @@ export class OwnerFinanceService {
   }
 
   async requestWithdraw(userId: string, dto: WithdrawRequestDto) {
-    if (!Number.isFinite(dto.amount) || dto.amount < 50000) {
-      throw new BadRequestException('Số tiền rút không hợp lệ');
-    }
+    assertVndAmount(dto.amount, { min: 50000, field: 'Số tiền rút' });
 
     const withdrawId = createHash('sha256')
       .update(`withdraw:${userId}:${dto.idempotencyKey}`)
@@ -60,6 +59,11 @@ export class OwnerFinanceService {
       if (existing.ownerId !== userId || existing.type !== 'WITHDRAW') {
         throw new BadRequestException('Idempotency key không hợp lệ');
       }
+      if (existing.amount !== dto.amount) {
+        throw new BadRequestException(
+          'Idempotency key đã được dùng cho số tiền rút khác',
+        );
+      }
       return existing;
     }
 
@@ -69,6 +73,10 @@ export class OwnerFinanceService {
         if (!wallet) {
           throw new BadRequestException('Wallet chưa được tạo');
         }
+        assertVndAmount(wallet.balance, {
+          allowZero: true,
+          field: 'Số dư ví',
+        });
 
         const reserve = await tx.wallet.updateMany({
           where: {
@@ -123,7 +131,12 @@ export class OwnerFinanceService {
         const replay = await this.db.ownerTransaction.findUnique({
           where: { id: withdrawId },
         });
-        if (replay && replay.ownerId === userId && replay.type === 'WITHDRAW') {
+        if (
+          replay &&
+          replay.ownerId === userId &&
+          replay.type === 'WITHDRAW' &&
+          replay.amount === dto.amount
+        ) {
           return replay;
         }
       }
