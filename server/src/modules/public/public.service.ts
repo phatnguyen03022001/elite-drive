@@ -113,13 +113,15 @@ export class PublicService {
             bookings: {
               none: {
                 status: { in: ACTIVE_BOOKING_STATUSES },
-                startDate: { lte: endDate },
-                endDate: { gte: startDate },
+                // Booking ranges use [startDate, endDate): a return on the next
+                // renter's pick-up date is not a conflict.
+                startDate: { lt: endDate },
+                endDate: { gt: startDate },
               },
             },
             availability: {
               none: {
-                date: { gte: startDate, lte: endDate },
+                date: { gte: startDate, lt: endDate },
                 isAvailable: false,
               },
             },
@@ -230,15 +232,15 @@ export class PublicService {
         where: {
           carId,
           status: { in: ACTIVE_BOOKING_STATUSES },
-          startDate: { lte: endDate },
-          endDate: { gte: startDate },
+          startDate: { lt: endDate },
+          endDate: { gt: startDate },
         },
         select: { id: true },
       }),
       this.prisma.availability.findFirst({
         where: {
           carId,
-          date: { gte: startDate, lte: endDate },
+          date: { gte: startDate, lt: endDate },
           isAvailable: false,
         },
         select: { id: true },
