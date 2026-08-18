@@ -3,6 +3,8 @@ import { BookingStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SignContractDto } from './dto/customer.dto';
 
+const MAX_SIGNATURE_CHARS = 200_000;
+
 @Injectable()
 export class CustomerContractService {
   constructor(private readonly db: PrismaService) {}
@@ -16,6 +18,14 @@ export class CustomerContractService {
   }
 
   async signContract(userId: string, bookingId: string, dto: SignContractDto) {
+    const signatureData = dto.signatureData.trim();
+    if (!signatureData) {
+      throw new BadRequestException('Chữ ký không được để trống');
+    }
+    if (signatureData.length > MAX_SIGNATURE_CHARS) {
+      throw new BadRequestException('Dữ liệu chữ ký vượt giới hạn cho phép');
+    }
+
     return this.db.$transaction(async (tx) => {
       const contract = await tx.contract.findFirst({
         where: { bookingId, booking: { customerId: userId } },
@@ -54,7 +64,7 @@ export class CustomerContractService {
         },
         data: {
           customerSignedAt: new Date(),
-          customerSignature: dto.signatureData,
+          customerSignature: signatureData,
           status: 'SIGNED',
         },
       });
