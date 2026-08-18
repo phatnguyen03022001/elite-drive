@@ -35,10 +35,9 @@ const nextConfig: NextConfig = {
     formats: ["image/avif", "image/webp"],
     remotePatterns: [
       { protocol: "https", hostname: "elitedrive-demoversion.onrender.com", pathname: "/**" },
+      { protocol: "https", hostname: "res.cloudinary.com", pathname: "/**" },
       { protocol: "http", hostname: "localhost", port: "9000", pathname: "/elitedrive/**" },
-      { protocol: "https", hostname: "**" },
     ],
-    unoptimized: true,
   },
 
   async headers() {
