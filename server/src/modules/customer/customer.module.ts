@@ -8,6 +8,7 @@ import { CustomerPaymentService } from './customer-payment.service';
 import { CustomerPromotionService } from './customer-promotion.service';
 import { CustomerReviewService } from './customer-review.service';
 import { CustomerService } from './customer.service';
+import { CustomerSupportService } from './customer-support.service';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { CustomerService } from './customer.service';
     CustomerCancellationService,
     CustomerReviewService,
     CustomerContractService,
+    CustomerSupportService,
   ],
   exports: [
     CustomerService,
@@ -35,6 +37,7 @@ import { CustomerService } from './customer.service';
     CustomerCancellationService,
     CustomerReviewService,
     CustomerContractService,
+    CustomerSupportService,
   ],
 })
 export class CustomerModule {}
