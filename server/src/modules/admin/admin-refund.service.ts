@@ -32,12 +32,12 @@ export class AdminRefundService {
       });
       if (!booking) throw new NotFoundException('Booking không tồn tại');
       if (
-        booking.status === BookingStatus.COMPLETED ||
+        booking.status !== BookingStatus.CONFIRMED ||
         booking.trip?.status === 'ONGOING' ||
         booking.trip?.status === 'COMPLETED'
       ) {
         throw new BadRequestException(
-          'Booking đã bắt đầu hoặc đã giải ngân; cần reversal/adjustment flow riêng',
+          'Booking không còn ở trạng thái có thể hoàn escrow; cần reversal/adjustment flow riêng',
         );
       }
 
@@ -61,6 +61,23 @@ export class AdminRefundService {
         throw new BadRequestException('Payment không khớp tổng tiền booking');
       }
 
+      const bookingClaim = await tx.booking.updateMany({
+        where: {
+          id: bookingId,
+          status: BookingStatus.CONFIRMED,
+          OR: [
+            { trip: null },
+            { trip: { is: { status: 'UPCOMING' } } },
+          ],
+        },
+        data: { status: BookingStatus.CANCELLED },
+      });
+      if (bookingClaim.count !== 1) {
+        throw new BadRequestException(
+          'Booking vừa được release, hủy hoặc bắt đầu chuyến đi',
+        );
+      }
+
       const paymentClaim = await tx.payment.updateMany({
         where: { id: payment.id, status: PaymentStatus.COMPLETED },
         data: {
@@ -70,7 +87,7 @@ export class AdminRefundService {
         },
       });
       if (paymentClaim.count !== 1) {
-        throw new BadRequestException('Giao dịch đã được hoàn tiền');
+        throw new BadRequestException('Giao dịch đã được xử lý');
       }
 
       const refundAmount = payment.amount;
@@ -129,10 +146,6 @@ export class AdminRefundService {
             },
           },
         ],
-      });
-      await tx.booking.update({
-        where: { id: bookingId },
-        data: { status: BookingStatus.CANCELLED },
       });
 
       return {
