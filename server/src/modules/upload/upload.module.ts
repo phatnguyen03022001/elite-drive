@@ -1,12 +1,20 @@
 import { Global, Module } from '@nestjs/common';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { MulterModule } from '@nestjs/platform-express';
+import { v2 as cloudinary } from 'cloudinary';
 import { UploadController } from './upload.controller';
 import { UploadService } from './upload.service';
-import { ConfigModule, ConfigService } from '@nestjs/config';
-import { v2 as cloudinary } from 'cloudinary';
 
 @Global()
 @Module({
-  imports: [ConfigModule],
+  imports: [
+    ConfigModule,
+    MulterModule.register({
+      limits: {
+        fileSize: 5 * 1024 * 1024,
+      },
+    }),
+  ],
   controllers: [UploadController],
   providers: [
     UploadService,
