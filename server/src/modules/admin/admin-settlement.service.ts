@@ -54,6 +54,10 @@ export class AdminSettlementService {
               processedAt: null,
               updatedAt: { gte: start, lt: end },
             },
+            {
+              processedAt: { isSet: false },
+              updatedAt: { gte: start, lt: end },
+            },
           ],
         },
         _sum: { amount: true },
