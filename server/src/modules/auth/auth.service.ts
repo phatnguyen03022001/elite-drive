@@ -11,7 +11,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
-import { createHmac, randomInt } from 'crypto';
+import { createHmac, randomInt, timingSafeEqual } from 'crypto';
 
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -28,6 +28,7 @@ import { MailService } from '../mail/mail.service';
 export class AuthService {
   private static readonly OTP_TTL_MS = 5 * 60 * 1000;
   private static readonly OTP_RESEND_COOLDOWN_MS = 60 * 1000;
+  private static readonly OTP_MAX_ATTEMPTS = 5;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -46,7 +47,6 @@ export class AuthService {
         select: { id: true },
       });
 
-      // Return the same response for unknown accounts to avoid account enumeration.
       if (!user) return this.otpSentResponse(type);
     }
 
@@ -208,6 +208,7 @@ export class AuthService {
         email,
         code: codeDigest,
         type,
+        attempts: 0,
         expiresAt: new Date(Date.now() + AuthService.OTP_TTL_MS),
       },
     });
@@ -216,36 +217,70 @@ export class AuthService {
   }
 
   private async assertOtpValid(email: string, code: string, type: string) {
-    const codeDigest = this.hashOtp(email, type, code);
-    const otp = await this.prisma.oTP.findFirst({
-      where: {
-        email,
-        code: codeDigest,
-        type,
-        expiresAt: { gt: new Date() },
-      },
-      select: { id: true },
-    });
-
+    const otp = await this.findActiveOtp(email, type);
     if (!otp) {
       throw new BadRequestException('OTP không hợp lệ hoặc đã hết hạn');
     }
+
+    if (otp.attempts >= AuthService.OTP_MAX_ATTEMPTS) {
+      throw new HttpException(
+        'OTP đã bị khóa do nhập sai quá nhiều lần',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
+    const codeDigest = this.hashOtp(email, type, code);
+    if (!this.secureDigestEquals(otp.code, codeDigest)) {
+      const nextAttempts = otp.attempts + 1;
+      await this.prisma.oTP.update({
+        where: { id: otp.id },
+        data: { attempts: nextAttempts },
+      });
+
+      if (nextAttempts >= AuthService.OTP_MAX_ATTEMPTS) {
+        throw new HttpException(
+          'OTP đã bị khóa do nhập sai quá nhiều lần',
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
+      }
+
+      throw new BadRequestException('OTP không hợp lệ hoặc đã hết hạn');
+    }
+
+    return otp;
   }
 
   private async consumeOtp(email: string, code: string, type: string) {
-    const codeDigest = this.hashOtp(email, type, code);
+    const otp = await this.assertOtpValid(email, code, type);
     const result = await this.prisma.oTP.deleteMany({
       where: {
-        email,
-        code: codeDigest,
-        type,
+        id: otp.id,
+        attempts: { lt: AuthService.OTP_MAX_ATTEMPTS },
         expiresAt: { gt: new Date() },
       },
     });
 
     if (result.count !== 1) {
-      throw new BadRequestException('OTP không hợp lệ hoặc đã hết hạn');
+      throw new BadRequestException('OTP đã được xử lý hoặc đã hết hạn');
     }
+  }
+
+  private findActiveOtp(email: string, type: string) {
+    return this.prisma.oTP.findFirst({
+      where: {
+        email,
+        type,
+        expiresAt: { gt: new Date() },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, code: true, attempts: true },
+    });
+  }
+
+  private secureDigestEquals(expectedHex: string, actualHex: string) {
+    const expected = Buffer.from(expectedHex, 'hex');
+    const actual = Buffer.from(actualHex, 'hex');
+    return expected.length === actual.length && timingSafeEqual(expected, actual);
   }
 
   private hashOtp(email: string, type: string, code: string) {
