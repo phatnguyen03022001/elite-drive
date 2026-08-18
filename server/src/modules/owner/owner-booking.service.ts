@@ -58,7 +58,7 @@ export class OwnerBookingService {
   private async claimDecision(
     ownerId: string,
     bookingId: string,
-    targetStatus: BookingStatus.APPROVED | BookingStatus.REJECTED,
+    targetStatus: 'APPROVED' | 'REJECTED',
   ) {
     const booking = await this.db.booking.findFirst({
       where: { id: bookingId, car: { ownerId } },
