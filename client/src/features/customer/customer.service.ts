@@ -57,8 +57,7 @@ export const CustomerService = {
   },
 
   getBookings: async (params: { page?: number; limit?: number } & BookingQueryInput) => {
-    const response = await axios.get(`${BASE_URL}/bookings`, { params });
-    return response.data;
+    return axios.get(`${BASE_URL}/bookings`, { params });
   },
 
   getBookingDetail: async (bookingId: string) => {
@@ -97,8 +96,7 @@ export const CustomerService = {
   },
 
   getTrips: async (params: { page?: number; limit?: number } & z.infer<typeof TripQuerySchema>) => {
-    const response = await axios.get(`${BASE_URL}/trips`, { params });
-    return response.data;
+    return axios.get(`${BASE_URL}/trips`, { params });
   },
 
   signContract: async (bookingId: string, dto: SignContractInput) => {
@@ -112,8 +110,7 @@ export const CustomerService = {
   },
 
   getWalletTransactions: async (params?: { page?: number; limit?: number }) => {
-    const response = await axios.get(`${BASE_URL}/wallet/transactions`, { params });
-    return response.data;
+    return axios.get(`${BASE_URL}/wallet/transactions`, { params });
   },
 
   createWalletTopup: async (dto: CreateWalletTopupInput) => {
