@@ -59,11 +59,9 @@ export const OwnerService = {
     files: { documentFront?: File; documentBack?: File; faceImage?: File },
   ) => {
     const formData = new FormData();
-
     Object.entries(dto).forEach(([key, value]) => {
       if (value) formData.append(key, String(value));
     });
-
     if (files.documentFront) formData.append("documentFront", files.documentFront);
     if (files.documentBack) formData.append("documentBack", files.documentBack);
     if (files.faceImage) formData.append("faceImage", files.faceImage);
@@ -80,27 +78,22 @@ export const OwnerService = {
   },
 
   createCar: async (formData: FormData) => {
-    const response = await axios.post(`${BASE_URL}/cars`, formData, {
+    return axios.post(`${BASE_URL}/cars`, formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
-    return response.data;
   },
 
   getMyCars: async (params?: { page?: number; limit?: number }) => {
-    const response = await axios.get(`${BASE_URL}/cars`, { params });
-    return response.data;
+    return axios.get(`${BASE_URL}/cars`, { params });
   },
 
   updateCar: async (carId: string, data: UpdateCarInput | FormData) => {
     if (data instanceof FormData) {
-      const response = await axios.put(`${BASE_URL}/cars/${carId}`, data, {
+      return axios.put(`${BASE_URL}/cars/${carId}`, data, {
         headers: { "Content-Type": "multipart/form-data" },
       });
-      return response.data;
     }
-
-    const response = await axios.put(`${BASE_URL}/cars/${carId}`, data);
-    return response.data;
+    return axios.put(`${BASE_URL}/cars/${carId}`, data);
   },
 
   deleteCar: async (carId: string) => {
@@ -139,8 +132,7 @@ export const OwnerService = {
   },
 
   getBookings: async (params?: { page?: number; limit?: number; status?: string }) => {
-    const response = await axios.get(`${BASE_URL}/bookings`, { params });
-    return response.data;
+    return axios.get(`${BASE_URL}/bookings`, { params });
   },
 
   approveBooking: async (bookingId: string) => {
@@ -154,8 +146,7 @@ export const OwnerService = {
   },
 
   getTrips: async (params?: { page?: number; limit?: number }) => {
-    const response = await axios.get(`${BASE_URL}/trips`, { params });
-    return response.data;
+    return axios.get(`${BASE_URL}/trips`, { params });
   },
 
   checkinTrip: async (tripId: string, dto: TripCheckinInput) => {
@@ -169,13 +160,11 @@ export const OwnerService = {
   },
 
   getEarnings: async (params?: { page?: number; limit?: number }) => {
-    const response = await axios.get(`${BASE_URL}/finance/earnings`, { params });
-    return response.data;
+    return axios.get(`${BASE_URL}/finance/earnings`, { params });
   },
 
   getTransactions: async (params?: { page?: number; limit?: number }) => {
-    const response = await axios.get(`${BASE_URL}/finance/transactions`, { params });
-    return response.data;
+    return axios.get(`${BASE_URL}/finance/transactions`, { params });
   },
 
   requestWithdraw: async (dto: WithdrawRequestInput) => {
