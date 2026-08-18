@@ -2,9 +2,10 @@
 import {
   BadRequestException,
   ConflictException,
+  HttpException,
+  HttpStatus,
   Injectable,
   NotFoundException,
-  TooManyRequestsException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -191,8 +192,9 @@ export class AuthService {
       Date.now() - previousOtp.createdAt.getTime() <
         AuthService.OTP_RESEND_COOLDOWN_MS
     ) {
-      throw new TooManyRequestsException(
+      throw new HttpException(
         'Vui lòng chờ trước khi yêu cầu OTP mới',
+        HttpStatus.TOO_MANY_REQUESTS,
       );
     }
 
