@@ -142,7 +142,11 @@ export class MomoGatewayService {
       },
     );
 
-    if (response.partnerCode !== partnerCode || response.orderId !== orderId) {
+    if (
+      response.partnerCode !== partnerCode ||
+      response.orderId !== orderId ||
+      response.requestId !== requestId
+    ) {
       throw new BadGatewayException('MoMo trả về trạng thái không khớp giao dịch');
     }
     return response;
@@ -216,8 +220,10 @@ export class MomoGatewayService {
   }
 
   private toVndInteger(amount: number) {
-    if (!Number.isSafeInteger(amount) || amount <= 0) {
-      throw new BadRequestException('Số tiền MoMo phải là số nguyên VND dương');
+    if (!Number.isSafeInteger(amount) || amount < 1000) {
+      throw new BadRequestException(
+        'Số tiền MoMo phải là số nguyên VND và tối thiểu 1.000 VND',
+      );
     }
     return amount;
   }
