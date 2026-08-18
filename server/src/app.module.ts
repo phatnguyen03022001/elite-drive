@@ -9,6 +9,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { CustomerModule } from './modules/customer/customer.module';
 import { MailModule } from './modules/mail/mail.module';
 import { OwnerModule } from './modules/owner/owner.module';
+import { PaymentModule } from './modules/payment/payment.module';
 import { PublicModule } from './modules/public/public.module';
 import { UploadModule } from './modules/upload/upload.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -24,6 +25,7 @@ import { PrismaModule } from './prisma/prisma.module';
     CustomerModule,
     OwnerModule,
     AdminModule,
+    PaymentModule,
     MailModule,
     PublicModule,
     UploadModule,
