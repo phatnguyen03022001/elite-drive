@@ -62,10 +62,10 @@ export const SignContractSchema = z.object({
 
 export const CreateReviewSchema = z.object({
   carId: z.string().min(1),
-  bookingId: z.string().optional(),
-  rating: z.number().min(1, "Rating must be at least 1 star.").max(5, "Rating cannot exceed 5 stars."),
-  title: z.string().optional(),
-  content: z.string().min(5, "Review must contain at least 5 characters.").optional(),
+  bookingId: z.string().min(1),
+  rating: z.number().int().min(1, "Rating must be at least 1 star.").max(5, "Rating cannot exceed 5 stars."),
+  title: z.string().max(120).optional(),
+  content: z.string().min(5, "Review must contain at least 5 characters.").max(2000).optional(),
 });
 
 export const WalletSchema = z.object({
