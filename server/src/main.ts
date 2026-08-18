@@ -3,6 +3,10 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { AppSwaggerConfig } from './config/swagger/swagger.module';
 import { GlobalValidationPipe } from './common/pipes/validation.pipe';
+import {
+  buildTrustedOrigins,
+  isTrustedFrontendOrigin,
+} from './common/security/trusted-origins';
 import { PrismaService } from './prisma/prisma.service';
 
 const bootstrapLogger = new Logger('Bootstrap');
@@ -29,23 +33,14 @@ async function bootstrap() {
 
   app.useGlobalPipes(GlobalValidationPipe);
 
-  const configuredFrontendUrl = process.env.FRONTEND_URL;
-  const allowedOrigins = new Set(
-    [
-      'https://elite-drive-iota.vercel.app',
-      'http://localhost:3000',
-      configuredFrontendUrl,
-    ].filter((origin): origin is string => Boolean(origin)),
+  const trustedOrigins = buildTrustedOrigins(
+    process.env.FRONTEND_URL,
+    process.env.ALLOW_VERCEL_PREVIEWS === 'true',
   );
-  const allowVercelPreviews = process.env.ALLOW_VERCEL_PREVIEWS === 'true';
 
   app.enableCors({
     origin: (origin, callback) => {
-      if (
-        !origin ||
-        allowedOrigins.has(origin) ||
-        (allowVercelPreviews && origin.endsWith('.vercel.app'))
-      ) {
+      if (!origin || isTrustedFrontendOrigin(origin, trustedOrigins)) {
         callback(null, true);
         return;
       }
