@@ -13,6 +13,7 @@ import {
   ResolveDisputeInput,
   DisputeQueryInput,
   WithdrawQueryInput,
+  ApproveWithdrawInput,
   RejectWithdrawInput,
   CreateCategoryInput,
   CreateLocationInput,
@@ -131,8 +132,8 @@ export const AdminService = {
     return response.data;
   },
 
-  approveWithdraw: async (id: string) => {
-    const response = await axios.post(`${BASE_URL}/withdraws/${id}/approve`);
+  approveWithdraw: async (id: string, dto: ApproveWithdrawInput) => {
+    const response = await axios.post(`${BASE_URL}/withdraws/${id}/approve`, dto);
     return response.data;
   },
 
