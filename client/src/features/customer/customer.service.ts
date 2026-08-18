@@ -9,6 +9,8 @@ import {
   CreatePaymentInput,
   CreateReviewInput,
   CreateWalletTopupInput,
+  MomoCheckoutSchema,
+  MomoStatusSchema,
   SignContractInput,
   TripQuerySchema,
   UpdateCustomerProfileInput,
@@ -16,6 +18,7 @@ import {
 } from "./customer.schema";
 
 const BASE_URL = "/api/customer";
+const MOMO_BASE_URL = "/api/payments/momo";
 
 export const CustomerService = {
   getProfile: async () => {
@@ -72,6 +75,16 @@ export const CustomerService = {
   createPayment: async (dto: CreatePaymentInput) => {
     const response = await axios.post(`${BASE_URL}/payments/create`, dto);
     return response.data;
+  },
+
+  createMomoCheckout: async (paymentId: string) => {
+    const response = await axios.post(`${MOMO_BASE_URL}/${paymentId}/checkout`);
+    return MomoCheckoutSchema.parse(response.data);
+  },
+
+  getMomoStatus: async (paymentId: string) => {
+    const response = await axios.get(`${MOMO_BASE_URL}/${paymentId}/status`);
+    return MomoStatusSchema.parse(response.data);
   },
 
   confirmPayment: async (dto: z.infer<typeof ConfirmPaymentSchema>) => {
