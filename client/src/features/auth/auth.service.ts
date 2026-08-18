@@ -60,5 +60,8 @@ export const authService = {
     },
   },
 
-  getProfile: async () => axios.get("/api/profile"),
+  getProfile: async () => {
+    const response = await axios.get("/api/auth/me");
+    return response.data;
+  },
 };
