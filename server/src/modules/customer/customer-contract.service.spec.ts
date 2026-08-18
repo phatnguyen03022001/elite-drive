@@ -4,6 +4,20 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CustomerContractService } from './customer-contract.service';
 
 describe('CustomerContractService invariants', () => {
+  it('rejects an oversized signature before opening a database transaction', async () => {
+    const db = {
+      $transaction: jest.fn(),
+    } as unknown as PrismaService;
+    const service = new CustomerContractService(db);
+
+    await expect(
+      service.signContract('customer-1', 'booking-1', {
+        signatureData: 'a'.repeat(200_001),
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(db.$transaction).not.toHaveBeenCalled();
+  });
+
   it('requires a confirmed booking before signing', async () => {
     const tx = {
       contract: {
@@ -104,7 +118,7 @@ describe('CustomerContractService invariants', () => {
     } as unknown as PrismaService;
     const service = new CustomerContractService(db);
 
-    await service.signContract('customer-1', 'booking-1', { signatureData: 'sig' });
+    await service.signContract('customer-1', 'booking-1', { signatureData: ' sig ' });
 
     expect(tx.contract.updateMany).toHaveBeenCalledWith({
       where: {
