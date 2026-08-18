@@ -49,44 +49,48 @@ export class AdminFinanceService {
           : undefined,
     };
 
-    return this.db.payment.findMany({
-      where,
-      skip: (page - 1) * limit,
-      take: limit,
-      orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        bookingId: true,
-        userId: true,
-        walletId: true,
-        amount: true,
-        paymentMethod: true,
-        transactionId: true,
-        status: true,
-        paidAt: true,
-        refundedAt: true,
-        failureReason: true,
-        createdAt: true,
-        updatedAt: true,
-        user: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
+    const [items, total] = await Promise.all([
+      this.db.payment.findMany({
+        where,
+        skip: (page - 1) * limit,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          bookingId: true,
+          userId: true,
+          amount: true,
+          paymentMethod: true,
+          transactionId: true,
+          status: true,
+          paidAt: true,
+          refundedAt: true,
+          failureReason: true,
+          createdAt: true,
+          updatedAt: true,
+          user: {
+            select: {
+              id: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+            },
+          },
+          booking: {
+            select: {
+              id: true,
+              status: true,
+              startDate: true,
+              endDate: true,
+              totalPrice: true,
+            },
           },
         },
-        booking: {
-          select: {
-            id: true,
-            status: true,
-            startDate: true,
-            endDate: true,
-            totalPrice: true,
-          },
-        },
-      },
-    });
+      }),
+      this.db.payment.count({ where }),
+    ]);
+
+    return { items, total, page, limit };
   }
 
   async getPlatformWallet() {
