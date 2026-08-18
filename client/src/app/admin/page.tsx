@@ -46,7 +46,8 @@ export default function AdminOperationsDashboardPage() {
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async (background = false) => {
-    background ? setRefreshing(true) : setLoading(true);
+    if (background) setRefreshing(true);
+    else setLoading(true);
     setError(null);
     try {
       const [overview, kyc, cars, withdrawals, disputes, releases, wallet] = await Promise.all([
