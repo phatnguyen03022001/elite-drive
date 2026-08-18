@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { CalendarDays, Car, ChevronLeft, ChevronRight, MessageSquare, Star } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
+import { z } from "zod";
 import { CustomerService } from "@/features/customer/customer.service";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,30 +12,37 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 const dateFormatter = new Intl.DateTimeFormat("en-US", { day: "2-digit", month: "short", year: "numeric" });
 
-type Review = {
-  id: string;
-  bookingId: string | null;
-  carId: string;
-  rating: number;
-  title: string | null;
-  content: string | null;
-  createdAt: string;
-  car: { name: string };
-};
+const ReviewResponseSchema = z.object({
+  data: z.array(
+    z.object({
+      id: z.string(),
+      bookingId: z.string().nullable(),
+      carId: z.string(),
+      rating: z.number().int().min(1).max(5),
+      title: z.string().nullable(),
+      content: z.string().nullable(),
+      createdAt: z.string(),
+      car: z.object({ name: z.string() }),
+    }),
+  ),
+  meta: z.object({
+    total: z.number().int().nonnegative(),
+    page: z.number().int().positive(),
+    limit: z.number().int().positive(),
+    lastPage: z.number().int().nonnegative(),
+  }),
+});
 
-type ReviewResponse = {
-  data: Review[];
-  meta: { total: number; page: number; limit: number; lastPage: number };
-};
+type ReviewResponse = z.infer<typeof ReviewResponseSchema>;
 
 export default function CustomerReviewsPage() {
   const [page, setPage] = useState(1);
   const query = useQuery<ReviewResponse>({
     queryKey: ["customer", "reviews", page],
-    queryFn: async () => {
-      const response = await CustomerService.getMyReviews({ page, limit: 6 });
-      return response as ReviewResponse;
-    },
+    queryFn: async () =>
+      ReviewResponseSchema.parse(
+        await CustomerService.getMyReviews({ page, limit: 6 }),
+      ),
     placeholderData: (previous) => previous,
   });
   const reviews = query.data?.data ?? [];
