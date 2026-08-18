@@ -1,7 +1,16 @@
 import type { NextConfig } from "next";
 
-const backendUrl = process.env.BACKEND_URL || "http://localhost:8000";
-const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://elite-drive-iota.vercel.app";
+const defaultBackendUrl =
+  process.env.NODE_ENV === "production"
+    ? "https://elitedrive-demoversion.onrender.com"
+    : "http://localhost:8000";
+
+// BACKEND_URL is the canonical server-side setting. NEXT_PUBLIC_API_URL remains
+// a compatibility fallback for existing deployments while environments migrate.
+const backendUrl =
+  process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || defaultBackendUrl;
+const appUrl =
+  process.env.NEXT_PUBLIC_APP_URL || "https://elite-drive-iota.vercel.app";
 
 const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
