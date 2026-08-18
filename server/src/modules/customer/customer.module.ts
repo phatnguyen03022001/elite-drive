@@ -5,6 +5,7 @@ import { CustomerCancellationService } from './customer-cancellation.service';
 import { CustomerController } from './customer.controller';
 import { CustomerPaymentService } from './customer-payment.service';
 import { CustomerPromotionService } from './customer-promotion.service';
+import { CustomerReviewService } from './customer-review.service';
 import { CustomerService } from './customer.service';
 
 @Module({
@@ -22,6 +23,7 @@ import { CustomerService } from './customer.service';
     CustomerBookingService,
     CustomerPromotionService,
     CustomerCancellationService,
+    CustomerReviewService,
   ],
   exports: [
     CustomerService,
@@ -29,6 +31,7 @@ import { CustomerService } from './customer.service';
     CustomerBookingService,
     CustomerPromotionService,
     CustomerCancellationService,
+    CustomerReviewService,
   ],
 })
 export class CustomerModule {}
