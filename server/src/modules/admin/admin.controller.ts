@@ -24,7 +24,7 @@ import {
   CustomerProfileResponseDto,
   UpdateCustomerProfileDto,
 } from '../customer/dto/customer.dto';
-import { CustomerService } from '../customer/customer.service';
+import { CustomerProfileService } from '../customer/customer-profile.service';
 import { AdminFinanceService } from './admin-finance.service';
 import { AdminPromotionService } from './admin-promotion.service';
 import { AdminRefundService } from './admin-refund.service';
@@ -64,12 +64,12 @@ export class AdminController {
     private readonly refundService: AdminRefundService,
     private readonly settlementService: AdminSettlementService,
     private readonly withdrawalService: AdminWithdrawalService,
-    private readonly customerService: CustomerService,
+    private readonly profileService: CustomerProfileService,
   ) {}
 
   @Get('profile')
   async getProfile(@CurrentUser('id') userId: string): Promise<ApiResponse<CustomerProfileResponseDto>> {
-    return ApiResponse.success(await this.customerService.getProfile(userId));
+    return ApiResponse.success(await this.profileService.getProfile(userId));
   }
 
   @Put('profile')
@@ -80,7 +80,7 @@ export class AdminController {
     @UploadedFile() avatarFile?: Express.Multer.File,
   ): Promise<ApiResponse<CustomerProfileResponseDto>> {
     return ApiResponse.success(
-      await this.customerService.updateProfile(userId, dto, avatarFile),
+      await this.profileService.updateProfile(userId, dto, avatarFile),
       'Cập nhật thành công',
     );
   }
