@@ -276,7 +276,7 @@ export class OwnerController {
     @Query() query?: PaginationDto,
   ) {
     const { data, total, page, limit } =
-      await this.ownerService.getOwnerTransactions(userId, query);
+      await this.financeService.getTransactions(userId, query);
     return new PaginatedResponseDto(data, total, page, limit);
   }
 
@@ -306,7 +306,7 @@ export class OwnerController {
 
   @Get('wallet')
   async getWallet(@CurrentUser('id') userId: string) {
-    const wallet = await this.ownerService.getWallet(userId);
+    const wallet = await this.financeService.getWallet(userId);
     return ApiResponse.success(wallet);
   }
 
