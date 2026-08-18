@@ -43,6 +43,7 @@ export class PaymentService {
       requestId,
       amount: payment.amount,
       orderInfo: `Elite Drive booking ${payment.bookingId ?? payment.id}`,
+      returnReference: payment.id,
       extraData: {
         paymentId: payment.id,
         ...(payment.bookingId ? { bookingId: payment.bookingId } : {}),
