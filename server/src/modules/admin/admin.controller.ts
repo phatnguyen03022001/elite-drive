@@ -19,12 +19,14 @@ import { PaginationDto } from '../../common/dto/pagination.dto';
 import { ApiResponse } from '../../common/dto/response.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { imageUploadOptions } from '../../common/upload/image-upload-options';
 import {
   CustomerProfileResponseDto,
   UpdateCustomerProfileDto,
 } from '../customer/dto/customer.dto';
 import { CustomerService } from '../customer/customer.service';
 import { AdminFinanceService } from './admin-finance.service';
+import { AdminPromotionService } from './admin-promotion.service';
 import { AdminService } from './admin.service';
 import {
   AdminKYCQueryDto,
@@ -54,6 +56,7 @@ export class AdminController {
   constructor(
     private readonly adminService: AdminService,
     private readonly financeService: AdminFinanceService,
+    private readonly promotionService: AdminPromotionService,
     private readonly customerService: CustomerService,
   ) {}
 
@@ -63,7 +66,7 @@ export class AdminController {
   }
 
   @Put('profile')
-  @UseInterceptors(FileInterceptor('avatar'))
+  @UseInterceptors(FileInterceptor('avatar', imageUploadOptions))
   async updateProfile(
     @CurrentUser('id') userId: string,
     @Body() dto: UpdateCustomerProfileDto,
@@ -131,17 +134,17 @@ export class AdminController {
 
   @Post('promotions')
   async createPromotion(@Body() dto: CreatePromotionDto) {
-    return ApiResponse.success(await this.adminService.createPromotion(dto), 'Khuyến mãi đã tạo');
+    return ApiResponse.success(await this.promotionService.create(dto), 'Khuyến mãi đã tạo');
   }
 
   @Patch('promotions/:id')
   async updatePromotion(@Param('id') id: string, @Body() dto: UpdatePromotionDto) {
-    return ApiResponse.success(await this.adminService.updatePromotion(id, dto), 'Khuyến mãi đã cập nhật');
+    return ApiResponse.success(await this.promotionService.update(id, dto), 'Khuyến mãi đã cập nhật');
   }
 
   @Get('promotions')
   async getPromotions(@Query() query: PromotionQueryDto) {
-    return ApiResponse.success(await this.adminService.getPromotions(query));
+    return ApiResponse.success(await this.promotionService.getAll(query));
   }
 
   @Get('payments')
