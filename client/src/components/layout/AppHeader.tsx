@@ -3,10 +3,9 @@
 import React, { useState } from "react";
 import { usePathname } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { RefreshCw } from "lucide-react"; // Import icon
+import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -15,64 +14,68 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "../ui/breadcrumb";
-// ... các imports Breadcrumb giữ nguyên
+
+const ROLE_LABELS: Record<string, string> = {
+  customer: "Customer",
+  owner: "Owner",
+  admin: "Admin",
+};
+
+function formatSegment(segment: string) {
+  return ROLE_LABELS[segment] ?? segment.replaceAll("-", " ");
+}
 
 export function AppHeader() {
   const pathname = usePathname();
   const queryClient = useQueryClient();
   const [isRefreshing, setIsRefreshing] = useState(false);
-
   const segments = pathname.split("/").filter(Boolean);
-  const roleBase = segments[0];
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
     try {
-      // Làm mới tất cả dữ liệu đang active trên màn hình
       await queryClient.invalidateQueries();
-      toast.success("Dữ liệu đã được cập nhật mới nhất");
-    } catch (error) {
-      toast.error("Không thể làm mới dữ liệu");
+      toast.success("Data is up to date");
+    } catch {
+      toast.error("Could not refresh data");
     } finally {
-      // Giữ hiệu ứng xoay thêm một chút cho mượt
-      setTimeout(() => setIsRefreshing(false), 500);
+      setIsRefreshing(false);
     }
   };
 
   return (
-    <header className="sticky top-3 z-40 ml-6 m-2 flex items-center justify-between pr-4">
-      <div className="flex items-center h-8 gap-2">
-        <Breadcrumb>
-          <BreadcrumbList>
-            <BreadcrumbItem>
-              <BreadcrumbLink href={`/`} className="transition-colors hover:text-primary">
-                Elite Drive
-              </BreadcrumbLink>
-            </BreadcrumbItem>
-            {segments.slice(1).map((segment) => (
-              <React.Fragment key={segment}>
+    <header className="sticky top-0 z-40 flex min-h-16 items-center justify-between border-b bg-background/90 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/75 md:px-6">
+      <Breadcrumb>
+        <BreadcrumbList>
+          <BreadcrumbItem>
+            <BreadcrumbLink href="/" className="font-semibold transition-colors hover:text-foreground">
+              Elite Drive
+            </BreadcrumbLink>
+          </BreadcrumbItem>
+          {segments.map((segment, index) => {
+            const isLast = index === segments.length - 1;
+            const href = `/${segments.slice(0, index + 1).join("/")}`;
+            return (
+              <React.Fragment key={`${segment}-${index}`}>
                 <BreadcrumbSeparator />
                 <BreadcrumbItem>
-                  <BreadcrumbPage className="capitalize font-medium text-foreground/80">
-                    {segment.replace("-", " ")}
-                  </BreadcrumbPage>
+                  {isLast ? (
+                    <BreadcrumbPage className="capitalize font-medium">{formatSegment(segment)}</BreadcrumbPage>
+                  ) : (
+                    <BreadcrumbLink href={href} className="capitalize text-muted-foreground transition-colors hover:text-foreground">
+                      {formatSegment(segment)}
+                    </BreadcrumbLink>
+                  )}
                 </BreadcrumbItem>
               </React.Fragment>
-            ))}
-          </BreadcrumbList>
-        </Breadcrumb>
-      </div>
+            );
+          })}
+        </BreadcrumbList>
+      </Breadcrumb>
 
-      {/* Nút Làm mới dữ liệu */}
-      <Button
-        // Bỏ variant mặc định để tự định nghĩa màu sắc
-        size="sm"
-        onClick={handleRefresh}
-        disabled={isRefreshing}>
-        <RefreshCw />
-        <span className="text-sm font-semibold tracking-tight">
-          {isRefreshing ? "Đang cập nhật..." : "Đồng bộ dữ liệu"}
-        </span>
+      <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isRefreshing} aria-label="Refresh page data">
+        <RefreshCw className={isRefreshing ? "animate-spin" : ""} />
+        <span className="hidden sm:inline">{isRefreshing ? "Refreshing" : "Refresh"}</span>
       </Button>
     </header>
   );
