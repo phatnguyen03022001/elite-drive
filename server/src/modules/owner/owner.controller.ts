@@ -33,6 +33,7 @@ import {
   OwnerBookingQueryDto,
   OwnerProfileResponseDto,
   RejectBookingDto,
+  RespondDisputeDto,
   TripCheckinDto,
   TripCheckoutDto,
   UpdateCarDto,
@@ -83,7 +84,7 @@ export class OwnerController {
       documentBack?: Express.Multer.File[];
       faceImage?: Express.Multer.File[];
     },
-  ): Promise<ApiResponse<any>> {
+  ): Promise<ApiResponse<unknown>> {
     const kyc = await this.ownerService.submitKyc(userId, dto, files);
     return ApiResponse.success(kyc, 'Owner identity verification submitted');
   }
@@ -301,12 +302,12 @@ export class OwnerController {
   async respondDispute(
     @CurrentUser('id') userId: string,
     @Param('dispute_id') disputeId: string,
-    @Body('message') message: string,
+    @Body() dto: RespondDisputeDto,
   ) {
     const dispute = await this.ownerService.respondDispute(
       userId,
       disputeId,
-      message,
+      dto.message,
     );
     return ApiResponse.success(dispute, 'Dispute response submitted');
   }
