@@ -24,7 +24,7 @@ const ACTIVE_BOOKING_STATUSES: BookingStatus[] = [
 export class PublicService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getProfile(userId: string): Promise<any> {
+  async getProfile(userId: string) {
     if (!userId) {
       throw new UnauthorizedException('User identity is required');
     }
@@ -113,8 +113,6 @@ export class PublicService {
             bookings: {
               none: {
                 status: { in: ACTIVE_BOOKING_STATUSES },
-                // Booking ranges use [startDate, endDate): a return on the next
-                // renter's pick-up date is not a conflict.
                 startDate: { lt: endDate },
                 endDate: { gt: startDate },
               },
@@ -129,13 +127,13 @@ export class PublicService {
         : {}),
     };
 
-    const [data, total] = await Promise.all([
+    const [cars, total] = await Promise.all([
       this.prisma.car.findMany({
         where,
         skip,
         take: limit,
         include: {
-          category: { select: { name: true, imageUrl: true } },
+          category: { select: { name: true, slug: true } },
           location: { select: { name: true, address: true, city: true } },
           owner: {
             select: {
@@ -149,7 +147,7 @@ export class PublicService {
               rating: true,
               content: true,
               createdAt: true,
-              customer: {
+              user: {
                 select: { firstName: true, lastName: true, avatar: true },
               },
             },
@@ -161,6 +159,14 @@ export class PublicService {
       }),
       this.prisma.car.count({ where }),
     ]);
+
+    const data = cars.map((car) => ({
+      ...car,
+      reviews: car.reviews.map(({ user, ...review }) => ({
+        ...review,
+        customer: user,
+      })),
+    }));
 
     return { data, total, page, limit };
   }
@@ -186,7 +192,7 @@ export class PublicService {
         },
         reviews: {
           include: {
-            customer: {
+            user: {
               select: { firstName: true, lastName: true, avatar: true },
             },
           },
@@ -202,7 +208,13 @@ export class PublicService {
       throw new NotFoundException('Vehicle not found or not approved');
     }
 
-    return car;
+    return {
+      ...car,
+      reviews: car.reviews.map(({ user, ...review }) => ({
+        ...review,
+        customer: user,
+      })),
+    };
   }
 
   async getCarAvailability(
@@ -259,14 +271,14 @@ export class PublicService {
     const { page = 1, limit = 10 } = query;
     const skip = (page - 1) * limit;
 
-    const [items, total] = await Promise.all([
+    const [reviews, total] = await Promise.all([
       this.prisma.review.findMany({
         where: { carId },
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
         include: {
-          customer: {
+          user: {
             select: {
               firstName: true,
               lastName: true,
@@ -278,7 +290,12 @@ export class PublicService {
       this.prisma.review.count({ where: { carId } }),
     ]);
 
-    return { data: items, total, page, limit };
+    const data = reviews.map(({ user, ...review }) => ({
+      ...review,
+      customer: user,
+    }));
+
+    return { data, total, page, limit };
   }
 
   async getReviewSummary() {
