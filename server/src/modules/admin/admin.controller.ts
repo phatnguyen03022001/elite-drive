@@ -29,7 +29,9 @@ import { AdminFinanceService } from './admin-finance.service';
 import { AdminPromotionService } from './admin-promotion.service';
 import { AdminRefundService } from './admin-refund.service';
 import { AdminSettlementService } from './admin-settlement.service';
+import { AdminWithdrawalService } from './admin-withdrawal.service';
 import { AdminService } from './admin.service';
+import { ApproveWithdrawDto } from './dto/admin-withdraw.dto';
 import {
   AdminKYCQueryDto,
   CreateCategoryDto,
@@ -61,6 +63,7 @@ export class AdminController {
     private readonly promotionService: AdminPromotionService,
     private readonly refundService: AdminRefundService,
     private readonly settlementService: AdminSettlementService,
+    private readonly withdrawalService: AdminWithdrawalService,
     private readonly customerService: CustomerService,
   ) {}
 
@@ -237,18 +240,21 @@ export class AdminController {
 
   @Get('withdraws/pending')
   async getPendingWithdraws(@Query() query: PaginationDto) {
-    return ApiResponse.success(await this.financeService.getPendingWithdraws(query));
+    return ApiResponse.success(await this.withdrawalService.getPending(query));
   }
 
   @Post('withdraws/:id/approve')
-  async approveWithdraw(@Param('id') id: string) {
-    await this.financeService.approveWithdraw(id);
-    return ApiResponse.success(null, 'Đã duyệt rút tiền');
+  async approveWithdraw(
+    @Param('id') id: string,
+    @Body() dto: ApproveWithdrawDto,
+  ) {
+    const result = await this.withdrawalService.approve(id, dto);
+    return ApiResponse.success(result, 'Đã xác nhận payout và duyệt rút tiền');
   }
 
   @Post('withdraws/:id/reject')
   async rejectWithdraw(@Param('id') id: string, @Body() dto: RejectWithdrawDto) {
-    await this.financeService.rejectWithdraw(id, dto.reason);
+    await this.withdrawalService.reject(id, dto.reason);
     return ApiResponse.success(null, 'Đã từ chối rút tiền');
   }
 
