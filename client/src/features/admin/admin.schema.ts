@@ -68,18 +68,32 @@ export const PendingCarSchema = z.object({
   createdAt: z.string(),
 });
 
-export const CreatePromotionSchema = z.object({
-  code: z.string().min(1, "Mã khuyến mãi không được để trống"),
-  description: z.string().optional(),
+const PromotionDefinitionSchema = z.object({
+  code: z.string().trim().regex(/^[A-Za-z0-9_-]{3,40}$/, "Mã khuyến mãi phải dài 3-40 ký tự và chỉ gồm chữ, số, _ hoặc -"),
+  description: z.string().max(500).optional(),
   discountType: z.enum(["PERCENTAGE", "FIXED"]),
   discountValue: z.number().positive("Giá trị giảm giá phải > 0"),
-  maxUses: z.number().optional(),
-  minBookingAmount: z.number().optional(),
-  startDate: z.string(),
-  endDate: z.string(),
+  maxUses: z.number().int().positive().optional(),
+  minBookingAmount: z.number().int().nonnegative().optional(),
+  startDate: z.string().min(1),
+  endDate: z.string().min(1),
 });
 
-export const UpdatePromotionSchema = CreatePromotionSchema.partial().extend({
+export const CreatePromotionSchema = PromotionDefinitionSchema.superRefine((value, ctx) => {
+  if (value.discountType === "PERCENTAGE" && value.discountValue > 100) {
+    ctx.addIssue({ code: "custom", path: ["discountValue"], message: "Phần trăm giảm tối đa là 100%" });
+  }
+  if (value.discountType === "FIXED" && !Number.isSafeInteger(value.discountValue)) {
+    ctx.addIssue({ code: "custom", path: ["discountValue"], message: "Giảm cố định phải là số nguyên VND" });
+  }
+  const start = new Date(value.startDate);
+  const end = new Date(value.endDate);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start >= end) {
+    ctx.addIssue({ code: "custom", path: ["endDate"], message: "Ngày kết thúc phải sau ngày bắt đầu" });
+  }
+});
+
+export const UpdatePromotionSchema = PromotionDefinitionSchema.partial().extend({
   isActive: z.boolean().optional(),
 });
 
