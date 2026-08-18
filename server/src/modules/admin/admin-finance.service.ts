@@ -115,6 +115,78 @@ export class AdminFinanceService {
     return wallet;
   }
 
+  async reconcileWalletLedger(query: PaginationDto = {}) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+    const [wallets, total] = await Promise.all([
+      this.db.wallet.findMany({
+        skip: (page - 1) * limit,
+        take: limit,
+        orderBy: { createdAt: 'asc' },
+        select: {
+          id: true,
+          userId: true,
+          balance: true,
+          currency: true,
+          user: {
+            select: {
+              email: true,
+              role: true,
+              firstName: true,
+              lastName: true,
+            },
+          },
+        },
+      }),
+      this.db.wallet.count(),
+    ]);
+
+    const walletIds = wallets.map((wallet) => wallet.id);
+    const journalRows = walletIds.length
+      ? await this.db.walletTransaction.groupBy({
+          by: ['walletId'],
+          where: { walletId: { in: walletIds } },
+          _sum: { amount: true },
+        })
+      : [];
+    const journalByWallet = new Map(
+      journalRows.map((row) => [row.walletId, row._sum.amount ?? 0]),
+    );
+
+    const items = wallets.map((wallet) => {
+      const journalBalance = journalByWallet.get(wallet.id) ?? 0;
+      const validVnd =
+        wallet.currency === 'VND' &&
+        Number.isSafeInteger(wallet.balance) &&
+        Number.isSafeInteger(journalBalance);
+      const drift = wallet.balance - journalBalance;
+      return {
+        walletId: wallet.id,
+        userId: wallet.userId,
+        user: wallet.user,
+        currency: wallet.currency,
+        balance: wallet.balance,
+        journalBalance,
+        drift,
+        validVnd,
+        isBalanced: validVnd && drift === 0,
+      };
+    });
+
+    return {
+      items,
+      total,
+      page,
+      limit,
+      summary: {
+        checked: items.length,
+        balanced: items.filter((item) => item.isBalanced).length,
+        mismatched: items.filter((item) => item.validVnd && item.drift !== 0).length,
+        invalidVnd: items.filter((item) => !item.validVnd).length,
+      },
+    };
+  }
+
   async runSettlement(dto: RunSettlementDto) {
     const owners = await this.db.user.findMany({
       where: {
@@ -128,12 +200,14 @@ export class AdminFinanceService {
       throw new NotFoundException('Owner không tồn tại');
     }
 
+    const { start, end } = this.periodRange(dto.period);
     const totals = await this.db.ownerTransaction.groupBy({
       by: ['ownerId'],
       where: {
         ownerId: { in: owners.map((owner) => owner.id) },
         type: 'RENTAL_INCOME',
         status: 'completed',
+        createdAt: { gte: start, lt: end },
       },
       _sum: { amount: true },
     });
@@ -181,7 +255,7 @@ export class AdminFinanceService {
       }
     }
 
-    return { success: true, created, skipped };
+    return { success: true, created, skipped, period: dto.period, start, end };
   }
 
   async getSettlementHistory(
@@ -237,6 +311,10 @@ export class AdminFinanceService {
         );
       }
       assertVndAmount(payment.amount, { field: 'Số tiền payment' });
+      assertVndAmount(booking.totalPrice, { field: 'Tổng tiền booking' });
+      if (payment.amount !== booking.totalPrice) {
+        throw new BadRequestException('Payment không khớp tổng tiền booking');
+      }
 
       const bookingClaim = await tx.booking.updateMany({
         where: { id: bookingId, status: BookingStatus.CONFIRMED },
@@ -258,12 +336,23 @@ export class AdminFinanceService {
         field: 'Số tiền owner nhận',
       });
 
+      const platformWallet = await tx.wallet.findUnique({
+        where: { userId: this.platformUserId },
+      });
+      if (!platformWallet) {
+        throw new BadRequestException('Ví escrow nền tảng không tồn tại');
+      }
+      assertVndAmount(platformWallet.balance, {
+        allowZero: true,
+        field: 'Số dư escrow',
+      });
+
       const escrowDebit = await tx.wallet.updateMany({
         where: {
-          userId: this.platformUserId,
-          balance: { gte: payment.amount },
+          id: platformWallet.id,
+          balance: { gte: ownerAmount },
         },
-        data: { balance: { decrement: payment.amount } },
+        data: { balance: { decrement: ownerAmount } },
       });
       if (escrowDebit.count !== 1) {
         throw new BadRequestException('Số dư escrow không đủ để giải ngân');
@@ -275,19 +364,35 @@ export class AdminFinanceService {
         update: { balance: { increment: ownerAmount } },
       });
 
-      await tx.walletTransaction.create({
-        data: {
-          walletId: ownerWallet.id,
-          amount: ownerAmount,
-          type: 'RENTAL_INCOME',
-          description: `Giải ngân booking ${booking.id}`,
-          metadata: {
-            operation: 'RELEASE_PAYMENT',
-            bookingId: booking.id,
-            paymentId: payment.id,
-            platformFee,
+      await tx.walletTransaction.createMany({
+        data: [
+          {
+            walletId: platformWallet.id,
+            amount: -ownerAmount,
+            type: 'ESCROW_RELEASE',
+            description: `Giải ngân booking ${booking.id}`,
+            metadata: {
+              operation: 'RELEASE_PAYMENT',
+              bookingId: booking.id,
+              paymentId: payment.id,
+              platformFeeRetained: platformFee,
+              counterpartWalletId: ownerWallet.id,
+            },
           },
-        },
+          {
+            walletId: ownerWallet.id,
+            amount: ownerAmount,
+            type: 'RENTAL_INCOME',
+            description: `Giải ngân booking ${booking.id}`,
+            metadata: {
+              operation: 'RELEASE_PAYMENT',
+              bookingId: booking.id,
+              paymentId: payment.id,
+              platformFee,
+              counterpartWalletId: platformWallet.id,
+            },
+          },
+        ],
       });
       await tx.ownerTransaction.create({
         data: {
@@ -307,7 +412,12 @@ export class AdminFinanceService {
         },
       });
 
-      return { success: true, ownerReceived: ownerAmount, platformFee };
+      return {
+        success: true,
+        ownerReceived: ownerAmount,
+        platformFee,
+        platformBalanceRetained: platformFee,
+      };
     });
 
     this.logger.log(`Released payment for booking ${bookingId}`);
@@ -316,6 +426,11 @@ export class AdminFinanceService {
 
   async refundPayment(dto: RefundPaymentDto) {
     const { bookingId, refundPercent = 100, reason } = dto;
+    if (refundPercent !== 100) {
+      throw new BadRequestException(
+        'Partial refund chưa được hỗ trợ bởi payment state model hiện tại',
+      );
+    }
 
     const result = await this.db.$transaction(async (tx) => {
       const booking = await tx.booking.findUnique({
@@ -323,6 +438,11 @@ export class AdminFinanceService {
         include: { payments: true },
       });
       if (!booking) throw new NotFoundException('Booking không tồn tại');
+      if (booking.status === BookingStatus.COMPLETED) {
+        throw new BadRequestException(
+          'Booking đã được giải ngân; cần reversal flow riêng thay vì refund escrow',
+        );
+      }
 
       const payment = booking.payments.find(
         (item) => item.status === PaymentStatus.COMPLETED,
@@ -333,24 +453,38 @@ export class AdminFinanceService {
         );
       }
       assertVndAmount(payment.amount, { field: 'Số tiền payment' });
+      assertVndAmount(booking.totalPrice, { field: 'Tổng tiền booking' });
+      if (payment.amount !== booking.totalPrice) {
+        throw new BadRequestException('Payment không khớp tổng tiền booking');
+      }
 
       const paymentClaim = await tx.payment.updateMany({
         where: { id: payment.id, status: PaymentStatus.COMPLETED },
         data: {
           status: PaymentStatus.REFUNDED,
           refundedAt: new Date(),
-          failureReason: `Refund ${refundPercent}%: ${reason.trim()}`,
+          failureReason: `Refund 100%: ${reason.trim()}`,
         },
       });
       if (paymentClaim.count !== 1) {
         throw new BadRequestException('Giao dịch đã được hoàn tiền');
       }
 
-      const refundAmount = calculateVndPercent(payment.amount, refundPercent);
-      assertVndAmount(refundAmount, { field: 'Số tiền hoàn' });
+      const refundAmount = payment.amount;
+      const platformWallet = await tx.wallet.findUnique({
+        where: { userId: this.platformUserId },
+      });
+      if (!platformWallet) {
+        throw new BadRequestException('Ví escrow nền tảng không tồn tại');
+      }
+      assertVndAmount(platformWallet.balance, {
+        allowZero: true,
+        field: 'Số dư escrow',
+      });
+
       const escrowDebit = await tx.wallet.updateMany({
         where: {
-          userId: this.platformUserId,
+          id: platformWallet.id,
           balance: { gte: refundAmount },
         },
         data: { balance: { decrement: refundAmount } },
@@ -364,19 +498,34 @@ export class AdminFinanceService {
         create: { userId: booking.customerId, balance: refundAmount },
         update: { balance: { increment: refundAmount } },
       });
-      await tx.walletTransaction.create({
-        data: {
-          walletId: customerWallet.id,
-          amount: refundAmount,
-          type: 'REFUND',
-          description: `Hoàn tiền booking ${bookingId}: ${reason.trim()}`,
-          metadata: {
-            operation: 'ADMIN_REFUND',
-            bookingId,
-            paymentId: payment.id,
-            percent: refundPercent,
+      await tx.walletTransaction.createMany({
+        data: [
+          {
+            walletId: platformWallet.id,
+            amount: -refundAmount,
+            type: 'ESCROW_REFUND',
+            description: `Hoàn escrow booking ${bookingId}: ${reason.trim()}`,
+            metadata: {
+              operation: 'ADMIN_REFUND',
+              bookingId,
+              paymentId: payment.id,
+              counterpartWalletId: customerWallet.id,
+            },
           },
-        },
+          {
+            walletId: customerWallet.id,
+            amount: refundAmount,
+            type: 'REFUND',
+            description: `Hoàn tiền booking ${bookingId}: ${reason.trim()}`,
+            metadata: {
+              operation: 'ADMIN_REFUND',
+              bookingId,
+              paymentId: payment.id,
+              percent: 100,
+              counterpartWalletId: platformWallet.id,
+            },
+          },
+        ],
       });
       await tx.booking.update({
         where: { id: bookingId },
@@ -522,5 +671,22 @@ export class AdminFinanceService {
     }
 
     return { processed, skipped };
+  }
+
+  private periodRange(period: string) {
+    const [year, month] = period.split('-').map(Number);
+    const start = new Date(Date.UTC(year, month - 1, 1));
+    const end = new Date(Date.UTC(year, month, 1));
+    if (
+      !Number.isInteger(year) ||
+      !Number.isInteger(month) ||
+      month < 1 ||
+      month > 12 ||
+      Number.isNaN(start.getTime()) ||
+      Number.isNaN(end.getTime())
+    ) {
+      throw new BadRequestException('Settlement period không hợp lệ');
+    }
+    return { start, end };
   }
 }
