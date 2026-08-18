@@ -4,6 +4,16 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { OwnerDisputeService } from './owner-dispute.service';
 
 describe('OwnerDisputeService invariants', () => {
+  it('rejects whitespace-only messages before opening a transaction', async () => {
+    const db = { $transaction: jest.fn() } as unknown as PrismaService;
+    const service = new OwnerDisputeService(db);
+
+    await expect(
+      service.respond('owner-1', 'dispute-1', '   '),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(db.$transaction).not.toHaveBeenCalled();
+  });
+
   it('rejects a dispute not owned through the booking car', async () => {
     const tx = {
       dispute: { findFirst: jest.fn().mockResolvedValue(null) },
