@@ -35,13 +35,48 @@ export class OwnerFinanceService {
       }),
     ]);
 
+    const totalEarnings = aggregate._sum.amount ?? 0;
+    assertVndAmount(totalEarnings, {
+      allowZero: true,
+      field: 'Tổng thu nhập owner',
+    });
+
     return {
       data,
       total,
       page,
       limit,
-      totalEarnings: aggregate._sum.amount ?? 0,
+      totalEarnings,
     };
+  }
+
+  async getTransactions(userId: string, query: PaginationDto = {}) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 10;
+    const where: Prisma.OwnerTransactionWhereInput = { ownerId: userId };
+    const [data, total] = await Promise.all([
+      this.db.ownerTransaction.findMany({
+        where,
+        skip: (page - 1) * limit,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.db.ownerTransaction.count({ where }),
+    ]);
+    return { data, total, page, limit };
+  }
+
+  async getWallet(userId: string) {
+    const wallet = await this.db.wallet.upsert({
+      where: { userId },
+      update: {},
+      create: { userId, balance: 0, currency: 'VND' },
+    });
+    assertVndAmount(wallet.balance, {
+      allowZero: true,
+      field: 'Số dư ví owner',
+    });
+    return wallet;
   }
 
   async requestWithdraw(userId: string, dto: WithdrawRequestDto) {
