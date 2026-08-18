@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AdminService } from "./admin.service";
 import {
   AdminKYCQueryInput,
+  ApproveWithdrawInput,
   CreateCategoryInput,
   CreateLocationInput,
   CreatePromotionInput,
@@ -194,7 +195,8 @@ export const usePendingWithdraws = (params: WithdrawQueryInput = {}) => useQuery
 export const useApproveWithdraw = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => AdminService.approveWithdraw(id),
+    mutationFn: ({ id, dto }: { id: string; dto: ApproveWithdrawInput }) =>
+      AdminService.approveWithdraw(id, dto),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: adminKeys.withdraws({}) });
       void queryClient.invalidateQueries({ queryKey: adminKeys.platformWallet() });
