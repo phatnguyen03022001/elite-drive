@@ -7,6 +7,7 @@ import { AdminPromotionService } from './admin-promotion.service';
 import { AdminRefundService } from './admin-refund.service';
 import { AdminSettlementService } from './admin-settlement.service';
 import { AdminWalletReconciliationController } from './admin-wallet-reconciliation.controller';
+import { AdminWithdrawalService } from './admin-withdrawal.service';
 import { AdminService } from './admin.service';
 import { CustomerModule } from '../customer/customer.module';
 import { PaymentModule } from '../payment/payment.module';
@@ -32,6 +33,7 @@ import { PaymentModule } from '../payment/payment.module';
     AdminPromotionService,
     AdminRefundService,
     AdminSettlementService,
+    AdminWithdrawalService,
   ],
   exports: [
     AdminService,
@@ -39,6 +41,7 @@ import { PaymentModule } from '../payment/payment.module';
     AdminPromotionService,
     AdminRefundService,
     AdminSettlementService,
+    AdminWithdrawalService,
   ],
 })
 export class AdminModule {}
