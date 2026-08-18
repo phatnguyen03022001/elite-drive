@@ -1,13 +1,11 @@
 import { Module } from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { SecureAdminService } from './secure-admin.service';
-
-// Controllers
 import { AdminController } from './admin.controller';
-
-// Shared
+import { CustomerModule } from '../customer/customer.module';
 
 @Module({
+  imports: [CustomerModule],
   controllers: [AdminController],
   providers: [
     SecureAdminService,
