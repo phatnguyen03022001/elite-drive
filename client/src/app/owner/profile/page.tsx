@@ -1,390 +1,138 @@
 "use client";
 
-import React, { useState } from "react";
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { UpdateCustomerProfileSchema, UpdateCustomerProfileInput } from "@/features/customer/customer.schema";
-import { useProfile, useUpdateProfile } from "@/features/customer/customer.queries";
-
-// UI Components
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Building2, Landmark, Loader2, MapPin, Save, ShieldCheck, UserRound } from "lucide-react";
 import { toast } from "sonner";
-import {
-  Loader2,
-  Save,
-  User,
-  MapPin,
-  Phone,
-  Undo2,
-  Mail,
-  ShieldCheck,
-  AlertCircle,
-  Calendar,
-  Hash,
-  Image as ImageIcon,
-  Edit3,
-} from "lucide-react";
+import { useOwnerProfile, useUpdateOwnerProfile } from "@/features/owner/owner.queries";
+import type { UpdateOwnerProfileInput } from "@/features/owner/owner.schema";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
 
-// Component con hiển thị thông tin dạng dòng
-const InfoRow = ({ icon: Icon, label, value }: { icon: any; label: string; value: string | null | undefined }) => (
-  <div className="flex flex-col space-y-1">
-    <span className="text-[10px] font-bold uppercase text-muted-foreground flex items-center gap-1">
-      <Icon className="w-3 h-3" /> {label}
-    </span>
-    <p className="text-sm font-medium">{value || "---"}</p>
-  </div>
-);
+const emptyProfile: UpdateOwnerProfileInput = {
+  companyName: "",
+  taxId: "",
+  bankAccountName: "",
+  bankAccountNumber: "",
+  bankCode: "",
+  address: "",
+  city: "",
+  country: "Vietnam",
+};
 
-export default function ProfilePage() {
-  const [isEditing, setIsEditing] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+export default function OwnerProfilePage() {
+  const profileQuery = useOwnerProfile();
+  const updateProfile = useUpdateOwnerProfile();
+  const { register, handleSubmit, reset, formState } = useForm<UpdateOwnerProfileInput>({ defaultValues: emptyProfile });
 
-  const { data: profile, isLoading } = useProfile();
-  const updateProfile = useUpdateProfile();
-
-  const form = useForm<UpdateCustomerProfileInput>({
-    resolver: zodResolver(UpdateCustomerProfileSchema),
-    values: {
-      firstName: profile?.firstName || "",
-      lastName: profile?.lastName || "",
-      phone: profile?.phone || "",
-      avatar: profile?.avatar || "",
-      address: profile?.profile?.address || "",
-      city: profile?.profile?.city || "",
-      country: profile?.profile?.country || "Vietnam",
-      postalCode: profile?.profile?.postalCode || "",
-      dateOfBirth: profile?.profile?.dateOfBirth
-        ? new Date(profile.profile.dateOfBirth).toISOString().split("T")[0]
-        : "2000-01-01",
-    },
-  });
-
-  const { isDirty } = form.formState;
-
-  const onSubmit = (data: UpdateCustomerProfileInput) => {
-    // 1. Tạo đối tượng FormData
-    const formData = new FormData();
-
-    // 2. Duyệt qua các key trong data và append vào FormData
-    Object.entries(data).forEach(([key, value]) => {
-      if (value === undefined || value === null) return;
-
-      if (key === "avatar") {
-        if (value instanceof File) {
-          // Nếu là file mới chọn, append file vào
-          formData.append("avatar", value);
-        } else if (typeof value === "string" && value.startsWith("http")) {
-          // Nếu là URL cũ (không thay đổi ảnh), gửi chuỗi URL
-          formData.append("avatar", value);
-        }
-      } else if (key === "dateOfBirth" && value) {
-        try {
-          const isoDate = new Date(value as string).toISOString();
-          formData.append(key, isoDate);
-        } catch (e) {
-          formData.append(key, value.toString());
-        }
-      } else {
-        // Các trường khác (firstName, phone, address...)
-        formData.append(key, value.toString());
-      }
+  useEffect(() => {
+    if (!profileQuery.data) return;
+    reset({
+      companyName: profileQuery.data.companyName ?? "",
+      taxId: profileQuery.data.taxId ?? "",
+      bankAccountName: profileQuery.data.bankAccountName ?? "",
+      bankAccountNumber: profileQuery.data.bankAccountNumber ?? "",
+      bankCode: profileQuery.data.bankCode ?? "",
+      address: profileQuery.data.address ?? "",
+      city: profileQuery.data.city ?? "",
+      country: profileQuery.data.country ?? "Vietnam",
     });
+  }, [profileQuery.data, reset]);
 
-    // 3. Gửi formData (ép kiểu any nếu hook mutate yêu cầu Object)
-    updateProfile.mutate(formData as any, {
-      onSuccess: () => {
-        toast.success("Cập nhật hồ sơ thành công!");
-        setIsEditing(false);
-        setPreviewUrl(null);
-      },
-      onError: (error: any) => {
-        const msg = error?.response?.data?.message || "Không thể cập nhật hồ sơ";
-        toast.error(msg);
-      },
+  const saveProfile = (values: UpdateOwnerProfileInput) => {
+    updateProfile.mutate(values, {
+      onSuccess: () => toast.success("Owner profile updated"),
+      onError: (error: any) => toast.error(error?.response?.data?.message || error?.message || "Could not update owner profile"),
     });
   };
 
-  const handleCancel = () => {
-    form.reset();
-    setIsEditing(false);
-    setPreviewUrl(null);
-  };
+  if (profileQuery.isLoading) {
+    return <div className="mx-auto max-w-5xl space-y-5 py-4"><Skeleton className="h-10 w-64" /><Skeleton className="h-40 w-full" /><Skeleton className="h-96 w-full" /></div>;
+  }
 
-  if (isLoading) {
+  if (profileQuery.isError || !profileQuery.data) {
     return (
-      <Card className="w-full bg-black/5 border-dashed border-2 flex items-center justify-center p-20">
-        <div className="flex flex-col items-center gap-2">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          <p className="text-muted-foreground animate-pulse text-sm">Đang tải dữ liệu...</p>
-        </div>
+      <Card className="mx-auto max-w-3xl border-destructive/30">
+        <CardHeader><CardTitle>Owner profile is unavailable</CardTitle><CardDescription>The owner profile API could not be loaded. No account data was changed.</CardDescription></CardHeader>
+        <CardContent><Button onClick={() => profileQuery.refetch()}>Try again</Button></CardContent>
       </Card>
     );
   }
 
-  const isKycApproved = profile?.kycStatus === "APPROVED";
+  const profile = profileQuery.data;
+  const displayName = [profile.user?.firstName, profile.user?.lastName].filter(Boolean).join(" ") || "Vehicle owner";
 
   return (
-    <Card className="w-full border-none shadow-none bg-transparent">
-      <CardHeader className="px-0 pt-0">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <CardTitle className="text-2xl font-bold flex items-center gap-2">
-              <User className="w-6 h-6 text-primary" />
-              Hồ sơ của tôi
-            </CardTitle>
-            <CardDescription>Quản lý thông tin cá nhân và địa chỉ liên lạc.</CardDescription>
-          </div>
-
-          <div className="flex items-center gap-3">
-            {!isEditing && (
-              <Button onClick={() => setIsEditing(true)} variant="outline" size="sm" className="h-9 px-4 font-semibold">
-                <Edit3 className="w-4 h-4 mr-2" />
-                Chỉnh sửa
-              </Button>
-            )}
-            <div
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg border shadow-sm ${
-                isKycApproved
-                  ? "bg-emerald-500/5 border-emerald-500/20 text-emerald-600"
-                  : "bg-amber-500/5 border-amber-500/20 text-amber-600"
-              }`}>
-              {isKycApproved ? <ShieldCheck className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
-              <span className="text-xs font-bold uppercase tracking-wider">
-                {profile?.kycStatus || "Chưa xác minh"}
-              </span>
-            </div>
-          </div>
+    <div className="mx-auto w-full max-w-5xl space-y-7 py-2">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Account</p>
+          <h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">Owner profile</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">Keep your business, payout, and operating address details current.</p>
         </div>
-      </CardHeader>
+        <Badge variant="outline" className="w-fit gap-2"><ShieldCheck className="h-4 w-4" />{profile.verificationStatus || "UNVERIFIED"}</Badge>
+      </div>
 
-      <CardContent className="px-0 py-6">
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-10">
-            {/* AVATAR SECTION - Luôn hiển thị ở trên cùng */}
-            <div className="flex flex-col items-center gap-4 pb-8 border-b border-dashed">
-              <div className="relative group">
-                <div className="w-32 h-32 rounded-full border-4 border-background shadow-xl overflow-hidden bg-muted">
-                  {previewUrl || profile?.avatar ? (
-                    <img src={previewUrl || profile?.avatar} alt="Avatar" className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <User className="w-12 h-12 text-muted-foreground" />
-                    </div>
-                  )}
-                </div>
+      <Card>
+        <CardHeader>
+          <div className="flex items-start gap-3">
+            <div className="rounded-xl bg-muted p-2.5"><UserRound className="h-5 w-5" /></div>
+            <div><CardTitle className="text-lg">Account identity</CardTitle><CardDescription className="mt-1">Identity fields come from the authenticated account and are read-only here.</CardDescription></div>
+          </div>
+        </CardHeader>
+        <CardContent className="grid gap-4 sm:grid-cols-3">
+          <ReadOnlyField label="Name" value={displayName} />
+          <ReadOnlyField label="Email" value={profile.user?.email || "—"} />
+          <ReadOnlyField label="Phone" value={profile.user?.phone || "—"} />
+        </CardContent>
+      </Card>
 
-                {isEditing && (
-                  <label className="absolute inset-0 flex items-center justify-center bg-black/40 text-white rounded-full opacity-0 group-hover:opacity-100 cursor-pointer transition-opacity">
-                    <div className="flex flex-col items-center gap-1">
-                      <ImageIcon className="w-6 h-6" />
-                      <span className="text-[10px] font-bold uppercase">Thay đổi</span>
-                    </div>
-                    <input
-                      type="file"
-                      className="hidden"
-                      accept="image/*"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) {
-                          form.setValue("avatar", file, { shouldDirty: true });
-                          setPreviewUrl(URL.createObjectURL(file));
-                        }
-                      }}
-                    />
-                  </label>
-                )}
-              </div>
-              {!isEditing && <h2 className="text-xl font-bold">{`${profile?.lastName} ${profile?.firstName}`}</h2>}
-            </div>
+      <form onSubmit={handleSubmit(saveProfile)} className="space-y-6">
+        <Card>
+          <CardHeader><CardTitle className="flex items-center gap-2 text-lg"><Building2 className="h-5 w-5" />Business details</CardTitle><CardDescription>Optional company and tax information associated with the owner account.</CardDescription></CardHeader>
+          <CardContent className="grid gap-5 sm:grid-cols-2">
+            <Field label="Company name"><Input {...register("companyName")} placeholder="Elite Mobility Co." /></Field>
+            <Field label="Tax ID"><Input {...register("taxId")} placeholder="Tax registration number" /></Field>
+          </CardContent>
+        </Card>
 
-            {/* PHẦN 1: THÔNG TIN CƠ BẢN */}
-            <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <input type="hidden" {...form.register("dateOfBirth")} />
-              <div className="lg:col-span-1">
-                <h3 className="text-lg font-semibold">Thông tin cá nhân</h3>
-                <p className="text-sm text-muted-foreground">Thông tin cơ bản định danh tài khoản.</p>
-              </div>
-              <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
-                {isEditing ? (
-                  <>
-                    <FormItem className="md:col-span-2 opacity-70">
-                      <FormLabel className="text-xs font-bold uppercase flex items-center gap-1">
-                        <Mail className="w-3 h-3" /> Email (Không thể thay đổi)
-                      </FormLabel>
-                      <Input value={profile?.email} disabled className="bg-muted" />
-                    </FormItem>
-                    <FormField
-                      control={form.control}
-                      name="lastName"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-xs font-bold uppercase">Họ & Đệm</FormLabel>
-                          <FormControl>
-                            <Input {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="firstName"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-xs font-bold uppercase">Tên</FormLabel>
-                          <FormControl>
-                            <Input {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="dateOfBirth"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-xs font-bold uppercase flex items-center gap-1">
-                            <Calendar className="w-3 h-3" /> Ngày sinh
-                          </FormLabel>
-                          <FormControl>
-                            <Input type="date" {...field} value={field.value as string} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="phone"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-xs font-bold uppercase flex items-center gap-1">
-                            <Phone className="w-3 h-3" /> Điện thoại
-                          </FormLabel>
-                          <FormControl>
-                            <Input {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </>
-                ) : (
-                  <>
-                    <div className="md:col-span-2">
-                      <InfoRow icon={Mail} label="Email đăng nhập" value={profile?.email} />
-                    </div>
-                    <InfoRow icon={User} label="Họ và tên" value={`${profile?.lastName} ${profile?.firstName}`} />
-                    <InfoRow
-                      icon={Calendar}
-                      label="Ngày sinh"
-                      value={
-                        profile?.profile?.dateOfBirth
-                          ? new Date(profile.profile.dateOfBirth).toLocaleDateString("vi-VN")
-                          : "**/**/****"
-                      }
-                    />
-                    <InfoRow icon={Phone} label="Số điện thoại" value={profile?.phone} />
-                  </>
-                )}
-              </div>
-            </section>
+        <Card>
+          <CardHeader><CardTitle className="flex items-center gap-2 text-lg"><Landmark className="h-5 w-5" />Payout account</CardTitle><CardDescription>Banking metadata used by the withdrawal workflow. This does not initiate a transfer by itself.</CardDescription></CardHeader>
+          <CardContent className="grid gap-5 sm:grid-cols-2">
+            <Field label="Account holder"><Input {...register("bankAccountName")} placeholder="NGUYEN VAN A" /></Field>
+            <Field label="Account number"><Input {...register("bankAccountNumber")} placeholder="Bank account number" /></Field>
+            <Field label="Bank code"><Input {...register("bankCode")} placeholder="VCB, TCB, ACB..." /></Field>
+          </CardContent>
+        </Card>
 
-            {/* PHẦN 2: ĐỊA CHỈ */}
-            <section className="grid grid-cols-1 lg:grid-cols-3 gap-6 pt-6 border-t border-dashed">
-              <div className="lg:col-span-1">
-                <h3 className="text-lg font-semibold">Địa chỉ & Liên lạc</h3>
-                <p className="text-sm text-muted-foreground">Thông tin nơi cư trú hiện tại.</p>
-              </div>
-              <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
-                {isEditing ? (
-                  <>
-                    <FormField
-                      control={form.control}
-                      name="address"
-                      render={({ field }) => (
-                        <FormItem className="md:col-span-2">
-                          <FormLabel className="text-xs font-bold uppercase flex items-center gap-1">
-                            <MapPin className="w-3 h-3" /> Địa chỉ chi tiết
-                          </FormLabel>
-                          <FormControl>
-                            <Input {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="city"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-xs font-bold uppercase text-muted-foreground">Thành phố</FormLabel>
-                          <FormControl>
-                            <Input {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="postalCode"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-xs font-bold uppercase flex items-center gap-1">
-                            <Hash className="w-3 h-3" /> Mã bưu chính
-                          </FormLabel>
-                          <FormControl>
-                            <Input {...field} value={field.value || ""} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </>
-                ) : (
-                  <>
-                    <div className="md:col-span-2">
-                      <InfoRow icon={MapPin} label="Địa chỉ" value={profile?.profile?.address} />
-                    </div>
-                    <InfoRow icon={MapPin} label="Thành phố" value={profile?.profile?.city} />
-                    <InfoRow icon={Hash} label="Mã bưu chính" value={profile?.profile?.postalCode} />
-                    <InfoRow icon={MapPin} label="Quốc gia" value={profile?.profile?.country} />
-                  </>
-                )}
-              </div>
-            </section>
+        <Card>
+          <CardHeader><CardTitle className="flex items-center gap-2 text-lg"><MapPin className="h-5 w-5" />Operating address</CardTitle><CardDescription>Primary address associated with fleet operations.</CardDescription></CardHeader>
+          <CardContent className="grid gap-5 sm:grid-cols-2">
+            <div className="sm:col-span-2"><Field label="Street address"><Input {...register("address")} placeholder="Street and district" /></Field></div>
+            <Field label="City"><Input {...register("city")} placeholder="Ho Chi Minh City" /></Field>
+            <Field label="Country"><Input {...register("country")} placeholder="Vietnam" /></Field>
+          </CardContent>
+        </Card>
 
-            {/* ACTION BUTTONS */}
-            {isEditing && (
-              <div className="flex items-center justify-end gap-3 pt-6 border-t animate-in fade-in slide-in-from-bottom-2">
-                <Button type="button" variant="ghost" onClick={handleCancel} disabled={updateProfile.isPending}>
-                  <Undo2 className="w-4 h-4 mr-2" /> Hủy bỏ
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={!isDirty || updateProfile.isPending}
-                  className="min-w-[140px] font-bold shadow-lg">
-                  {updateProfile.isPending ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Đang lưu...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="mr-2 h-4 w-4" /> Lưu thay đổi
-                    </>
-                  )}
-                </Button>
-              </div>
-            )}
-          </form>
-        </Form>
-      </CardContent>
-    </Card>
+        <div className="flex justify-end">
+          <Button type="submit" disabled={!formState.isDirty || updateProfile.isPending}>
+            {updateProfile.isPending ? <Loader2 className="animate-spin" /> : <Save />}
+            Save profile
+          </Button>
+        </div>
+      </form>
+    </div>
   );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return <div className="space-y-2"><Label>{label}</Label>{children}</div>;
+}
+
+function ReadOnlyField({ label, value }: { label: string; value: string }) {
+  return <div className="rounded-xl border bg-muted/20 p-4"><div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{label}</div><div className="mt-2 truncate font-medium">{value}</div></div>;
 }

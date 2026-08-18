@@ -1,53 +1,66 @@
 import {
-  Controller,
-  Post,
-  Get,
-  Put,
-  Delete,
   Body,
+  Controller,
+  Delete,
+  Get,
   Param,
+  Post,
+  Put,
   Query,
+  UploadedFiles,
   UseGuards,
   UseInterceptors,
-  UploadedFiles,
 } from '@nestjs/common';
+import { FileFieldsInterceptor } from '@nestjs/platform-express';
+import { UserRole } from '@prisma/client';
 import { OwnerService } from './owner.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { UserRole } from '@prisma/client';
-
-import {
-  ApiResponse,
-  PaginatedResponseDto,
-} from '../../common/dto/response.dto';
+import { ApiResponse, PaginatedResponseDto } from '../../common/dto/response.dto';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 import {
-  CreateCarDto,
-  UpdateCarDto,
-  CreateCarDocumentDto,
-  CarDocumentResponseDto,
-  CreatePricingDto,
   BlockCalendarDto,
-  // CalendarResponseDto,
+  CarDocumentResponseDto,
+  CreateCarDocumentDto,
+  CreateCarDto,
+  CreateKYCDto,
+  CreatePricingDto,
+  GetCalendarDto,
+  KYCStatusResponseDto,
   OwnerBookingQueryDto,
+  OwnerProfileResponseDto,
   RejectBookingDto,
-  WithdrawRequestDto,
   TripCheckinDto,
   TripCheckoutDto,
-  GetCalendarDto,
-  CreateKYCDto,
-  KYCStatusResponseDto,
+  UpdateCarDto,
+  UpdateOwnerProfileDto,
+  WithdrawRequestDto,
 } from './dto/owner.dto';
-import { FileFieldsInterceptor } from '@nestjs/platform-express';
 
 @Controller('api/owner')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserRole.OWNER)
 export class OwnerController {
   constructor(private readonly ownerService: OwnerService) {}
-  // 1. CAR MANAGEMENT
+
+  @Get('profile')
+  async getProfile(
+    @CurrentUser('id') userId: string,
+  ): Promise<ApiResponse<OwnerProfileResponseDto>> {
+    const profile = await this.ownerService.getProfile(userId);
+    return ApiResponse.success(profile);
+  }
+
+  @Put('profile')
+  async updateProfile(
+    @CurrentUser('id') userId: string,
+    @Body() dto: UpdateOwnerProfileDto,
+  ) {
+    const profile = await this.ownerService.updateProfile(userId, dto);
+    return ApiResponse.success(profile, 'Owner profile updated');
+  }
 
   @Post('kyc')
   @UseInterceptors(
@@ -67,9 +80,8 @@ export class OwnerController {
       faceImage?: Express.Multer.File[];
     },
   ): Promise<ApiResponse<any>> {
-    // Gọi sang ownerService thay vì customerService
     const kyc = await this.ownerService.submitKyc(userId, dto, files);
-    return ApiResponse.success(kyc, 'Hồ sơ KYC chủ xe đã được gửi thành công');
+    return ApiResponse.success(kyc, 'Owner identity verification submitted');
   }
 
   @Get('kyc/status')
@@ -83,8 +95,8 @@ export class OwnerController {
   @Post('cars')
   @UseInterceptors(
     FileFieldsInterceptor([
-      { name: 'mainImage', maxCount: 1 }, // Bắt buộc 1
-      { name: 'images', maxCount: 3 }, // Tối đa 3 ảnh phụ
+      { name: 'mainImage', maxCount: 1 },
+      { name: 'images', maxCount: 3 },
     ]),
   )
   async createCar(
@@ -137,10 +149,8 @@ export class OwnerController {
     @Param('car_id') carId: string,
   ) {
     await this.ownerService.deleteCar(userId, carId);
-    return ApiResponse.success(null, 'Xe đã xóa');
+    return ApiResponse.success(null, 'Vehicle deleted');
   }
-
-  // 2. DOCUMENTS, PRICING & CALENDAR
 
   @Post('cars/:car_id/documents')
   async addCarDocument(
@@ -148,8 +158,8 @@ export class OwnerController {
     @Param('car_id') carId: string,
     @Body() dto: CreateCarDocumentDto,
   ) {
-    const doc = await this.ownerService.addCarDocument(userId, carId, dto);
-    return ApiResponse.success(doc, 'Tài liệu đã thêm');
+    const document = await this.ownerService.addCarDocument(userId, carId, dto);
+    return ApiResponse.success(document, 'Vehicle document added');
   }
 
   @Get('cars/:car_id/documents')
@@ -157,8 +167,8 @@ export class OwnerController {
     @CurrentUser('id') userId: string,
     @Param('car_id') carId: string,
   ): Promise<ApiResponse<CarDocumentResponseDto[]>> {
-    const docs = await this.ownerService.getCarDocuments(userId, carId);
-    return ApiResponse.success(docs);
+    const documents = await this.ownerService.getCarDocuments(userId, carId);
+    return ApiResponse.success(documents);
   }
 
   @Post('cars/:car_id/pricing')
@@ -167,12 +177,8 @@ export class OwnerController {
     @Param('car_id') carId: string,
     @Body() dto: CreatePricingDto,
   ) {
-    const pricing = await this.ownerService.updateCarPricing(
-      userId,
-      carId,
-      dto,
-    );
-    return ApiResponse.success(pricing, 'Bảng giá đã thêm');
+    const pricing = await this.ownerService.updateCarPricing(userId, carId, dto);
+    return ApiResponse.success(pricing, 'Vehicle pricing updated');
   }
 
   @Post('cars/:car_id/calendar/block')
@@ -181,12 +187,8 @@ export class OwnerController {
     @Param('car_id') carId: string,
     @Body() dto: BlockCalendarDto,
   ) {
-    const result = await this.ownerService.blockAvailability(
-      userId,
-      carId,
-      dto,
-    );
-    return ApiResponse.success(result, 'Lịch đã cập nhật');
+    const result = await this.ownerService.blockAvailability(userId, carId, dto);
+    return ApiResponse.success(result, 'Vehicle availability updated');
   }
 
   @Get('cars/:car_id/calendar')
@@ -199,8 +201,6 @@ export class OwnerController {
     const end = query.end_date
       ? new Date(query.end_date)
       : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-
-    // Sửa getCalendar -> getAvailability
     const calendar = await this.ownerService.getAvailability(
       userId,
       carId,
@@ -210,7 +210,6 @@ export class OwnerController {
     return ApiResponse.success(calendar);
   }
 
-  // 3. BOOKING MANAGEMENT
   @Get('bookings')
   async getBookings(
     @CurrentUser('id') userId: string,
@@ -229,7 +228,7 @@ export class OwnerController {
     @Param('booking_id') bookingId: string,
   ) {
     const booking = await this.ownerService.approveBooking(userId, bookingId);
-    return ApiResponse.success(booking, 'Đã phê duyệt đặt xe');
+    return ApiResponse.success(booking, 'Booking approved');
   }
 
   @Post('bookings/:booking_id/reject')
@@ -238,15 +237,9 @@ export class OwnerController {
     @Param('booking_id') bookingId: string,
     @Body() dto: RejectBookingDto,
   ) {
-    const booking = await this.ownerService.rejectBooking(
-      userId,
-      bookingId,
-      dto,
-    );
-    return ApiResponse.success(booking, 'Đã từ chối đặt xe');
+    const booking = await this.ownerService.rejectBooking(userId, bookingId, dto);
+    return ApiResponse.success(booking, 'Booking declined');
   }
-
-  // 4. FINANCE & WITHDRAWAL
 
   @Get('finance/earnings')
   async getEarnings(
@@ -276,7 +269,7 @@ export class OwnerController {
     @Body() dto: WithdrawRequestDto,
   ) {
     const withdraw = await this.ownerService.requestWithdraw(userId, dto);
-    return ApiResponse.success(withdraw, 'Yêu cầu rút tiền đã gửi');
+    return ApiResponse.success(withdraw, 'Withdrawal request submitted');
   }
 
   @Get('dashboard/overview')
@@ -285,24 +278,21 @@ export class OwnerController {
     return ApiResponse.success(data);
   }
 
-  // SUBMIT CAR FOR REVIEW
   @Post('cars/:car_id/submit-review')
   async submitCarReview(
     @CurrentUser('id') userId: string,
     @Param('car_id') carId: string,
   ) {
     const car = await this.ownerService.submitCarForReview(userId, carId);
-    return ApiResponse.success(car, 'Đã gửi xe chờ duyệt');
+    return ApiResponse.success(car, 'Vehicle submitted for review');
   }
 
-  // WALLET
   @Get('wallet')
   async getWallet(@CurrentUser('id') userId: string) {
     const wallet = await this.ownerService.getWallet(userId);
     return ApiResponse.success(wallet);
   }
 
-  // DISPUTE RESPOND
   @Post('disputes/:dispute_id/respond')
   async respondDispute(
     @CurrentUser('id') userId: string,
@@ -314,10 +304,9 @@ export class OwnerController {
       disputeId,
       message,
     );
-    return ApiResponse.success(dispute, 'Đã phản hồi tranh chấp');
+    return ApiResponse.success(dispute, 'Dispute response submitted');
   }
 
-  // TRIPS
   @Get('trips')
   async getTrips(
     @CurrentUser('id') userId: string,
@@ -337,7 +326,7 @@ export class OwnerController {
     @Body() dto: TripCheckinDto,
   ) {
     const trip = await this.ownerService.checkinTrip(userId, tripId, dto);
-    return ApiResponse.success(trip, 'Đã check-in thành công');
+    return ApiResponse.success(trip, 'Vehicle pickup recorded');
   }
 
   @Post('trips/:trip_id/checkout')
@@ -347,6 +336,6 @@ export class OwnerController {
     @Body() dto: TripCheckoutDto,
   ) {
     const trip = await this.ownerService.checkoutTrip(userId, tripId, dto);
-    return ApiResponse.success(trip, 'Đã check-out thành công');
+    return ApiResponse.success(trip, 'Vehicle return recorded');
   }
 }

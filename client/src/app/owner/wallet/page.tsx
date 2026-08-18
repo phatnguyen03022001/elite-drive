@@ -1,246 +1,136 @@
-// app/owner/finance/page.tsx
 "use client";
 
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import api from "@/lib/axios";
-import { format } from "date-fns";
-import { vi } from "date-fns/locale";
-import { Wallet, ArrowUpRight, ArrowDownLeft, History, RefreshCcw, Loader2 } from "lucide-react";
-
+import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowDownToLine, History, Loader2, RefreshCw, Wallet } from "lucide-react";
+import { toast } from "sonner";
+import { OwnerService } from "@/features/owner/owner.service";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useState } from "react";
 
-// ── Query Keys ─────────────────────────────────────
-const ownerKeys = {
-  wallet: ["owner", "wallet"] as const,
-  transactions: (limit = 10) => ["owner", "transactions", limit] as const,
-};
+const currency = new Intl.NumberFormat("en-US", { style: "currency", currency: "VND", maximumFractionDigits: 0 });
+const dateFormatter = new Intl.DateTimeFormat("en-US", { day: "2-digit", month: "short", year: "numeric" });
+const MIN_WITHDRAWAL = 50_000;
 
-// ── Fetchers ───────────────────────────────────────
-const fetchWallet = () => api.get("/api/owner/wallet").then((r) => r.data?.data || r.data);
-const fetchTransactions = () =>
-  api.get("/api/owner/finance/transactions?limit=10").then((r) => r.data?.data || r.data || []);
-
-// ── Mutation ───────────────────────────────────────
-const useWithdrawMutation = () => {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (data: any) => api.post("/api/owner/finance/withdraw", data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ownerKeys.wallet });
-      qc.invalidateQueries({ queryKey: ownerKeys.transactions() });
-    },
-  });
-};
-
-// ── Main Page ──────────────────────────────────────
-export default function OwnerFinancePage() {
-  const qc = useQueryClient();
+export default function OwnerWalletPage() {
+  const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
 
-  const { data: wallet, isLoading: walletLoading } = useQuery({
-    queryKey: ownerKeys.wallet,
-    queryFn: fetchWallet,
+  const walletQuery = useQuery({ queryKey: ["owner", "wallet"], queryFn: OwnerService.getWallet, staleTime: 60_000 });
+  const transactionsQuery = useQuery({
+    queryKey: ["owner", "transactions", 20],
+    queryFn: () => OwnerService.getTransactions({ page: 1, limit: 20 }),
     staleTime: 60_000,
   });
 
-  const { data: transactions = [], isLoading: txLoading } = useQuery({
-    queryKey: ownerKeys.transactions(),
-    queryFn: fetchTransactions,
-    staleTime: 60_000,
+  const withdraw = useMutation({
+    mutationFn: OwnerService.requestWithdraw,
+    onSuccess: async () => {
+      toast.success("Withdrawal request submitted");
+      setOpen(false);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["owner", "wallet"] }),
+        queryClient.invalidateQueries({ queryKey: ["owner", "transactions"] }),
+      ]);
+    },
+    onError: (error: any) => toast.error(error?.response?.data?.message || error?.message || "Could not submit withdrawal request"),
   });
 
-  const withdrawMut = useWithdrawMutation();
+  const transactions = Array.isArray(transactionsQuery.data) ? transactionsQuery.data : transactionsQuery.data?.data ?? [];
+  const refreshing = walletQuery.isFetching || transactionsQuery.isFetching;
 
-  const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(amount);
-
-  const isLoading = walletLoading || txLoading;
+  const refresh = async () => {
+    await Promise.all([walletQuery.refetch(), transactionsQuery.refetch()]);
+  };
 
   return (
-    <div className="container mx-auto max-w-6xl space-y-8 p-6">
-      {/* Header */}
-      <div className="flex items-end justify-between">
+    <div className="mx-auto w-full max-w-6xl space-y-7 py-2">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Quản lý Tài chính</h1>
-          <p className="text-muted-foreground">Theo dõi thu nhập và rút tiền dễ dàng</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Finance</p>
+          <h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">Owner wallet</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">Track rental income, refunds, and withdrawal requests from one ledger.</p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => qc.invalidateQueries()} disabled={isLoading}>
-          {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCcw className="h-4 w-4" />}
-          <span className="ml-2">Làm mới</span>
-        </Button>
+        <Button variant="outline" onClick={refresh} disabled={refreshing}><RefreshCw className={refreshing ? "animate-spin" : ""} />Refresh</Button>
       </div>
 
-      {/* Balance + Stats */}
-      <div className="grid gap-6 md:grid-cols-3">
-        <Card className="md:col-span-2 bg-primary text-primary-foreground shadow-2xl border-none overflow-hidden relative">
-          <CardHeader className="relative z-10">
-            <CardDescription className="text-primary-foreground/80">Số dư khả dụng</CardDescription>
-            <CardTitle className="text-5xl font-bold tracking-tighter">
-              {isLoading ? "..." : formatCurrency(wallet?.balance || 0)}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="relative z-10">
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card className="md:col-span-2">
+          <CardHeader><CardDescription>Available balance</CardDescription><CardTitle className="text-4xl tracking-tight">{walletQuery.isLoading ? "—" : currency.format(Number(walletQuery.data?.balance || 0))}</CardTitle></CardHeader>
+          <CardContent>
             <Dialog open={open} onOpenChange={setOpen}>
-              <DialogTrigger asChild>
-                <Button variant="secondary" size="lg" className="font-semibold shadow-md">
-                  Rút tiền ngay
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[425px]">
-                <DialogHeader>
-                  <DialogTitle>Yêu cầu rút tiền</DialogTitle>
-                  <DialogDescription>Nhập thông tin ngân hàng để nhận tiền</DialogDescription>
-                </DialogHeader>
+              <DialogTrigger asChild><Button><ArrowDownToLine />Request withdrawal</Button></DialogTrigger>
+              <DialogContent>
+                <DialogHeader><DialogTitle>Request withdrawal</DialogTitle><DialogDescription>Submit a payout request for operations review. Minimum withdrawal: {currency.format(MIN_WITHDRAWAL)}.</DialogDescription></DialogHeader>
                 <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    const formData = new FormData(e.currentTarget);
-
-                    withdrawMut.mutate(
-                      {
-                        amount: Number(formData.get("amount")),
-                        bankAccountNumber: formData.get("bankNo"),
-                        bankAccountName: (formData.get("bankName") as string)?.toUpperCase(),
-                        description: formData.get("desc") as string,
-                      },
-                      {
-                        onSuccess: () => {
-                          setOpen(false);
-                          // qc.invalidateQueries(); // refresh ngay nếu cần
-                        },
-                        // onError: (err) => toast.error("Lỗi: " + err.message), // tùy chọn
-                      },
-                    );
-                  }}
-                  className="space-y-4 py-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="amount">Số tiền rút (VND)</Label>
-                    <Input id="amount" name="amount" type="number" min="10000" placeholder="1000000" required />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="bankNo">Số tài khoản</Label>
-                    <Input id="bankNo" name="bankNo" placeholder="1903..." required />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="bankName">Tên ngân hàng</Label>
-                    <Input id="bankName" name="bankName" placeholder="VIETCOMBANK" className="uppercase" required />
-                  </div>
-
-                  {/* Nếu có thêm mô tả */}
-                  {/* <div className="space-y-2">
-    <Label htmlFor="desc">Ghi chú (tùy chọn)</Label>
-    <Input id="desc" name="desc" placeholder="Rút tiền tháng này" />
-  </div> */}
-
-                  <DialogFooter className="pt-4">
-                    <Button type="submit" className="w-full" disabled={withdrawMut.isPending}>
-                      {withdrawMut.isPending ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Đang gửi...
-                        </>
-                      ) : (
-                        "Gửi yêu cầu"
-                      )}
-                    </Button>
-                  </DialogFooter>
+                  className="space-y-4"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    const data = new FormData(event.currentTarget);
+                    const amount = Number(data.get("amount"));
+                    if (!Number.isFinite(amount) || amount < MIN_WITHDRAWAL) {
+                      toast.error(`Minimum withdrawal is ${currency.format(MIN_WITHDRAWAL)}`);
+                      return;
+                    }
+                    withdraw.mutate({
+                      amount,
+                      bankAccountNumber: String(data.get("accountNumber") || ""),
+                      bankAccountName: String(data.get("accountName") || "").trim().toUpperCase(),
+                      description: String(data.get("description") || "").trim() || undefined,
+                    });
+                  }}>
+                  <Field label="Amount (VND)"><Input name="amount" type="number" min={MIN_WITHDRAWAL} step="1000" placeholder="500000" required /></Field>
+                  <Field label="Account holder"><Input name="accountName" placeholder="NGUYEN VAN A" required /></Field>
+                  <Field label="Account number"><Input name="accountNumber" placeholder="Bank account number" required /></Field>
+                  <Field label="Note (optional)"><Input name="description" placeholder="Monthly payout" /></Field>
+                  <DialogFooter><Button type="submit" disabled={withdraw.isPending}>{withdraw.isPending ? <Loader2 className="animate-spin" /> : <ArrowDownToLine />}Submit request</Button></DialogFooter>
                 </form>
               </DialogContent>
             </Dialog>
           </CardContent>
-          <div className="absolute top-[-20%] right-[-10%] h-64 w-64 rounded-full bg-white/10 blur-3xl" />
         </Card>
 
-        <Card className="flex flex-col justify-center border-dashed">
-          <CardHeader className="pb-2">
-            <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-blue-100">
-              <History className="h-5 w-5 text-blue-600" />
-            </div>
-            <CardDescription>Giao dịch gần nhất</CardDescription>
-            <CardTitle className="text-3xl">{transactions.length}</CardTitle>
-          </CardHeader>
+        <Card>
+          <CardHeader><div className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-muted"><History className="h-5 w-5" /></div><CardDescription>Recent ledger entries</CardDescription><CardTitle className="text-3xl">{transactions.length}</CardTitle></CardHeader>
+          <CardContent className="text-sm text-muted-foreground">Showing the latest 20 wallet transactions.</CardContent>
         </Card>
       </div>
 
-      {/* Transaction Table */}
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-xl">
-            <Wallet className="h-5 w-5" /> Lịch sử giao dịch
-          </CardTitle>
-        </CardHeader>
+        <CardHeader><CardTitle className="flex items-center gap-2 text-lg"><Wallet className="h-5 w-5" />Transaction ledger</CardTitle><CardDescription>Rental income, refunds, escrow releases, and withdrawal activity.</CardDescription></CardHeader>
         <CardContent>
           <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Ngày</TableHead>
-                <TableHead>Mô tả</TableHead>
-                <TableHead>Loại</TableHead>
-                <TableHead>Số tiền</TableHead>
-                <TableHead className="text-right">Trạng thái</TableHead>
-              </TableRow>
-            </TableHeader>
+            <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Description</TableHead><TableHead>Type</TableHead><TableHead>Amount</TableHead><TableHead className="text-right">Status</TableHead></TableRow></TableHeader>
             <TableBody>
-              {isLoading ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="h-32 text-center">
-                    Đang tải...
-                  </TableCell>
-                </TableRow>
+              {walletQuery.isLoading || transactionsQuery.isLoading ? (
+                <TableRow><TableCell colSpan={5} className="h-28 text-center text-muted-foreground">Loading wallet activity...</TableCell></TableRow>
               ) : transactions.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
-                    Chưa có giao dịch nào
-                  </TableCell>
-                </TableRow>
-              ) : (
-                transactions.map((tx: any) => (
-                  <TableRow key={tx.id}>
-                    <TableCell className="text-muted-foreground">
-                      {format(new Date(tx.createdAt), "dd/MM/yyyy", { locale: vi })}
-                    </TableCell>
-                    <TableCell className="font-medium">{tx.description || "-"}</TableCell>
-                    <TableCell>
-                      <Badge variant={tx.type === "WITHDRAW" ? "outline" : "secondary"}>
-                        {tx.type === "RENTAL_INCOME" ? "Thu nhập" : tx.type === "REFUND" ? "Hoàn tiền" : "Rút tiền"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className={`font-bold ${tx.amount > 0 ? "text-emerald-600" : "text-destructive"}`}>
-                      {tx.amount > 0 ? "+" : ""}
-                      {formatCurrency(Math.abs(tx.amount))}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Badge
-                        variant={
-                          tx.status === "completed" ? "default" : tx.status === "pending" ? "outline" : "destructive"
-                        }>
-                        {tx.status}
-                      </Badge>
-                    </TableCell>
+                <TableRow><TableCell colSpan={5} className="h-28 text-center text-muted-foreground">No wallet transactions yet.</TableCell></TableRow>
+              ) : transactions.map((transaction: any) => {
+                const amount = Number(transaction.amount || 0);
+                return (
+                  <TableRow key={transaction.id}>
+                    <TableCell className="text-muted-foreground">{dateFormatter.format(new Date(transaction.createdAt))}</TableCell>
+                    <TableCell className="font-medium">{transaction.description || "Wallet transaction"}</TableCell>
+                    <TableCell><Badge variant="secondary">{String(transaction.type || "TRANSACTION").replaceAll("_", " ")}</Badge></TableCell>
+                    <TableCell className="font-semibold">{amount > 0 ? "+" : ""}{currency.format(amount)}</TableCell>
+                    <TableCell className="text-right"><Badge variant="outline">{String(transaction.status || "RECORDED").toUpperCase()}</Badge></TableCell>
                   </TableRow>
-                ))
-              )}
+                );
+              })}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
     </div>
   );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return <div className="space-y-2"><Label>{label}</Label>{children}</div>;
 }
