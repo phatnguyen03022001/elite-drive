@@ -43,6 +43,7 @@ import {
 } from './dto/customer.dto';
 import { ApplyPromotionDto } from './dto/promotion.dto';
 import { CustomerBookingService } from './customer-booking.service';
+import { CustomerCancellationService } from './customer-cancellation.service';
 import { CustomerPaymentService } from './customer-payment.service';
 import { CustomerPromotionService } from './customer-promotion.service';
 import { CustomerService } from './customer.service';
@@ -56,6 +57,7 @@ export class CustomerController {
     private readonly paymentService: CustomerPaymentService,
     private readonly bookingService: CustomerBookingService,
     private readonly promotionService: CustomerPromotionService,
+    private readonly cancellationService: CustomerCancellationService,
   ) {}
 
   @Get('profile')
@@ -129,7 +131,10 @@ export class CustomerController {
     @CurrentUser('id') userId: string,
     @Param('booking_id') bookingId: string,
   ): Promise<ApiResponse<unknown>> {
-    return ApiResponse.success(await this.paymentService.cancelBooking(userId, bookingId), 'Booking cancelled');
+    return ApiResponse.success(
+      await this.cancellationService.cancelBooking(userId, bookingId),
+      'Booking cancelled',
+    );
   }
 
   @Post('payments/create')
