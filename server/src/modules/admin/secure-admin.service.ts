@@ -53,8 +53,6 @@ export class SecureAdminService extends AdminService {
       take: limit,
       orderBy: { createdAt: 'desc' },
       include: {
-        // Preserve the existing array return contract while explicitly removing
-        // the password before the object crosses the controller boundary.
         user: true,
         booking: true,
       },
@@ -421,7 +419,7 @@ export class SecureAdminService extends AdminService {
         throw new NotFoundException('Withdraw transaction not found');
       }
 
-      return [wallet, updated] as const;
+      return [wallet, updated];
     });
 
     this.logger.warn(`Rejected withdraw ${id}: ${reason.trim()}`);
