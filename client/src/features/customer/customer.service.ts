@@ -19,6 +19,13 @@ import {
 const BASE_URL = "/api/customer";
 const MOMO_BASE_URL = "/api/payments/momo";
 
+type CreateDisputeInput = {
+  type: string;
+  bookingId?: string;
+  title: string;
+  description: string;
+};
+
 export const CustomerService = {
   getProfile: async () => {
     const response = await axios.get(`${BASE_URL}/profile`);
@@ -125,6 +132,16 @@ export const CustomerService = {
 
   getMyReviews: async (params?: { page?: number; limit?: number }) => {
     return axios.get(`${BASE_URL}/reviews/my`, { params });
+  },
+
+  createDispute: async (dto: CreateDisputeInput) => {
+    const response = await axios.post(`${BASE_URL}/disputes`, dto);
+    return response.data;
+  },
+
+  getMyDisputes: async () => {
+    const response = await axios.get(`${BASE_URL}/disputes`);
+    return response.data;
   },
 
   getActivePromotions: async () => {
