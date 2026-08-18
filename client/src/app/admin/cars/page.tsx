@@ -37,7 +37,7 @@ type AdminCar = {
 
 export default function AdminCarsPage() {
   const pendingQuery = usePendingCars();
-  const allQuery = useAllCars({ page: 1, limit: 50 });
+  const allQuery = useAllCars();
   const approve = useApproveCar();
   const reject = useRejectCar();
   const [tab, setTab] = useState("PENDING");
