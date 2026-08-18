@@ -31,7 +31,9 @@ export class SecureAdminService extends AdminService {
     this.platformUserId = config.getOrThrow<string>('PLATFORM_USER_ID');
   }
 
-  override async getPayments(query: PaginationDto & PaymentQueryDto) {
+  override async getPayments(
+    query: PaginationDto & PaymentQueryDto,
+  ): ReturnType<AdminService['getPayments']> {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
     const where: Prisma.PaymentWhereInput = {
@@ -45,49 +47,26 @@ export class SecureAdminService extends AdminService {
           : undefined,
     };
 
-    const [items, total] = await Promise.all([
-      this.db.payment.findMany({
-        where,
-        skip: (page - 1) * limit,
-        take: limit,
-        orderBy: { createdAt: 'desc' },
-        select: {
-          id: true,
-          bookingId: true,
-          userId: true,
-          walletId: true,
-          amount: true,
-          paymentMethod: true,
-          transactionId: true,
-          status: true,
-          paidAt: true,
-          refundedAt: true,
-          failureReason: true,
-          createdAt: true,
-          updatedAt: true,
-          user: {
-            select: {
-              id: true,
-              email: true,
-              firstName: true,
-              lastName: true,
-            },
-          },
-          booking: {
-            select: {
-              id: true,
-              status: true,
-              startDate: true,
-              endDate: true,
-              totalPrice: true,
-            },
-          },
-        },
-      }),
-      this.db.payment.count({ where }),
-    ]);
+    const items = await this.db.payment.findMany({
+      where,
+      skip: (page - 1) * limit,
+      take: limit,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        // Preserve the existing array return contract while explicitly removing
+        // the password before the object crosses the controller boundary.
+        user: true,
+        booking: true,
+      },
+    });
 
-    return { items, total, page, limit };
+    return items.map(({ user, ...payment }) => ({
+      ...payment,
+      user: {
+        ...user,
+        password: undefined,
+      },
+    })) as unknown as Awaited<ReturnType<AdminService['getPayments']>>;
   }
 
   override async getPlatformWallet() {
@@ -98,6 +77,7 @@ export class SecureAdminService extends AdminService {
         userId: true,
         balance: true,
         currency: true,
+        createdAt: true,
         updatedAt: true,
       },
     });
@@ -142,8 +122,6 @@ export class SecureAdminService extends AdminService {
         continue;
       }
 
-      // Deterministic ObjectId-compatible id makes concurrent runs converge on
-      // the same primary key without requiring an infrastructure-level lock.
       const settlementId = createHash('sha256')
         .update(`settlement:${owner.id}:${dto.period}`)
         .digest('hex')
@@ -380,19 +358,24 @@ export class SecureAdminService extends AdminService {
   }
 
   override async approveWithdraw(id: string) {
-    const result = await this.db.ownerTransaction.updateMany({
+    const claim = await this.db.ownerTransaction.updateMany({
       where: { id, type: 'WITHDRAW', status: 'pending' },
       data: { status: 'completed' },
     });
 
-    if (result.count !== 1) {
+    if (claim.count !== 1) {
       throw new BadRequestException(
         'Yêu cầu rút tiền không tồn tại hoặc đã được xử lý',
       );
     }
 
+    const updated = await this.db.ownerTransaction.findUnique({ where: { id } });
+    if (!updated) {
+      throw new NotFoundException('Withdraw transaction not found');
+    }
+
     this.logger.log(`Approved withdraw ${id}`);
-    return { id, status: 'completed' };
+    return updated;
   }
 
   override async rejectWithdraw(id: string, reason: string) {
@@ -433,7 +416,12 @@ export class SecureAdminService extends AdminService {
         },
       });
 
-      return { id, status: 'failed' };
+      const updated = await tx.ownerTransaction.findUnique({ where: { id } });
+      if (!updated) {
+        throw new NotFoundException('Withdraw transaction not found');
+      }
+
+      return [wallet, updated] as const;
     });
 
     this.logger.warn(`Rejected withdraw ${id}: ${reason.trim()}`);
