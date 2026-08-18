@@ -12,6 +12,7 @@ import {
   IsIn,
   Matches,
   Max,
+  MaxLength,
   Min,
 } from 'class-validator';
 import {
@@ -130,6 +131,7 @@ export class RefundPaymentDto {
   @ApiProperty()
   @IsNotEmpty()
   @IsString()
+  @MaxLength(1000)
   reason: string;
 }
 
@@ -162,7 +164,19 @@ export class AdminKYCQueryDto {
 }
 
 export class RejectKYCDto {
-  @ApiProperty() @IsNotEmpty() @IsString() rejectionReason: string;
+  @ApiProperty()
+  @IsNotEmpty()
+  @IsString()
+  @MaxLength(1000)
+  rejectionReason: string;
+}
+
+export class RejectCarDto {
+  @ApiProperty()
+  @IsNotEmpty()
+  @IsString()
+  @MaxLength(1000)
+  reason: string;
 }
 
 export class AdminKYCResponseDto {
@@ -197,7 +211,11 @@ export class PendingCarResponseDto {
 // --- GROUP 5: DISPUTES & MASTER DATA ---
 
 export class ResolveDisputeDto {
-  @ApiProperty() @IsNotEmpty() @IsString() resolution: string;
+  @ApiProperty()
+  @IsNotEmpty()
+  @IsString()
+  @MaxLength(2000)
+  resolution: string;
   @ApiProperty({ enum: DisputeStatus })
   @IsNotEmpty()
   @IsEnum(DisputeStatus)
@@ -235,5 +253,6 @@ export class RejectWithdrawDto {
   @ApiProperty()
   @IsNotEmpty()
   @IsString()
+  @MaxLength(1000)
   reason: string;
 }
