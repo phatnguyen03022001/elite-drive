@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { useForm } from "react-hook-form";
-import api from "@/lib/axios"; // Sử dụng instance axios đã cấu hình của bạn
+import api from "@/lib/axios";
 import { toast } from "sonner";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -11,10 +11,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { PhoneCall, MessageSquare, LifeBuoy, ShieldAlert, Loader2 } from "lucide-react";
+import { PhoneCall, LifeBuoy, ShieldAlert, Loader2 } from "lucide-react";
 import { cn } from "../../../lib/utils";
 
-// ── Interfaces ──────────────────────────────────────────────────
 interface SupportTicketForm {
   type: string;
   bookingId: string;
@@ -29,6 +28,14 @@ interface TicketHistory {
   createdAt: string;
 }
 
+function getApiErrorMessage(error: unknown, fallback: string) {
+  if (typeof error === "object" && error !== null && "response" in error) {
+    const response = (error as { response?: { data?: { message?: string } } }).response;
+    if (response?.data?.message) return response.data.message;
+  }
+  return error instanceof Error ? error.message : fallback;
+}
+
 export default function SupportPage() {
   const [history, setHistory] = useState<TicketHistory[]>([]);
   const [fetchingHistory, setFetchingHistory] = useState(false);
@@ -36,54 +43,44 @@ export default function SupportPage() {
   const [activeTab, setActiveTab] = useState<string>("faq");
   const { register, handleSubmit, reset } = useForm<SupportTicketForm>({
     defaultValues: {
-      type: "Sự cố kỹ thuật",
+      type: "TECHNICAL",
       bookingId: "",
       description: "",
     },
   });
 
-  interface DisputeResponse {
-    success: boolean;
-    data?: TicketHistory[]; // cho GET /disputes
-    message?: string;
-  }
-
-  // Trong fetchHistory
   const fetchHistory = async () => {
     setFetchingHistory(true);
     try {
       const response = await api.get("/api/customer/disputes");
-      // Adapter dữ liệu nếu cần, ở đây giả định trả về mảng data
-      setHistory(response.data || []);
-    } catch (error) {
-      console.error("Lỗi lấy lịch sử:", error);
+      const payload = response.data?.data ?? response.data;
+      setHistory(Array.isArray(payload) ? payload : []);
+    } catch (error: unknown) {
+      toast.error(getApiErrorMessage(error, "Không thể tải lịch sử hỗ trợ"));
     } finally {
       setFetchingHistory(false);
     }
   };
-  // Trong onSubmit
+
   const onSubmit = async (values: SupportTicketForm) => {
     setLoading(true);
     try {
-      const res = await api.post("/api/customer/disputes", {
+      await api.post("/api/customer/disputes", {
         ...values,
+        bookingId: values.bookingId.trim() || undefined,
         title: `[${values.type}] - ${values.bookingId || "Hỗ trợ chung"}`,
       });
-
-      // Không phụ thuộc success nữa, miễn 201 là coi thành công
       toast.success("Yêu cầu đã được gửi!");
       reset();
       await fetchHistory();
       setActiveTab("history");
-    } catch (error: any) {
-      console.error("Lỗi gửi dispute:", error);
-      toast.error(error?.response?.data?.message || "Gửi thất bại");
+    } catch (error: unknown) {
+      toast.error(getApiErrorMessage(error, "Gửi thất bại"));
     } finally {
       setLoading(false);
     }
   };
 
-  // ── Phần Return nằm bên trong hàm SupportPage ──────────────────
   return (
     <div className="container mx-auto py-10 px-4 max-w-5xl animate-in fade-in duration-500">
       <div className="text-center mb-10">
@@ -91,7 +88,6 @@ export default function SupportPage() {
         <p className="text-muted-foreground mt-2 font-medium">Chúng tôi luôn sẵn sàng hỗ trợ bạn 24/7</p>
       </div>
 
-      {/* Quick Contact Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
         <Card className="border-primary/20 shadow-sm">
           <CardHeader className="flex flex-row items-center space-x-4 pb-2">
@@ -110,9 +106,7 @@ export default function SupportPage() {
             <CardTitle className="text-lg">Tranh chấp</CardTitle>
           </CardHeader>
           <CardContent>
-            <Badge variant="destructive" className="mb-2">
-              Dispute Center
-            </Badge>
+            <Badge variant="destructive" className="mb-2">Dispute Center</Badge>
             <p className="text-xs text-muted-foreground font-medium">Gửi yêu cầu giải quyết tranh chấp</p>
           </CardContent>
         </Card>
@@ -120,15 +114,9 @@ export default function SupportPage() {
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-3 mb-8 h-12">
-          <TabsTrigger value="faq" className="font-bold">
-            FAQ
-          </TabsTrigger>
-          <TabsTrigger value="contact" className="font-bold">
-            Gửi yêu cầu
-          </TabsTrigger>
-          <TabsTrigger value="history" className="font-bold" onClick={fetchHistory}>
-            Lịch sử yêu cầu
-          </TabsTrigger>
+          <TabsTrigger value="faq" className="font-bold">FAQ</TabsTrigger>
+          <TabsTrigger value="contact" className="font-bold">Gửi yêu cầu</TabsTrigger>
+          <TabsTrigger value="history" className="font-bold" onClick={fetchHistory}>Lịch sử yêu cầu</TabsTrigger>
         </TabsList>
 
         <TabsContent value="faq" className="space-y-8">
@@ -138,15 +126,11 @@ export default function SupportPage() {
             </h2>
             <Accordion type="single" collapsible className="w-full bg-card border rounded-xl px-4">
               <AccordionItem value="item-1" className="border-none">
-                <AccordionTrigger className="hover:no-underline font-semibold">
-                  Làm thế nào để xác thực KYC?
-                </AccordionTrigger>
+                <AccordionTrigger className="hover:no-underline font-semibold">Làm thế nào để xác thực KYC?</AccordionTrigger>
                 <AccordionContent className="text-muted-foreground">
-                  Bạn cần tải lên hình ảnh CCCD và Bằng lái xe rõ nét. Hệ thống sẽ phê duyệt tự động thông qua model KYC
-                  trong vòng 15-30 phút.
+                  Bạn cần tải lên hình ảnh CCCD và Bằng lái xe rõ nét. Hồ sơ sẽ được gửi tới quy trình kiểm duyệt của hệ thống.
                 </AccordionContent>
               </AccordionItem>
-              {/* Thêm các FAQ khác tại đây */}
             </Accordion>
           </section>
         </TabsContent>
@@ -162,9 +146,7 @@ export default function SupportPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <label className="text-sm font-bold">Loại vấn đề</label>
-                    <select
-                      {...register("type")}
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:ring-2 focus:ring-primary outline-none transition-all">
+                    <select {...register("type")} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:ring-2 focus:ring-primary outline-none transition-all">
                       <option value="TECHNICAL">Xe gặp sự cố kỹ thuật (Hỏng hóc, lỗi máy...)</option>
                       <option value="DISPUTE">Khiếu nại chủ xe / Tranh chấp chi phí</option>
                       <option value="INCIDENT">Báo cáo va chạm, tai nạn (Cần bảo hiểm)</option>
@@ -173,30 +155,15 @@ export default function SupportPage() {
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-bold">Mã đặt xe (Booking ID)</label>
-                    <Input
-                      {...register("bookingId")}
-                      placeholder="Ví dụ: BK-12345"
-                      className="focus:ring-2 focus:ring-primary transition-all"
-                    />
+                    <Input {...register("bookingId")} placeholder="Booking ObjectId" className="focus:ring-2 focus:ring-primary transition-all" />
                   </div>
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-bold">Nội dung chi tiết</label>
-                  <Textarea
-                    {...register("description")}
-                    placeholder="Vui lòng mô tả chi tiết vấn đề bạn gặp phải..."
-                    className="min-h-[150px] focus:ring-2 focus:ring-primary transition-all"
-                  />
+                  <Textarea {...register("description", { required: true })} placeholder="Vui lòng mô tả chi tiết vấn đề bạn gặp phải..." className="min-h-[150px] focus:ring-2 focus:ring-primary transition-all" />
                 </div>
                 <Button className="w-full h-12 text-md font-bold" type="submit" disabled={loading}>
-                  {loading ? (
-                    <>
-                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                      Đang gửi yêu cầu...
-                    </>
-                  ) : (
-                    "Gửi yêu cầu hỗ trợ"
-                  )}
+                  {loading ? <><Loader2 className="mr-2 h-5 w-5 animate-spin" />Đang gửi yêu cầu...</> : "Gửi yêu cầu hỗ trợ"}
                 </Button>
               </form>
             </CardContent>
@@ -211,43 +178,31 @@ export default function SupportPage() {
             </CardHeader>
             <CardContent>
               {fetchingHistory ? (
-                <div className="flex justify-center py-10">
-                  <Loader2 className="animate-spin h-8 w-8 text-primary" />
-                </div>
+                <div className="flex justify-center py-10"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>
               ) : history.length === 0 ? (
                 <div className="text-center py-10 text-muted-foreground">Bạn chưa gửi yêu cầu hỗ trợ nào.</div>
               ) : (
                 <div className="space-y-4">
                   {history.map((ticket) => (
-                    <div
-                      key={ticket.id}
-                      className="flex flex-col md:flex-row md:items-center justify-between p-4 border rounded-lg hover:bg-muted/30 transition-colors gap-4">
+                    <div key={ticket.id} className="flex flex-col md:flex-row md:items-center justify-between p-4 border rounded-lg hover:bg-muted/30 transition-colors gap-4">
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
-                          {/* <Badge variant="outline">{ticket.type}</Badge> */}
-                          <span className="text-xs text-muted-foreground">
-                            {new Date(ticket.createdAt).toLocaleDateString("vi-VN")}
-                          </span>
+                          <span className="text-xs text-muted-foreground">{new Date(ticket.createdAt).toLocaleDateString("vi-VN")}</span>
                         </div>
                         <p className="text-sm font-medium line-clamp-1">{ticket.description}</p>
                         <p className="text-[10px] text-muted-foreground font-mono">ID: {ticket.id}</p>
                       </div>
-
-                      <div className="flex items-center gap-3">
-                        <Badge
-                          className={cn(
-                            "text-white", // Đảm bảo chữ trắng trên nền màu
-                            ticket.status === "RESOLVED" && "bg-emerald-500 hover:bg-emerald-600",
-                            (ticket.status === "OPEN" || ticket.status === "IN_PROGRESS") &&
-                              "bg-orange-500 hover:bg-orange-600",
-                            ticket.status === "CLOSED" && "bg-slate-500 hover:bg-slate-600",
-                          )}>
-                          {ticket.status === "RESOLVED" && "Đã giải quyết"}
-                          {ticket.status === "OPEN" && "Mới tiếp nhận"}
-                          {ticket.status === "IN_PROGRESS" && "Đang xử lý"}
-                          {ticket.status === "CLOSED" && "Đã đóng"}
-                        </Badge>
-                      </div>
+                      <Badge className={cn(
+                        "text-white",
+                        ticket.status === "RESOLVED" && "bg-emerald-500 hover:bg-emerald-600",
+                        (ticket.status === "OPEN" || ticket.status === "IN_PROGRESS") && "bg-orange-500 hover:bg-orange-600",
+                        ticket.status === "CLOSED" && "bg-slate-500 hover:bg-slate-600",
+                      )}>
+                        {ticket.status === "RESOLVED" && "Đã giải quyết"}
+                        {ticket.status === "OPEN" && "Mới tiếp nhận"}
+                        {ticket.status === "IN_PROGRESS" && "Đang xử lý"}
+                        {ticket.status === "CLOSED" && "Đã đóng"}
+                      </Badge>
                     </div>
                   ))}
                 </div>
@@ -256,24 +211,6 @@ export default function SupportPage() {
           </Card>
         </TabsContent>
       </Tabs>
-
-      <div className="mt-20 border-t pt-10 text-center">
-        <h3 className="font-bold mb-4">Các điều khoản quan trọng</h3>
-        <div className="flex flex-wrap justify-center gap-6 text-sm text-muted-foreground">
-          <a href="#" className="hover:text-primary transition-colors">
-            Điều khoản sử dụng
-          </a>
-          <a href="#" className="hover:text-primary transition-colors">
-            Chính sách bảo mật (KYC)
-          </a>
-          <a href="#" className="hover:text-primary transition-colors">
-            Quy trình xử lý Tranh chấp
-          </a>
-          <a href="#" className="hover:text-primary transition-colors">
-            Chính sách hoàn tiền
-          </a>
-        </div>
-      </div>
     </div>
   );
 }
