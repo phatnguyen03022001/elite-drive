@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 export function PaymentMethodForm({ bookingId, onSuccess }: { bookingId: string; onSuccess: (payment: any) => void }) {
   const [submitting, setSubmitting] = useState(false);
 
-  const createSandboxPayment = async () => {
+  const createTestPayment = async () => {
     setSubmitting(true);
     try {
       const payment = await CustomerService.createPayment({
@@ -27,9 +27,9 @@ export function PaymentMethodForm({ bookingId, onSuccess }: { bookingId: string;
   return (
     <div className="space-y-5 py-1">
       <div>
-        <h2 className="text-lg font-semibold">Payment method</h2>
+        <h2 className="text-lg font-semibold">Test transaction</h2>
         <p className="mt-1 text-sm leading-6 text-muted-foreground">
-          Use the sandbox adapter to validate the booking lifecycle in this public environment.
+          Create a pending payment record for this approved booking, then confirm it in the next step.
         </p>
       </div>
 
@@ -38,14 +38,16 @@ export function PaymentMethodForm({ bookingId, onSuccess }: { bookingId: string;
           <CreditCard className="h-5 w-5" />
         </div>
         <div>
-          <div className="font-medium">Elite Drive payment sandbox</div>
-          <div className="mt-1 text-sm text-muted-foreground">Creates a pending payment tied to this booking. No real funds are collected.</div>
+          <div className="font-medium">Elite Drive test checkout</div>
+          <div className="mt-1 text-sm text-muted-foreground">
+            Uses the application payment workflow without contacting an external payment provider.
+          </div>
         </div>
       </div>
 
-      <Button className="w-full" onClick={createSandboxPayment} disabled={submitting}>
+      <Button className="w-full" onClick={createTestPayment} disabled={submitting}>
         {submitting ? <Loader2 className="animate-spin" /> : <CreditCard />}
-        Create payment record
+        Continue in test mode
       </Button>
     </div>
   );
