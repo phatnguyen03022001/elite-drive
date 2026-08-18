@@ -9,6 +9,7 @@ import {
   IsBooleanString,
   IsEnum,
   IsIn,
+  IsInt,
   Matches,
   Max,
   MaxLength,
@@ -46,14 +47,46 @@ export class AdminBookingReportDto {
 }
 
 export class CreatePromotionDto {
-  @ApiProperty({ example: 'SUMMER2026' }) @IsNotEmpty() @IsString() code: string;
-  @ApiPropertyOptional() @IsOptional() @IsString() description?: string;
-  @ApiProperty({ example: 'PERCENTAGE' }) @IsNotEmpty() @IsString() discountType: string;
-  @ApiProperty() @IsNotEmpty() @IsNumber() discountValue: number;
-  @ApiPropertyOptional() @IsOptional() @IsNumber() maxUses?: number;
-  @ApiPropertyOptional() @IsOptional() @IsNumber() minBookingAmount?: number;
-  @ApiProperty() @IsNotEmpty() @IsDateString() startDate: string;
-  @ApiProperty() @IsNotEmpty() @IsDateString() endDate: string;
+  @ApiProperty({ example: 'SUMMER2026' })
+  @IsNotEmpty()
+  @IsString()
+  @Matches(/^[A-Za-z0-9_-]{3,40}$/)
+  code: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  description?: string;
+
+  @ApiProperty({ enum: ['PERCENTAGE', 'FIXED'] })
+  @IsIn(['PERCENTAGE', 'FIXED'])
+  discountType: 'PERCENTAGE' | 'FIXED';
+
+  @ApiProperty()
+  @IsNumber()
+  @Min(0.01)
+  discountValue: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  maxUses?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  minBookingAmount?: number;
+
+  @ApiProperty()
+  @IsDateString()
+  startDate: string;
+
+  @ApiProperty()
+  @IsDateString()
+  endDate: string;
 }
 
 export class UpdatePromotionDto extends PartialType(CreatePromotionDto) {
