@@ -1,7 +1,6 @@
 import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
-import { PaginationDto } from '../../common/dto/pagination.dto';
 import {
   ApiResponse,
   PaginatedResponseDto,
@@ -30,14 +29,14 @@ export class PublicController {
 
   @Public()
   @Get('promotions')
-  async getPromotions(@Query() query: PaginationDto & PromotionQueryDto) {
+  async getPromotions(@Query() query: PromotionQueryDto) {
     const promotions = await this.publicService.getPromotions(query);
     return ApiResponse.success(promotions);
   }
 
   @Public()
   @Get('cars')
-  async getCars(@Query() query: PaginationDto & PublicCarQueryDto) {
+  async getCars(@Query() query: PublicCarQueryDto) {
     const { data, total, page, limit } = await this.publicService.getCars(query);
     return new PaginatedResponseDto(data, total, page, limit);
   }
@@ -53,7 +52,7 @@ export class PublicController {
   @Get('cars/:car_id/availability')
   async getCarAvailability(
     @Param('car_id') carId: string,
-    @Query() query: PaginationDto & CarAvailabilityQueryDto,
+    @Query() query: CarAvailabilityQueryDto,
   ) {
     const availability = await this.publicService.getCarAvailability(carId, query);
     return ApiResponse.success(availability);
@@ -63,7 +62,7 @@ export class PublicController {
   @Get('cars/:car_id/reviews')
   async getCarReviews(
     @Param('car_id') carId: string,
-    @Query() query: PaginationDto & CarReviewQueryDto,
+    @Query() query: CarReviewQueryDto,
   ) {
     const { data, total, page, limit } = await this.publicService.getCarReviews(carId, query);
     return new PaginatedResponseDto(data, total, page, limit);
