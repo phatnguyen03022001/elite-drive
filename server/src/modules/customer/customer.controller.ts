@@ -32,6 +32,7 @@ import {
   ConfirmPaymentDto,
   ContractResponseDto,
   CreateBookingDto,
+  CreateDisputeDto,
   CreateKYCDto,
   CreatePaymentDto,
   CreateReviewDto,
@@ -45,6 +46,7 @@ import {
   UpdateCustomerProfileDto,
   WalletTransactionResponseDto,
 } from './dto/customer.dto';
+import { CustomerBookingService } from './customer-booking.service';
 import { CustomerPaymentService } from './customer-payment.service';
 import { CustomerService } from './customer.service';
 
@@ -55,6 +57,7 @@ export class CustomerController {
   constructor(
     private readonly customerService: CustomerService,
     private readonly paymentService: CustomerPaymentService,
+    private readonly bookingService: CustomerBookingService,
   ) {}
 
   @Get('profile')
@@ -93,7 +96,7 @@ export class CustomerController {
       documentBack?: Express.Multer.File[];
       faceImage?: Express.Multer.File[];
     },
-  ): Promise<ApiResponse<any>> {
+  ): Promise<ApiResponse<unknown>> {
     const kyc = await this.customerService.submitKyc(userId, dto, files);
     return ApiResponse.success(kyc, 'KYC submission received');
   }
@@ -110,8 +113,8 @@ export class CustomerController {
   async createBooking(
     @CurrentUser('id') userId: string,
     @Body() dto: CreateBookingDto,
-  ): Promise<ApiResponse<any>> {
-    const booking = await this.customerService.createBooking(userId, dto);
+  ): Promise<ApiResponse<unknown>> {
+    const booking = await this.bookingService.createBooking(userId, dto);
     return ApiResponse.success(booking, 'Booking created');
   }
 
@@ -137,7 +140,7 @@ export class CustomerController {
   async cancelBooking(
     @CurrentUser('id') userId: string,
     @Param('booking_id') bookingId: string,
-  ): Promise<ApiResponse<any>> {
+  ): Promise<ApiResponse<unknown>> {
     const result = await this.paymentService.cancelBooking(userId, bookingId);
     return ApiResponse.success(result, 'Booking cancelled');
   }
@@ -146,7 +149,7 @@ export class CustomerController {
   async createPayment(
     @CurrentUser('id') userId: string,
     @Body() dto: CreatePaymentDto,
-  ): Promise<ApiResponse<any>> {
+  ): Promise<ApiResponse<unknown>> {
     const payment = await this.paymentService.createPayment(userId, dto);
     return ApiResponse.success(
       {
@@ -171,7 +174,7 @@ export class CustomerController {
   async confirmPayment(
     @CurrentUser('id') userId: string,
     @Body() dto: ConfirmPaymentDto,
-  ): Promise<ApiResponse<any>> {
+  ): Promise<ApiResponse<unknown>> {
     const result = await this.paymentService.confirmMockPayment(userId, dto);
     return ApiResponse.success(result, 'Development mock payment confirmed');
   }
@@ -180,7 +183,7 @@ export class CustomerController {
   async getPaymentByBooking(
     @CurrentUser('id') userId: string,
     @Param('booking_id') bookingId: string,
-  ): Promise<ApiResponse<any>> {
+  ): Promise<ApiResponse<unknown>> {
     const payment = await this.customerService.getPaymentByBooking(userId, bookingId);
     return ApiResponse.success(payment);
   }
@@ -189,7 +192,7 @@ export class CustomerController {
   async getTrips(
     @CurrentUser('id') userId: string,
     @Query() query: PaginationDto & TripQueryDto,
-  ): Promise<PaginatedResponseDto<any>> {
+  ): Promise<PaginatedResponseDto<unknown>> {
     const { data, total, page, limit } = await this.customerService.getTrips(userId, query);
     return new PaginatedResponseDto(data, total, page, limit);
   }
@@ -223,7 +226,7 @@ export class CustomerController {
   }
 
   @Get('wallet')
-  async getWallet(@CurrentUser('id') userId: string): Promise<ApiResponse<any>> {
+  async getWallet(@CurrentUser('id') userId: string): Promise<ApiResponse<unknown>> {
     const wallet = await this.customerService.getWallet(userId);
     return ApiResponse.success(wallet);
   }
@@ -240,7 +243,7 @@ export class CustomerController {
   async topupWallet(
     @CurrentUser('id') userId: string,
     @Body() dto: CreateWalletTopupDto,
-  ): Promise<ApiResponse<any>> {
+  ): Promise<ApiResponse<unknown>> {
     const payment = await this.paymentService.createWalletTopup(userId, dto);
     return ApiResponse.success(
       {
@@ -262,7 +265,7 @@ export class CustomerController {
   async createReview(
     @CurrentUser('id') userId: string,
     @Body() dto: CreateReviewDto,
-  ): Promise<ApiResponse<any>> {
+  ): Promise<ApiResponse<unknown>> {
     const review = await this.customerService.createReview(userId, dto);
     return ApiResponse.success(review, 'Review submitted');
   }
@@ -271,7 +274,7 @@ export class CustomerController {
   async getMyReviews(
     @CurrentUser('id') userId: string,
     @Query() query?: PaginationDto,
-  ): Promise<PaginatedResponseDto<any>> {
+  ): Promise<PaginatedResponseDto<unknown>> {
     const { data, total, page, limit } = await this.customerService.getMyReviews(userId, query);
     return new PaginatedResponseDto(data, total, page, limit);
   }
@@ -301,13 +304,7 @@ export class CustomerController {
   @Post('disputes')
   async createDispute(
     @CurrentUser('id') userId: string,
-    @Body()
-    dto: {
-      type: string;
-      bookingId?: string;
-      description: string;
-      title: string;
-    },
+    @Body() dto: CreateDisputeDto,
   ) {
     const result = await this.customerService.createDispute(userId, dto);
     return ApiResponse.success(result, 'Support request submitted');
@@ -321,7 +318,7 @@ export class CustomerController {
 
   @Public()
   @Get('promotions')
-  async getActivePromotions(): Promise<ApiResponse<any>> {
+  async getActivePromotions(): Promise<ApiResponse<unknown>> {
     const promotions = await this.customerService.getActivePromotions();
     return ApiResponse.success(promotions);
   }
@@ -330,7 +327,7 @@ export class CustomerController {
   async applyPromotion(
     @CurrentUser('id') userId: string,
     @Body() dto: { bookingId: string; promoCode: string },
-  ): Promise<ApiResponse<any>> {
+  ): Promise<ApiResponse<unknown>> {
     const result = await this.customerService.applyPromotion(userId, dto.bookingId, dto.promoCode);
     return ApiResponse.success(result, 'Promotion applied');
   }
