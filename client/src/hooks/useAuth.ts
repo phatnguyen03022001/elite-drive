@@ -1,9 +1,9 @@
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
 import Cookies from "js-cookie";
 import { jwtDecode } from "jwt-decode";
 import { useAuthQueries } from "../features/auth/auth.queries";
 import { LoginRequest, LoginResponse } from "../features/auth/auth.schema";
+import { notify, notifyError } from "@/lib/notifications";
 
 interface DecodedToken {
   role: "ADMIN" | "OWNER" | "CUSTOMER";
@@ -37,7 +37,10 @@ export const useAuth = () => {
     const decoded = jwtDecode<DecodedToken>(token);
     const returnTo = getSafeReturnTo(decoded.role);
 
-    toast.success("Signed in successfully");
+    notify.success("Signed in", {
+      id: "auth-session",
+      description: returnTo ? "Returning you to where you left off." : "Your Elite Drive workspace is ready.",
+    });
 
     if (returnTo) {
       router.push(returnTo);
@@ -58,9 +61,13 @@ export const useAuth = () => {
         const token = res.data?.token;
         if (token) handleAuthSuccess(token);
       },
-      onError: (err: any) => {
-        const message = err.response?.data?.message;
-        toast.error(typeof message === "string" ? message : "Unable to sign in with those credentials");
+      onError: (error: unknown) => {
+        notifyError(
+          "Sign-in failed",
+          error,
+          "Check your email and password, then try again.",
+          { id: "auth-sign-in" },
+        );
       },
     });
   };
@@ -71,16 +78,23 @@ export const useAuth = () => {
         const token = res.data?.token;
         if (token) handleAuthSuccess(token);
       },
-      onError: (err: any) => {
-        const message = err.response?.data?.message;
-        toast.error(typeof message === "string" ? message : "The verification code is invalid or has expired");
+      onError: (error: unknown) => {
+        notifyError(
+          "Verification code not accepted",
+          error,
+          "The code may be invalid or expired. Request a new code and try again.",
+          { id: "auth-otp" },
+        );
       },
     });
   };
 
   const handleLogout = () => {
     Cookies.remove("token");
-    toast.success("Signed out");
+    notify.info("Signed out", {
+      id: "auth-session",
+      description: "This browser no longer has an active Elite Drive session.",
+    });
     router.push("/login");
     router.refresh();
   };

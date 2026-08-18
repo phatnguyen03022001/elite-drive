@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import { AuthProvider } from "@/components/provider/AuthProvider";
 import { ThemeProvider } from "@/components/provider/ThemeProvider";
 import ReactQueryProvider from "@/components/provider/ReactQueryProvider";
-import { Toaster } from "sonner";
+import { Toaster } from "@/components/ui/sonner";
 import { ImageErrorHandler } from "../components/provider/ImageErrorHandler";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
@@ -48,7 +48,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <AuthProvider>
               {children}
               <ImageErrorHandler />
-              <Toaster richColors position="bottom-right" />
+              <Toaster />
             </AuthProvider>
           </ReactQueryProvider>
         </ThemeProvider>

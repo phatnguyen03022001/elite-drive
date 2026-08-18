@@ -4,7 +4,6 @@ import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { CalendarDays, Car, CreditCard, Loader2, MapPin, Star, XCircle } from "lucide-react";
-import { toast } from "sonner";
 import { CustomerService } from "@/features/customer/customer.service";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { notify, notifyError } from "@/lib/notifications";
 
 const currency = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -56,8 +56,13 @@ export default function MyBookingsPage() {
     try {
       const result = await CustomerService.getBookings({ page: 1, limit: 50 });
       setBookings(Array.isArray(result) ? result : result?.data ?? []);
-    } catch (error: any) {
-      toast.error(error?.message || "Could not load your bookings");
+    } catch (error: unknown) {
+      notifyError(
+        "Bookings could not be loaded",
+        error,
+        "Your booking history is temporarily unavailable. Try again in a moment.",
+        { id: "customer-bookings-load" },
+      );
     } finally {
       setLoading(false);
     }
@@ -79,10 +84,18 @@ export default function MyBookingsPage() {
     if (!window.confirm("Cancel this booking? Any eligible refund will be returned to your Elite Drive wallet.")) return;
     try {
       await CustomerService.cancelBooking(bookingId);
-      toast.success("Booking cancelled");
+      notify.success("Booking cancelled", {
+        id: `customer-booking-${bookingId}`,
+        description: "The booking state has been updated and the list will refresh now.",
+      });
       await fetchBookings();
-    } catch (error: any) {
-      toast.error(error?.message || "Could not cancel this booking");
+    } catch (error: unknown) {
+      notifyError(
+        "Booking could not be cancelled",
+        error,
+        "No booking state was changed. Refresh the page and try again.",
+        { id: `customer-booking-${bookingId}` },
+      );
     }
   };
 
@@ -95,11 +108,17 @@ export default function MyBookingsPage() {
   const submitReview = async () => {
     if (!selectedBooking) return;
     if (reviewData.rating < 1) {
-      toast.error("Choose a star rating");
+      notify.warning("Choose a star rating", {
+        id: "customer-review-validation",
+        description: "Select a rating from one to five stars before submitting your review.",
+      });
       return;
     }
     if (reviewData.content.trim().length < 10) {
-      toast.error("Write at least 10 characters about your trip");
+      notify.warning("Add more trip detail", {
+        id: "customer-review-validation",
+        description: "Write at least 10 characters so the review is useful to other renters.",
+      });
       return;
     }
 
@@ -112,11 +131,19 @@ export default function MyBookingsPage() {
         title: `Trip with ${selectedBooking.car?.name || "Elite Drive"}`,
         content: reviewData.content.trim(),
       });
-      toast.success("Review submitted");
+      notify.success("Review submitted", {
+        id: `customer-review-${selectedBooking.id}`,
+        description: "Your feedback is now attached to the completed trip.",
+      });
       setShowReviewDialog(false);
       await fetchBookings();
-    } catch (error: any) {
-      toast.error(error?.message || "Could not submit your review");
+    } catch (error: unknown) {
+      notifyError(
+        "Review could not be submitted",
+        error,
+        "Your review was not saved. Check the content and try again.",
+        { id: `customer-review-${selectedBooking.id}` },
+      );
     } finally {
       setSubmittingReview(false);
     }
@@ -160,10 +187,10 @@ export default function MyBookingsPage() {
                   <Car className="h-7 w-7" />
                 </div>
                 <h2 className="mt-5 text-lg font-semibold">No bookings here yet</h2>
-                <p className="mt-2 max-w-md text-sm text-muted-foreground">Find an available vehicle and choose your rental dates to start a booking.</p>
-                <Button asChild className="mt-5">
-                  <Link href="/customer/cars">Browse vehicles</Link>
-                </Button>
+                <p className="mt-2 max-w-md text-sm text-muted-foreground">
+                  Find an available vehicle and choose your rental dates to start a booking.
+                </p>
+                <Button asChild className="mt-5"><Link href="/customer/cars">Browse vehicles</Link></Button>
               </CardContent>
             </Card>
           ) : (
@@ -175,9 +202,7 @@ export default function MyBookingsPage() {
                       {booking.car?.mainImageUrl ? (
                         <Image src={booking.car.mainImageUrl} alt={booking.car?.name || "Rental vehicle"} fill className="object-cover" sizes="96px" />
                       ) : (
-                        <div className="flex h-full w-full items-center justify-center text-muted-foreground">
-                          <Car className="h-7 w-7" />
-                        </div>
+                        <div className="flex h-full w-full items-center justify-center text-muted-foreground"><Car className="h-7 w-7" /></div>
                       )}
                     </div>
 
@@ -209,24 +234,23 @@ export default function MyBookingsPage() {
                     <div className="space-y-2">
                       {booking.status === "APPROVED" ? (
                         <Button asChild className="w-full">
-                          <Link href={`/customer/payments/${booking.id}`}>
-                            <CreditCard />
-                            Continue to payment
-                          </Link>
+                          <Link href={`/customer/payments/${booking.id}`}><CreditCard />Continue to payment</Link>
                         </Button>
                       ) : null}
 
                       {["PENDING", "APPROVED"].includes(booking.status) ? (
-                        <Button variant="outline" className="w-full hover:border-destructive/30 hover:text-destructive" onClick={() => cancelBooking(booking.id)}>
-                          <XCircle />
-                          Cancel booking
+                        <Button
+                          variant="outline"
+                          className="w-full hover:border-destructive/30 hover:text-destructive"
+                          onClick={() => cancelBooking(booking.id)}
+                        >
+                          <XCircle />Cancel booking
                         </Button>
                       ) : null}
 
                       {booking.status === "COMPLETED" ? (
                         <Button variant="outline" className="w-full" onClick={() => openReview(booking)}>
-                          <Star />
-                          Leave a review
+                          <Star />Leave a review
                         </Button>
                       ) : null}
 
@@ -258,7 +282,8 @@ export default function MyBookingsPage() {
                     type="button"
                     onClick={() => setReviewData((current) => ({ ...current, rating: star }))}
                     className="rounded-md p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    aria-label={`${star} star${star > 1 ? "s" : ""}`}>
+                    aria-label={`${star} star${star > 1 ? "s" : ""}`}
+                  >
                     <Star className={reviewData.rating >= star ? "fill-current" : "text-muted-foreground"} />
                   </button>
                 ))}

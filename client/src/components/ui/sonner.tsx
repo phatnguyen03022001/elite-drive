@@ -1,4 +1,4 @@
-"use client"
+"use client";
 
 import {
   CircleCheckIcon,
@@ -6,35 +6,50 @@ import {
   Loader2Icon,
   OctagonXIcon,
   TriangleAlertIcon,
-} from "lucide-react"
-import { useTheme } from "next-themes"
-import { Toaster as Sonner, type ToasterProps } from "sonner"
+} from "lucide-react";
+import { useTheme } from "next-themes";
+import { Toaster as Sonner, type ToasterProps } from "sonner";
 
-const Toaster = ({ ...props }: ToasterProps) => {
-  const { theme = "system" } = useTheme()
+const defaultClassNames = {
+  toast: "elite-toast",
+  title: "elite-toast-title",
+  description: "elite-toast-description",
+  icon: "elite-toast-icon",
+  actionButton: "elite-toast-action",
+  cancelButton: "elite-toast-cancel",
+  closeButton: "elite-toast-close",
+};
+
+const Toaster = ({ toastOptions, ...props }: ToasterProps) => {
+  const { resolvedTheme } = useTheme();
 
   return (
     <Sonner
-      theme={theme as ToasterProps["theme"]}
-      className="toaster group"
+      theme={(resolvedTheme || "system") as ToasterProps["theme"]}
+      position="bottom-right"
+      closeButton
+      duration={5_500}
+      visibleToasts={4}
+      gap={10}
+      containerAriaLabel="Elite Drive notifications"
       icons={{
-        success: <CircleCheckIcon className="size-4" />,
-        info: <InfoIcon className="size-4" />,
-        warning: <TriangleAlertIcon className="size-4" />,
-        error: <OctagonXIcon className="size-4" />,
-        loading: <Loader2Icon className="size-4 animate-spin" />,
+        success: <CircleCheckIcon aria-hidden="true" className="size-5" />,
+        info: <InfoIcon aria-hidden="true" className="size-5" />,
+        warning: <TriangleAlertIcon aria-hidden="true" className="size-5" />,
+        error: <OctagonXIcon aria-hidden="true" className="size-5" />,
+        loading: <Loader2Icon aria-hidden="true" className="size-5 animate-spin" />,
       }}
-      style={
-        {
-          "--normal-bg": "var(--popover)",
-          "--normal-text": "var(--popover-foreground)",
-          "--normal-border": "var(--border)",
-          "--border-radius": "var(--radius)",
-        } as React.CSSProperties
-      }
+      toastOptions={{
+        ...toastOptions,
+        closeButtonAriaLabel: toastOptions?.closeButtonAriaLabel || "Dismiss notification",
+        classNames: {
+          ...defaultClassNames,
+          ...toastOptions?.classNames,
+        },
+      }}
       {...props}
     />
-  )
-}
+  );
+};
 
-export { Toaster }
+export { Toaster };

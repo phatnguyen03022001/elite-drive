@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react";
 import { CalendarDays, Car, CheckCircle2, Info, Loader2, Phone, User, XCircle } from "lucide-react";
-import { toast } from "sonner";
 import { OwnerService } from "@/features/owner/owner.service";
 import { useOwnerBookings } from "@/features/owner/owner.queries";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { notify, notifyError } from "@/lib/notifications";
 
 const currency = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -36,7 +36,10 @@ export default function OwnerBookingsPage() {
   const [status, setStatus] = useState("PENDING");
   const [processingId, setProcessingId] = useState<string | null>(null);
   const query = useOwnerBookings({ page: 1, limit: 20, status });
-  const bookings = useMemo(() => (Array.isArray(query.data) ? query.data : query.data?.data ?? []), [query.data]);
+  const bookings = useMemo(
+    () => (Array.isArray(query.data) ? query.data : query.data?.data ?? []),
+    [query.data],
+  );
 
   const handleAction = async (bookingId: string, action: "approve" | "reject") => {
     const isApprove = action === "approve";
@@ -44,7 +47,10 @@ export default function OwnerBookingsPage() {
 
     let reason = "";
     if (!isApprove) {
-      const response = window.prompt("Reason for declining this request:", "Vehicle is unavailable for the requested dates");
+      const response = window.prompt(
+        "Reason for declining this request:",
+        "Vehicle is unavailable for the requested dates",
+      );
       if (response === null) return;
       reason = response.trim() || "Vehicle is unavailable for the requested dates";
     }
@@ -53,10 +59,21 @@ export default function OwnerBookingsPage() {
     try {
       if (isApprove) await OwnerService.approveBooking(bookingId);
       else await OwnerService.rejectBooking(bookingId, { reason });
-      toast.success(isApprove ? "Booking approved" : "Booking declined");
+
+      notify.success(isApprove ? "Booking approved" : "Booking declined", {
+        id: `owner-booking-${bookingId}`,
+        description: isApprove
+          ? "The renter can now continue to checkout for this request."
+          : "The renter will see the decision and the reason you provided.",
+      });
       await query.refetch();
-    } catch (error: any) {
-      toast.error(error?.response?.data?.message || error?.message || "Could not update this booking");
+    } catch (error: unknown) {
+      notifyError(
+        "Booking could not be updated",
+        error,
+        "No booking state was changed. Refresh the page and try again.",
+        { id: `owner-booking-${bookingId}` },
+      );
     } finally {
       setProcessingId(null);
     }
@@ -84,7 +101,9 @@ export default function OwnerBookingsPage() {
 
       {query.isLoading ? (
         <div className="space-y-4">
-          {Array.from({ length: 3 }).map((_, index) => <Skeleton key={index} className="h-52 w-full rounded-xl" />)}
+          {Array.from({ length: 3 }).map((_, index) => (
+            <Skeleton key={index} className="h-52 w-full rounded-xl" />
+          ))}
         </div>
       ) : query.isError ? (
         <Card className="border-destructive/30">
@@ -99,7 +118,9 @@ export default function OwnerBookingsPage() {
           <CardContent className="flex flex-col items-center py-16 text-center">
             <Info className="h-8 w-8 text-muted-foreground" />
             <h2 className="mt-4 font-semibold">No bookings in this state</h2>
-            <p className="mt-2 text-sm text-muted-foreground">Requests will appear here as customers move through the rental lifecycle.</p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Requests will appear here as customers move through the rental lifecycle.
+            </p>
           </CardContent>
         </Card>
       ) : (
@@ -115,18 +136,31 @@ export default function OwnerBookingsPage() {
                         <div className="rounded-xl bg-muted p-2.5"><Car className="h-5 w-5" /></div>
                         <div>
                           <h2 className="font-semibold">{booking.car?.name || "Vehicle"}</h2>
-                          <p className="mt-0.5 font-mono text-xs text-muted-foreground">{booking.car?.licensePlate || booking.id.slice(-8).toUpperCase()}</p>
+                          <p className="mt-0.5 font-mono text-xs text-muted-foreground">
+                            {booking.car?.licensePlate || booking.id.slice(-8).toUpperCase()}
+                          </p>
                         </div>
                       </div>
-                      <Badge variant={booking.status === "REJECTED" ? "destructive" : booking.status === "PENDING" ? "secondary" : "outline"}>
+                      <Badge
+                        variant={booking.status === "REJECTED" ? "destructive" : booking.status === "PENDING" ? "secondary" : "outline"}
+                      >
                         {STATUS_LABELS[booking.status] || booking.status}
                       </Badge>
                     </div>
 
                     <div className="mt-6 grid gap-3 text-sm sm:grid-cols-2">
-                      <div className="flex items-center gap-2"><User className="h-4 w-4 text-muted-foreground" /><span>{booking.customer?.firstName} {booking.customer?.lastName}</span></div>
-                      <div className="flex items-center gap-2"><Phone className="h-4 w-4 text-muted-foreground" /><span>{booking.customer?.phone || "Phone not provided"}</span></div>
-                      <div className="flex items-center gap-2 sm:col-span-2"><CalendarDays className="h-4 w-4 text-muted-foreground" /><span>{dates.format(new Date(booking.startDate))} — {dates.format(new Date(booking.endDate))}</span></div>
+                      <div className="flex items-center gap-2">
+                        <User className="h-4 w-4 text-muted-foreground" />
+                        <span>{booking.customer?.firstName} {booking.customer?.lastName}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Phone className="h-4 w-4 text-muted-foreground" />
+                        <span>{booking.customer?.phone || "Phone not provided"}</span>
+                      </div>
+                      <div className="flex items-center gap-2 sm:col-span-2">
+                        <CalendarDays className="h-4 w-4 text-muted-foreground" />
+                        <span>{dates.format(new Date(booking.startDate))} — {dates.format(new Date(booking.endDate))}</span>
+                      </div>
                     </div>
                   </div>
 
@@ -142,11 +176,20 @@ export default function OwnerBookingsPage() {
 
                     {booking.status === "PENDING" ? (
                       <div className="space-y-2">
-                        <Button className="w-full" onClick={() => handleAction(booking.id, "approve")} disabled={processingId !== null}>
+                        <Button
+                          className="w-full"
+                          onClick={() => handleAction(booking.id, "approve")}
+                          disabled={processingId !== null}
+                        >
                           {processingId === booking.id ? <Loader2 className="animate-spin" /> : <CheckCircle2 />}
                           Approve request
                         </Button>
-                        <Button variant="outline" className="w-full hover:border-destructive/30 hover:text-destructive" onClick={() => handleAction(booking.id, "reject")} disabled={processingId !== null}>
+                        <Button
+                          variant="outline"
+                          className="w-full hover:border-destructive/30 hover:text-destructive"
+                          onClick={() => handleAction(booking.id, "reject")}
+                          disabled={processingId !== null}
+                        >
                           <XCircle />
                           Decline request
                         </Button>
