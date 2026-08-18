@@ -39,7 +39,9 @@ describe('PaymentService MoMo invariants', () => {
     await expect(service.handleMomoIpn(payload)).rejects.toBeInstanceOf(
       UnauthorizedException,
     );
-    expect((db as unknown as { payment: { findFirst: jest.Mock } }).payment.findFirst).not.toHaveBeenCalled();
+    expect(
+      (db as unknown as { payment: { findFirst: jest.Mock } }).payment.findFirst,
+    ).not.toHaveBeenCalled();
   });
 
   it('rejects a validly signed IPN whose request id was not issued for the payment', async () => {
@@ -62,6 +64,42 @@ describe('PaymentService MoMo invariants', () => {
     await expect(
       service.handleMomoIpn({ ...payload, requestId: 'REQ-attacker-or-stale' }),
     ).rejects.toBeInstanceOf(BadRequestException);
-    expect((db as unknown as { $transaction: jest.Mock }).$transaction).not.toHaveBeenCalled();
+    expect(
+      (db as unknown as { $transaction: jest.Mock }).$transaction,
+    ).not.toHaveBeenCalled();
+  });
+
+  it('rejects a successful provider query when the amount differs from local payment', async () => {
+    const db = {
+      payment: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'payment-1',
+          userId: 'customer-1',
+          transactionId: 'PAY-ORDER-1',
+          amount: 150000,
+          status: PaymentStatus.PENDING,
+        }),
+      },
+      $transaction: jest.fn(),
+    } as unknown as PrismaService;
+    const momo = {
+      queryStatus: jest.fn().mockResolvedValue({
+        partnerCode: 'MOMO_TEST',
+        orderId: 'PAY-ORDER-1',
+        requestId: 'QUERY-payment-1',
+        amount: 149000,
+        resultCode: 0,
+        message: 'Successful.',
+        responseTime: Date.now(),
+      }),
+    } as unknown as MomoGatewayService;
+    const service = new PaymentService(db, momo, config);
+
+    await expect(
+      service.queryMomoStatus('customer-1', 'payment-1'),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(
+      (db as unknown as { $transaction: jest.Mock }).$transaction,
+    ).not.toHaveBeenCalled();
   });
 });
