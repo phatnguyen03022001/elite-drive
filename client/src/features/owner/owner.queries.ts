@@ -13,14 +13,19 @@ import {
 export const ownerKeys = {
   all: ["owner"] as const,
   profile: () => [...ownerKeys.all, "profile"] as const,
-  cars: (params: unknown) => [...ownerKeys.all, "cars", params] as const,
-  carDocuments: (carId: string) => [...ownerKeys.all, "cars", carId, "documents"] as const,
-  calendar: (carId: string, params: unknown) => [...ownerKeys.all, "cars", carId, "calendar", params] as const,
+  carsRoot: () => [...ownerKeys.all, "cars"] as const,
+  cars: (params: unknown) => [...ownerKeys.carsRoot(), params] as const,
+  carDocuments: (carId: string) => [...ownerKeys.carsRoot(), carId, "documents"] as const,
+  calendar: (carId: string, params: unknown) => [...ownerKeys.carsRoot(), carId, "calendar", params] as const,
   kyc: () => [...ownerKeys.all, "kyc"] as const,
-  bookings: (params: unknown) => [...ownerKeys.all, "bookings", params] as const,
-  trips: (params: unknown) => [...ownerKeys.all, "trips", params] as const,
-  earnings: (params: unknown) => [...ownerKeys.all, "earnings", params] as const,
-  transactions: (params: unknown) => [...ownerKeys.all, "transactions", params] as const,
+  bookingsRoot: () => [...ownerKeys.all, "bookings"] as const,
+  bookings: (params: unknown) => [...ownerKeys.bookingsRoot(), params] as const,
+  tripsRoot: () => [...ownerKeys.all, "trips"] as const,
+  trips: (params: unknown) => [...ownerKeys.tripsRoot(), params] as const,
+  earningsRoot: () => [...ownerKeys.all, "earnings"] as const,
+  earnings: (params: unknown) => [...ownerKeys.earningsRoot(), params] as const,
+  transactionsRoot: () => [...ownerKeys.all, "transactions"] as const,
+  transactions: (params: unknown) => [...ownerKeys.transactionsRoot(), params] as const,
   wallet: () => [...ownerKeys.all, "wallet"] as const,
   dashboard: () => [...ownerKeys.all, "dashboard"] as const,
 };
@@ -33,7 +38,8 @@ export const useUpdateOwnerProfile = () => {
   return useMutation({
     mutationFn: (dto: UpdateOwnerProfileInput) => OwnerService.updateProfile(dto),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ownerKeys.profile() });
+      void queryClient.invalidateQueries({ queryKey: ownerKeys.profile() });
+      void queryClient.invalidateQueries({ queryKey: ownerKeys.dashboard() });
     },
   });
 };
@@ -49,7 +55,8 @@ export const useCreateCar = () => {
   return useMutation({
     mutationFn: (formData: FormData) => OwnerService.createCar(formData),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ownerKeys.all, exact: false });
+      void queryClient.invalidateQueries({ queryKey: ownerKeys.carsRoot() });
+      void queryClient.invalidateQueries({ queryKey: ownerKeys.dashboard() });
     },
   });
 };
@@ -63,7 +70,8 @@ export const useUpdateCar = () => {
       return OwnerService.updateCar(carId, payload);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ownerKeys.all, exact: false });
+      void queryClient.invalidateQueries({ queryKey: ownerKeys.carsRoot() });
+      void queryClient.invalidateQueries({ queryKey: ownerKeys.dashboard() });
     },
   });
 };
@@ -71,16 +79,11 @@ export const useUpdateCar = () => {
 export const useSubmitKyc = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({
-      dto,
-      files,
-    }: {
-      dto: CreateKYCInput;
-      files: { documentFront?: File; documentBack?: File; faceImage?: File };
-    }) => OwnerService.submitKyc(dto, files),
+    mutationFn: ({ dto, files }: { dto: CreateKYCInput; files: { documentFront?: File; documentBack?: File; faceImage?: File } }) =>
+      OwnerService.submitKyc(dto, files),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ownerKeys.kyc() });
-      queryClient.invalidateQueries({ queryKey: ownerKeys.profile() });
+      void queryClient.invalidateQueries({ queryKey: ownerKeys.kyc() });
+      void queryClient.invalidateQueries({ queryKey: ownerKeys.profile() });
     },
   });
 };
@@ -90,26 +93,22 @@ export const useDeleteCar = () => {
   return useMutation({
     mutationFn: (carId: string) => OwnerService.deleteCar(carId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ownerKeys.cars({}) });
+      void queryClient.invalidateQueries({ queryKey: ownerKeys.carsRoot() });
+      void queryClient.invalidateQueries({ queryKey: ownerKeys.dashboard() });
     },
   });
 };
 
 export const useKycStatus = () =>
-  useQuery({
-    queryKey: ownerKeys.kyc(),
-    queryFn: async () => {
-      const response = await OwnerService.getKycStatus();
-      return response.data?.data || response.data || response;
-    },
-  });
+  useQuery({ queryKey: ownerKeys.kyc(), queryFn: OwnerService.getKycStatus });
 
 export const useSubmitCarForReview = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (carId: string) => OwnerService.submitCarForReview(carId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ownerKeys.cars({}) });
+      void queryClient.invalidateQueries({ queryKey: ownerKeys.carsRoot() });
+      void queryClient.invalidateQueries({ queryKey: ownerKeys.dashboard() });
     },
   });
 };
@@ -125,7 +124,8 @@ export const useCheckinTrip = () => {
   return useMutation({
     mutationFn: ({ tripId, dto }: { tripId: string; dto: TripCheckinInput }) => OwnerService.checkinTrip(tripId, dto),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ownerKeys.trips({}) });
+      void queryClient.invalidateQueries({ queryKey: ownerKeys.tripsRoot() });
+      void queryClient.invalidateQueries({ queryKey: ownerKeys.dashboard() });
     },
   });
 };
@@ -135,9 +135,10 @@ export const useCheckoutTrip = () => {
   return useMutation({
     mutationFn: ({ tripId, dto }: { tripId: string; dto: TripCheckoutInput }) => OwnerService.checkoutTrip(tripId, dto),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ownerKeys.trips({}) });
-      queryClient.invalidateQueries({ queryKey: ownerKeys.earnings({}) });
-      queryClient.invalidateQueries({ queryKey: ownerKeys.wallet() });
+      void queryClient.invalidateQueries({ queryKey: ownerKeys.tripsRoot() });
+      void queryClient.invalidateQueries({ queryKey: ownerKeys.earningsRoot() });
+      void queryClient.invalidateQueries({ queryKey: ownerKeys.wallet() });
+      void queryClient.invalidateQueries({ queryKey: ownerKeys.dashboard() });
     },
   });
 };
@@ -153,7 +154,8 @@ export const useApproveBooking = () => {
   return useMutation({
     mutationFn: (bookingId: string) => OwnerService.approveBooking(bookingId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ownerKeys.bookings({}) });
+      void queryClient.invalidateQueries({ queryKey: ownerKeys.bookingsRoot() });
+      void queryClient.invalidateQueries({ queryKey: ownerKeys.dashboard() });
     },
   });
 };
@@ -164,7 +166,8 @@ export const useRejectBooking = () => {
     mutationFn: ({ bookingId, dto }: { bookingId: string; dto: RejectBookingInput }) =>
       OwnerService.rejectBooking(bookingId, dto),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ownerKeys.bookings({}) });
+      void queryClient.invalidateQueries({ queryKey: ownerKeys.bookingsRoot() });
+      void queryClient.invalidateQueries({ queryKey: ownerKeys.dashboard() });
     },
   });
 };
@@ -183,14 +186,12 @@ export const useRequestWithdraw = () => {
   return useMutation({
     mutationFn: (dto: WithdrawRequestInput) => OwnerService.requestWithdraw(dto),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ownerKeys.wallet() });
-      queryClient.invalidateQueries({ queryKey: ownerKeys.transactions({}) });
+      void queryClient.invalidateQueries({ queryKey: ownerKeys.wallet() });
+      void queryClient.invalidateQueries({ queryKey: ownerKeys.transactionsRoot() });
+      void queryClient.invalidateQueries({ queryKey: ownerKeys.dashboard() });
     },
   });
 };
 
 export const useOwnerDashboard = () =>
-  useQuery({
-    queryKey: ownerKeys.dashboard(),
-    queryFn: OwnerService.getDashboardOverview,
-  });
+  useQuery({ queryKey: ownerKeys.dashboard(), queryFn: OwnerService.getDashboardOverview });
