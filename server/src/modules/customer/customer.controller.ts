@@ -49,6 +49,7 @@ import { CustomerPaymentService } from './customer-payment.service';
 import { CustomerPromotionService } from './customer-promotion.service';
 import { CustomerReviewService } from './customer-review.service';
 import { CustomerService } from './customer.service';
+import { CustomerSupportService } from './customer-support.service';
 
 @Controller('api/customer')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -62,6 +63,7 @@ export class CustomerController {
     private readonly cancellationService: CustomerCancellationService,
     private readonly reviewService: CustomerReviewService,
     private readonly contractService: CustomerContractService,
+    private readonly supportService: CustomerSupportService,
   ) {}
 
   @Get('profile')
@@ -251,12 +253,12 @@ export class CustomerController {
 
   @Post('disputes')
   async createDispute(@CurrentUser('id') userId: string, @Body() dto: CreateDisputeDto) {
-    return ApiResponse.success(await this.customerService.createDispute(userId, dto), 'Support request submitted');
+    return ApiResponse.success(await this.supportService.createDispute(userId, dto), 'Support request submitted');
   }
 
   @Get('disputes')
   async getMyDisputes(@CurrentUser('id') userId: string) {
-    return ApiResponse.success(await this.customerService.getMyDisputes(userId));
+    return ApiResponse.success(await this.supportService.getMyDisputes(userId));
   }
 
   @Public()
