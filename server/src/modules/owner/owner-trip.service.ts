@@ -40,93 +40,109 @@ export class OwnerTripService {
   }
 
   async checkinTrip(ownerId: string, tripId: string, dto: TripCheckinDto) {
-    const trip = await this.db.trip.findFirst({
-      where: { id: tripId, car: { ownerId } },
-      select: {
-        id: true,
-        status: true,
-        booking: { select: { status: true } },
-      },
-    });
-    if (!trip) throw new NotFoundException('Trip không tồn tại');
-    if (trip.status !== 'UPCOMING') {
-      throw new BadRequestException('Trip không ở trạng thái UPCOMING');
-    }
-    if (trip.booking.status !== BookingStatus.CONFIRMED) {
-      throw new BadRequestException('Booking không còn ở trạng thái CONFIRMED');
-    }
+    return this.db.$transaction(async (tx) => {
+      const trip = await tx.trip.findFirst({
+        where: { id: tripId, car: { ownerId } },
+        select: {
+          id: true,
+          bookingId: true,
+          status: true,
+          booking: { select: { status: true } },
+        },
+      });
+      if (!trip) throw new NotFoundException('Trip không tồn tại');
+      if (trip.status !== 'UPCOMING') {
+        throw new BadRequestException('Trip không ở trạng thái UPCOMING');
+      }
+      if (trip.booking.status !== BookingStatus.CONFIRMED) {
+        throw new BadRequestException('Booking không còn ở trạng thái CONFIRMED');
+      }
 
-    const claim = await this.db.trip.updateMany({
-      where: {
-        id: tripId,
-        status: 'UPCOMING',
-        car: { ownerId },
-        booking: { status: BookingStatus.CONFIRMED },
-      },
-      data: {
-        status: 'ONGOING',
-        pickupAt: new Date(),
-        startOdometer: dto.startOdometer,
-        startFuelLevel: dto.startFuelLevel,
-        pickupNotes: dto.pickupNotes,
-      },
-    });
-    if (claim.count !== 1) {
-      throw new BadRequestException(
-        'Trip hoặc booking vừa thay đổi; tải lại trước khi check-in',
-      );
-    }
+      const bookingLock = await tx.booking.updateMany({
+        where: { id: trip.bookingId, status: BookingStatus.CONFIRMED },
+        data: { updatedAt: new Date() },
+      });
+      if (bookingLock.count !== 1) {
+        throw new BadRequestException(
+          'Booking vừa thay đổi; tải lại trước khi check-in',
+        );
+      }
 
-    return this.db.trip.findUniqueOrThrow({ where: { id: tripId } });
+      const claim = await tx.trip.updateMany({
+        where: { id: tripId, status: 'UPCOMING' },
+        data: {
+          status: 'ONGOING',
+          pickupAt: new Date(),
+          startOdometer: dto.startOdometer,
+          startFuelLevel: dto.startFuelLevel,
+          pickupNotes: dto.pickupNotes,
+        },
+      });
+      if (claim.count !== 1) {
+        throw new BadRequestException(
+          'Trip vừa thay đổi; tải lại trước khi check-in',
+        );
+      }
+
+      return tx.trip.findUniqueOrThrow({ where: { id: tripId } });
+    });
   }
 
   async checkoutTrip(ownerId: string, tripId: string, dto: TripCheckoutDto) {
-    const trip = await this.db.trip.findFirst({
-      where: { id: tripId, car: { ownerId } },
-      select: {
-        id: true,
-        status: true,
-        startOdometer: true,
-        booking: { select: { status: true } },
-      },
-    });
-    if (!trip) throw new NotFoundException('Trip không tồn tại');
-    if (trip.status !== 'ONGOING') {
-      throw new BadRequestException('Trip không ở trạng thái ONGOING');
-    }
-    if (trip.booking.status !== BookingStatus.CONFIRMED) {
-      throw new BadRequestException('Booking không còn ở trạng thái CONFIRMED');
-    }
-    if (
-      trip.startOdometer !== null &&
-      dto.endOdometer < trip.startOdometer
-    ) {
-      throw new BadRequestException(
-        'Odometer khi trả xe không thể nhỏ hơn lúc nhận xe',
-      );
-    }
+    return this.db.$transaction(async (tx) => {
+      const trip = await tx.trip.findFirst({
+        where: { id: tripId, car: { ownerId } },
+        select: {
+          id: true,
+          bookingId: true,
+          status: true,
+          startOdometer: true,
+          booking: { select: { status: true } },
+        },
+      });
+      if (!trip) throw new NotFoundException('Trip không tồn tại');
+      if (trip.status !== 'ONGOING') {
+        throw new BadRequestException('Trip không ở trạng thái ONGOING');
+      }
+      if (trip.booking.status !== BookingStatus.CONFIRMED) {
+        throw new BadRequestException('Booking không còn ở trạng thái CONFIRMED');
+      }
+      if (
+        trip.startOdometer !== null &&
+        dto.endOdometer < trip.startOdometer
+      ) {
+        throw new BadRequestException(
+          'Odometer khi trả xe không thể nhỏ hơn lúc nhận xe',
+        );
+      }
 
-    const claim = await this.db.trip.updateMany({
-      where: {
-        id: tripId,
-        status: 'ONGOING',
-        car: { ownerId },
-        booking: { status: BookingStatus.CONFIRMED },
-      },
-      data: {
-        status: 'COMPLETED',
-        dropoffAt: new Date(),
-        endOdometer: dto.endOdometer,
-        endFuelLevel: dto.endFuelLevel,
-        dropoffNotes: dto.dropoffNotes,
-      },
-    });
-    if (claim.count !== 1) {
-      throw new BadRequestException(
-        'Trip hoặc booking vừa thay đổi; tải lại trước khi checkout',
-      );
-    }
+      const bookingLock = await tx.booking.updateMany({
+        where: { id: trip.bookingId, status: BookingStatus.CONFIRMED },
+        data: { updatedAt: new Date() },
+      });
+      if (bookingLock.count !== 1) {
+        throw new BadRequestException(
+          'Booking vừa thay đổi; tải lại trước khi checkout',
+        );
+      }
 
-    return this.db.trip.findUniqueOrThrow({ where: { id: tripId } });
+      const claim = await tx.trip.updateMany({
+        where: { id: tripId, status: 'ONGOING' },
+        data: {
+          status: 'COMPLETED',
+          dropoffAt: new Date(),
+          endOdometer: dto.endOdometer,
+          endFuelLevel: dto.endFuelLevel,
+          dropoffNotes: dto.dropoffNotes,
+        },
+      });
+      if (claim.count !== 1) {
+        throw new BadRequestException(
+          'Trip vừa thay đổi; tải lại trước khi checkout',
+        );
+      }
+
+      return tx.trip.findUniqueOrThrow({ where: { id: tripId } });
+    });
   }
 }
