@@ -176,9 +176,20 @@ export class CustomerPaymentService {
         });
 
         if (refundClaim.count === 1) {
+          const platformWallet = await tx.wallet.findUnique({
+            where: { userId: this.platformUserId },
+          });
+          if (!platformWallet) {
+            throw new BadRequestException('Ví escrow nền tảng không tồn tại');
+          }
+          assertVndAmount(platformWallet.balance, {
+            allowZero: true,
+            field: 'Số dư escrow',
+          });
+
           const escrowDebit = await tx.wallet.updateMany({
             where: {
-              userId: this.platformUserId,
+              id: platformWallet.id,
               balance: { gte: completedPayment.amount },
             },
             data: { balance: { decrement: completedPayment.amount } },
@@ -192,19 +203,34 @@ export class CustomerPaymentService {
             create: { userId, balance: completedPayment.amount },
             update: { balance: { increment: completedPayment.amount } },
           });
-          await tx.walletTransaction.create({
-            data: {
-              walletId: customerWallet.id,
-              amount: completedPayment.amount,
-              type: 'REFUND',
-              description: `Hoàn tiền đơn ${bookingId}`,
-              metadata: {
-                operation: 'CUSTOMER_CANCEL',
-                bookingId,
-                paymentId: completedPayment.id,
-                refundPercent: 100,
+          await tx.walletTransaction.createMany({
+            data: [
+              {
+                walletId: platformWallet.id,
+                amount: -completedPayment.amount,
+                type: 'ESCROW_REFUND',
+                description: `Hoàn escrow cho booking ${bookingId}`,
+                metadata: {
+                  operation: 'CUSTOMER_CANCEL',
+                  bookingId,
+                  paymentId: completedPayment.id,
+                  counterpartWalletId: customerWallet.id,
+                },
               },
-            },
+              {
+                walletId: customerWallet.id,
+                amount: completedPayment.amount,
+                type: 'REFUND',
+                description: `Hoàn tiền đơn ${bookingId}`,
+                metadata: {
+                  operation: 'CUSTOMER_CANCEL',
+                  bookingId,
+                  paymentId: completedPayment.id,
+                  refundPercent: 100,
+                  counterpartWalletId: platformWallet.id,
+                },
+              },
+            ],
           });
         }
       }
