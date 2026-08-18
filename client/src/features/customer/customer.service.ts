@@ -14,7 +14,6 @@ import {
   SignContractInput,
   TripQuerySchema,
   UpdateCustomerProfileInput,
-  WalletRefundInput,
 } from "./customer.schema";
 
 const BASE_URL = "/api/customer";
@@ -104,11 +103,6 @@ export const CustomerService = {
 
   signContract: async (bookingId: string, dto: SignContractInput) => {
     const response = await axios.post(`${BASE_URL}/contracts/${bookingId}/sign`, dto);
-    return response.data;
-  },
-
-  requestRefund: async (dto: WalletRefundInput) => {
-    const response = await axios.post(`${BASE_URL}/wallet/refund`, dto);
     return response.data;
   },
 
