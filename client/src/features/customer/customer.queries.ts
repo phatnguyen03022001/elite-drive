@@ -6,6 +6,7 @@ import {
   CreateBookingInput,
   CreateWalletTopupInput,
   ApplyPromotionInput,
+  CreatePaymentInput,
 } from "./customer.schema";
 
 // --- KEYS ---
@@ -13,28 +14,22 @@ export const customerKeys = {
   all: ["customer"] as const,
   profile: () => [...customerKeys.all, "profile"] as const,
   kyc: () => [...customerKeys.all, "kyc"] as const,
-  bookings: (params: any) => [...customerKeys.all, "bookings", params] as const,
-  trips: (params: any) => [...customerKeys.all, "trips", params] as const,
+  bookings: (params: unknown) => [...customerKeys.all, "bookings", params] as const,
+  trips: (params: unknown) => [...customerKeys.all, "trips", params] as const,
   payment: (bookingId: string) => [...customerKeys.all, "payment", bookingId] as const,
 };
 
-// --- QUERIES ---
-
-// Lấy thông tin Profile
-export const useProfile = () => {
-  return useQuery({
+export const useProfile = () =>
+  useQuery({
     queryKey: customerKeys.profile(),
     queryFn: CustomerService.getProfile,
   });
-};
 
-// Lấy danh sách Bookings
-export const useBookings = (params: { page?: number; limit?: number } & BookingQueryInput) => {
-  return useQuery({
+export const useBookings = (params: { page?: number; limit?: number } & BookingQueryInput) =>
+  useQuery({
     queryKey: customerKeys.bookings(params),
     queryFn: () => CustomerService.getBookings(params),
   });
-};
 
 export const useBookingDetail = (bookingId: string) =>
   useQuery({
@@ -47,21 +42,16 @@ export const useCancelBooking = () =>
     mutationFn: (bookingId: string) => CustomerService.cancelBooking(bookingId),
   });
 
-// --- MUTATIONS ---
-
-// Cập nhật Profile
 export const useUpdateProfile = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (dto: UpdateCustomerProfileInput) => CustomerService.updateProfile(dto),
     onSuccess: () => {
-      // Invalidate để UI tự động cập nhật lại thông tin mới
       queryClient.invalidateQueries({ queryKey: customerKeys.profile() });
     },
   });
 };
 
-// Đặt xe mới
 export const useCreateBooking = () => {
   const queryClient = useQueryClient();
   return useMutation({
@@ -72,13 +62,12 @@ export const useCreateBooking = () => {
   });
 };
 
-// Gửi hồ sơ KYC (Xử lý cả file)
 export const useSubmitKyc = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ dto, files }: { dto: any; files: any }) => CustomerService.submitKyc(dto, files),
+    mutationFn: ({ dto, files }: { dto: Parameters<typeof CustomerService.submitKyc>[0]; files: Parameters<typeof CustomerService.submitKyc>[1] }) =>
+      CustomerService.submitKyc(dto, files),
     onSuccess: () => {
-      // Cập nhật cả 2 để đồng bộ toàn bộ giao diện
       queryClient.invalidateQueries({ queryKey: customerKeys.kyc() });
       queryClient.invalidateQueries({ queryKey: customerKeys.profile() });
     },
@@ -102,29 +91,20 @@ export const useWalletTopup = () =>
     mutationFn: (dto: CreateWalletTopupInput) => CustomerService.createWalletTopup(dto),
   });
 
-export const useKycStatus = () => {
-  return useQuery({
+export const useKycStatus = () =>
+  useQuery({
     queryKey: customerKeys.kyc(),
     queryFn: async () => {
       const response = await CustomerService.getKycStatus();
-      // Bóc tách lớp vỏ bọc để trả về đúng object chứa status
       return response.data?.data || response.data || response;
     },
   });
-};
 
-// 1. Tạo yêu cầu thanh toán (Để lấy mockQrUrl)
-export const useCreatePayment = () => {
-  return useMutation({
-    mutationFn: (dto: { bookingId: string; paymentMethod: string }) => CustomerService.createPayment(dto),
-    onSuccess: (response) => {
-      // Trả về data bao gồm mockQrUrl để hiển thị QR Code ở UI
-      return response.data;
-    },
+export const useCreatePayment = () =>
+  useMutation({
+    mutationFn: (dto: CreatePaymentInput) => CustomerService.createPayment(dto),
   });
-};
 
-// 2. Xác nhận thanh toán (Dùng cho nút "Tôi đã chuyển khoản" hoặc Webhook)
 export const useConfirmPayment = () => {
   const queryClient = useQueryClient();
   return useMutation({
@@ -135,23 +115,18 @@ export const useConfirmPayment = () => {
   });
 };
 
-// --- QUERIES MỚI ---
-
-// Lấy thông tin thanh toán theo booking
-export const usePaymentDetail = (bookingId: string) => {
-  return useQuery({
+export const usePaymentDetail = (bookingId: string) =>
+  useQuery({
     queryKey: customerKeys.payment(bookingId),
     queryFn: () => CustomerService.getPaymentByBooking(bookingId),
-    enabled: !!bookingId,
+    enabled: Boolean(bookingId),
   });
-};
 
-export const useActivePromotions = () => {
-  return useQuery({
+export const useActivePromotions = () =>
+  useQuery({
     queryKey: ["promotions", "active"],
     queryFn: CustomerService.getActivePromotions,
   });
-};
 
 export const useApplyPromotion = () => {
   const queryClient = useQueryClient();
