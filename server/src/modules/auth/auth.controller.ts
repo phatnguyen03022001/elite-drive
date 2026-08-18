@@ -1,22 +1,24 @@
-// src/modules/auth/auth.controller.ts
-import { Controller, Post, Body } from '@nestjs/common';
+import { Body, Controller, Post, Res } from '@nestjs/common';
+import { Response } from 'express';
+import { Public } from '../../common/decorators/public.decorator';
+import { ApiResponse } from '../../common/dto/response.dto';
 import { AuthService } from './auth.service';
 import {
+  ForgotPasswordDto,
+  LoginDto,
   RegisterDto,
   SendOtpDto,
-  LoginDto,
-  ForgotPasswordDto,
   VerifyOtpDto,
 } from './dto/auth.dto';
-import { Public } from '../../common/decorators/public.decorator';
-import { ApiResponse } from '../../common/dto/response.dto'; // Đảm bảo import đúng đường dẫn
+
+const SESSION_COOKIE = 'token';
+const SESSION_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 @Public()
 @Controller('api/auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  // ── REGISTER ────────────────────────────────────────
   @Post('register')
   async register(@Body() dto: RegisterDto) {
     const result = await this.authService.register(dto);
@@ -35,10 +37,13 @@ export class AuthController {
     return ApiResponse.success(result, 'Xác thực OTP đăng ký thành công');
   }
 
-  // ── LOGIN ───────────────────────────────────────────
   @Post('login')
-  async login(@Body() dto: LoginDto) {
+  async login(
+    @Body() dto: LoginDto,
+    @Res({ passthrough: true }) response: Response,
+  ) {
     const result = await this.authService.login(dto);
+    this.setSessionCookie(response, result.token);
     return ApiResponse.success(result, 'Đăng nhập thành công');
   }
 
@@ -49,12 +54,26 @@ export class AuthController {
   }
 
   @Post('verify-login-otp')
-  async verifyLoginOtp(@Body() dto: VerifyOtpDto) {
+  async verifyLoginOtp(
+    @Body() dto: VerifyOtpDto,
+    @Res({ passthrough: true }) response: Response,
+  ) {
     const result = await this.authService.verifyLoginOtp(dto);
+    this.setSessionCookie(response, result.token);
     return ApiResponse.success(result, 'Xác thực OTP đăng nhập thành công');
   }
 
-  // ── FORGOT PASSWORD ─────────────────────────────────
+  @Post('logout')
+  logout(@Res({ passthrough: true }) response: Response) {
+    response.clearCookie(SESSION_COOKIE, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+    });
+    return ApiResponse.success(null, 'Đăng xuất thành công');
+  }
+
   @Post('forgot-password')
   async forgotPassword(@Body() dto: ForgotPasswordDto) {
     const result = await this.authService.forgotPassword(dto);
@@ -74,5 +93,15 @@ export class AuthController {
   async verifyForgotOtp(@Body() dto: VerifyOtpDto) {
     const result = await this.authService.verifyForgotOtp(dto);
     return ApiResponse.success(result, 'Xác thực OTP quên mật khẩu thành công');
+  }
+
+  private setSessionCookie(response: Response, token: string) {
+    response.cookie(SESSION_COOKIE, token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: SESSION_MAX_AGE_MS,
+      path: '/',
+    });
   }
 }
