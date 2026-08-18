@@ -86,7 +86,11 @@ export class ReleasePaymentDto {
 
 export class RefundPaymentDto {
   @ApiProperty() @IsNotEmpty() @IsString() bookingId: string;
-  @ApiPropertyOptional({ minimum: 1, maximum: 100, default: 100 }) @IsOptional() @IsNumber() @Min(1) @Max(100) refundPercent?: number;
+  @ApiPropertyOptional({ enum: [100], default: 100, description: 'Partial refunds require a dedicated state model and are not supported yet.' })
+  @IsOptional()
+  @IsNumber()
+  @IsIn([100])
+  refundPercent?: 100;
   @ApiProperty() @IsNotEmpty() @IsString() @MaxLength(1000) reason: string;
 }
 
