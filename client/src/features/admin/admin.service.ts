@@ -156,6 +156,11 @@ export const AdminService = {
     return response.data;
   },
 
+  getWalletReconciliation: async (params: { page?: number; limit?: number } = {}) => {
+    const response = await axios.get(`${BASE_URL}/wallets/reconciliation`, { params });
+    return response.data;
+  },
+
   getAllBookings: async (params: { page?: number; limit?: number }) => {
     const response = await axios.get(`${BASE_URL}/bookings/all`, { params });
     return response.data;
