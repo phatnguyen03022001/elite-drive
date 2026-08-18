@@ -12,18 +12,12 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
-import {
-  FileFieldsInterceptor,
-  FileInterceptor,
-} from '@nestjs/platform-express';
+import { FileFieldsInterceptor, FileInterceptor } from '@nestjs/platform-express';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { PaginationDto } from '../../common/dto/pagination.dto';
-import {
-  ApiResponse,
-  PaginatedResponseDto,
-} from '../../common/dto/response.dto';
+import { ApiResponse, PaginatedResponseDto } from '../../common/dto/response.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import {
@@ -62,11 +56,8 @@ export class CustomerController {
   ) {}
 
   @Get('profile')
-  async getProfile(
-    @CurrentUser('id') userId: string,
-  ): Promise<ApiResponse<CustomerProfileResponseDto>> {
-    const profile = await this.customerService.getProfile(userId);
-    return ApiResponse.success(profile);
+  async getProfile(@CurrentUser('id') userId: string): Promise<ApiResponse<CustomerProfileResponseDto>> {
+    return ApiResponse.success(await this.customerService.getProfile(userId));
   }
 
   @Put('profile')
@@ -91,32 +82,23 @@ export class CustomerController {
   async submitKyc(
     @CurrentUser('id') userId: string,
     @Body() dto: CreateKYCDto,
-    @UploadedFiles()
-    files: {
+    @UploadedFiles() files: {
       documentFront?: Express.Multer.File[];
       documentBack?: Express.Multer.File[];
       faceImage?: Express.Multer.File[];
     },
   ): Promise<ApiResponse<unknown>> {
-    const kyc = await this.customerService.submitKyc(userId, dto, files);
-    return ApiResponse.success(kyc, 'KYC submission received');
+    return ApiResponse.success(await this.customerService.submitKyc(userId, dto, files), 'KYC submission received');
   }
 
   @Get('kyc/status')
-  async getKycStatus(
-    @CurrentUser('id') userId: string,
-  ): Promise<ApiResponse<KYCStatusResponseDto>> {
-    const status = await this.customerService.getKycStatus(userId);
-    return ApiResponse.success(status);
+  async getKycStatus(@CurrentUser('id') userId: string): Promise<ApiResponse<KYCStatusResponseDto>> {
+    return ApiResponse.success(await this.customerService.getKycStatus(userId));
   }
 
   @Post('bookings')
-  async createBooking(
-    @CurrentUser('id') userId: string,
-    @Body() dto: CreateBookingDto,
-  ): Promise<ApiResponse<unknown>> {
-    const booking = await this.bookingService.createBooking(userId, dto);
-    return ApiResponse.success(booking, 'Booking created');
+  async createBooking(@CurrentUser('id') userId: string, @Body() dto: CreateBookingDto): Promise<ApiResponse<unknown>> {
+    return ApiResponse.success(await this.bookingService.createBooking(userId, dto), 'Booking created');
   }
 
   @Get('bookings')
@@ -133,8 +115,7 @@ export class CustomerController {
     @CurrentUser('id') userId: string,
     @Param('booking_id') bookingId: string,
   ): Promise<ApiResponse<BookingDetailResponseDto>> {
-    const booking = await this.customerService.getBookingDetail(userId, bookingId);
-    return ApiResponse.success(booking);
+    return ApiResponse.success(await this.customerService.getBookingDetail(userId, bookingId));
   }
 
   @Put('bookings/:booking_id/cancel')
@@ -142,21 +123,16 @@ export class CustomerController {
     @CurrentUser('id') userId: string,
     @Param('booking_id') bookingId: string,
   ): Promise<ApiResponse<unknown>> {
-    const result = await this.paymentService.cancelBooking(userId, bookingId);
-    return ApiResponse.success(result, 'Booking cancelled');
+    return ApiResponse.success(await this.paymentService.cancelBooking(userId, bookingId), 'Booking cancelled');
   }
 
   @Post('payments/create')
-  async createPayment(
-    @CurrentUser('id') userId: string,
-    @Body() dto: CreatePaymentDto,
-  ): Promise<ApiResponse<unknown>> {
+  async createPayment(@CurrentUser('id') userId: string, @Body() dto: CreatePaymentDto): Promise<ApiResponse<unknown>> {
     const payment = await this.paymentService.createPayment(userId, dto);
     return ApiResponse.success(
       {
         ...payment,
-        ...(payment.paymentMethod === 'MOCK_QR' &&
-        this.paymentService.isMockPaymentsEnabled()
+        ...(payment.paymentMethod === 'MOCK_QR' && this.paymentService.isMockPaymentsEnabled()
           ? { mockQrUrl: `/api/customer/payments/mock-scan/${payment.id}` }
           : {}),
       },
@@ -172,12 +148,8 @@ export class CustomerController {
   }
 
   @Post('payments/confirm')
-  async confirmPayment(
-    @CurrentUser('id') userId: string,
-    @Body() dto: ConfirmPaymentDto,
-  ): Promise<ApiResponse<unknown>> {
-    const result = await this.paymentService.confirmMockPayment(userId, dto);
-    return ApiResponse.success(result, 'Development mock payment confirmed');
+  async confirmPayment(@CurrentUser('id') userId: string, @Body() dto: ConfirmPaymentDto): Promise<ApiResponse<unknown>> {
+    return ApiResponse.success(await this.paymentService.confirmMockPayment(userId, dto), 'Development mock payment confirmed');
   }
 
   @Get('payments/:booking_id')
@@ -185,8 +157,7 @@ export class CustomerController {
     @CurrentUser('id') userId: string,
     @Param('booking_id') bookingId: string,
   ): Promise<ApiResponse<unknown>> {
-    const payment = await this.customerService.getPaymentByBooking(userId, bookingId);
-    return ApiResponse.success(payment);
+    return ApiResponse.success(await this.customerService.getPaymentByBooking(userId, bookingId));
   }
 
   @Get('trips')
@@ -199,21 +170,13 @@ export class CustomerController {
   }
 
   @Get('trips/:trip_id/status')
-  async getTripStatus(
-    @CurrentUser('id') userId: string,
-    @Param('trip_id') tripId: string,
-  ): Promise<ApiResponse<TripStatusResponseDto>> {
-    const status = await this.customerService.getTripStatus(userId, tripId);
-    return ApiResponse.success(status);
+  async getTripStatus(@CurrentUser('id') userId: string, @Param('trip_id') tripId: string): Promise<ApiResponse<TripStatusResponseDto>> {
+    return ApiResponse.success(await this.customerService.getTripStatus(userId, tripId));
   }
 
   @Get('contracts/:booking_id')
-  async getContract(
-    @CurrentUser('id') userId: string,
-    @Param('booking_id') bookingId: string,
-  ): Promise<ApiResponse<ContractResponseDto>> {
-    const contract = await this.customerService.getContract(userId, bookingId);
-    return ApiResponse.success(contract);
+  async getContract(@CurrentUser('id') userId: string, @Param('booking_id') bookingId: string): Promise<ApiResponse<ContractResponseDto>> {
+    return ApiResponse.success(await this.customerService.getContract(userId, bookingId));
   }
 
   @Post('contracts/:booking_id/sign')
@@ -222,37 +185,27 @@ export class CustomerController {
     @Param('booking_id') bookingId: string,
     @Body() dto: SignContractDto,
   ): Promise<ApiResponse<ContractResponseDto>> {
-    const signed = await this.customerService.signContract(userId, bookingId, dto);
-    return ApiResponse.success(signed, 'Contract signed');
+    return ApiResponse.success(await this.customerService.signContract(userId, bookingId, dto), 'Contract signed');
   }
 
   @Get('wallet')
   async getWallet(@CurrentUser('id') userId: string): Promise<ApiResponse<unknown>> {
-    const wallet = await this.customerService.getWallet(userId);
-    return ApiResponse.success(wallet);
+    return ApiResponse.success(await this.customerService.getWallet(userId));
   }
 
   @Get('wallet/transactions')
   async getWalletTransactions(
     @CurrentUser('id') userId: string,
+    @Query() query: PaginationDto,
   ): Promise<PaginatedResponseDto<WalletTransactionResponseDto>> {
-    const { data, total, page, limit } = await this.customerService.getWalletTransactions(userId);
+    const { data, total, page, limit } = await this.customerService.getWalletTransactions(userId, query);
     return new PaginatedResponseDto(data, total, page, limit);
   }
 
   @Post('wallet/topup')
-  async topupWallet(
-    @CurrentUser('id') userId: string,
-    @Body() dto: CreateWalletTopupDto,
-  ): Promise<ApiResponse<unknown>> {
+  async topupWallet(@CurrentUser('id') userId: string, @Body() dto: CreateWalletTopupDto): Promise<ApiResponse<unknown>> {
     const payment = await this.paymentService.createWalletTopup(userId, dto);
-    return ApiResponse.success(
-      {
-        ...payment,
-        mockQrUrl: `/api/customer/wallet/topup/mock-scan/${payment.id}`,
-      },
-      'Development mock wallet top-up created',
-    );
+    return ApiResponse.success({ ...payment, mockQrUrl: `/api/customer/wallet/topup/mock-scan/${payment.id}` }, 'Development mock wallet top-up created');
   }
 
   @Public()
@@ -263,18 +216,14 @@ export class CustomerController {
   }
 
   @Post('reviews')
-  async createReview(
-    @CurrentUser('id') userId: string,
-    @Body() dto: CreateReviewDto,
-  ): Promise<ApiResponse<unknown>> {
-    const review = await this.customerService.createReview(userId, dto);
-    return ApiResponse.success(review, 'Review submitted');
+  async createReview(@CurrentUser('id') userId: string, @Body() dto: CreateReviewDto): Promise<ApiResponse<unknown>> {
+    return ApiResponse.success(await this.customerService.createReview(userId, dto), 'Review submitted');
   }
 
   @Get('reviews/my')
   async getMyReviews(
     @CurrentUser('id') userId: string,
-    @Query() query?: PaginationDto,
+    @Query() query: PaginationDto,
   ): Promise<PaginatedResponseDto<unknown>> {
     const { data, total, page, limit } = await this.customerService.getMyReviews(userId, query);
     return new PaginatedResponseDto(data, total, page, limit);
@@ -282,54 +231,38 @@ export class CustomerController {
 
   @Public()
   @Get('cars/search')
-  async searchCars(@Query() query: SearchCarQueryDto) {
+  searchCars(@Query() query: SearchCarQueryDto) {
     return this.customerService.searchCars(query);
   }
 
   @Get('bookings/:id/price-preview')
-  async previewPrice(
-    @CurrentUser('id') userId: string,
-    @Param('id') bookingId: string,
-  ) {
+  previewPrice(@CurrentUser('id') userId: string, @Param('id') bookingId: string) {
     return this.customerService.previewBookingPrice(userId, bookingId);
   }
 
   @Post('bookings/:id/confirm')
-  async confirmBooking(
-    @CurrentUser('id') userId: string,
-    @Param('id') bookingId: string,
-  ) {
+  confirmBooking(@CurrentUser('id') userId: string, @Param('id') bookingId: string) {
     return this.customerService.confirmBooking(userId, bookingId);
   }
 
   @Post('disputes')
-  async createDispute(
-    @CurrentUser('id') userId: string,
-    @Body() dto: CreateDisputeDto,
-  ) {
-    const result = await this.customerService.createDispute(userId, dto);
-    return ApiResponse.success(result, 'Support request submitted');
+  async createDispute(@CurrentUser('id') userId: string, @Body() dto: CreateDisputeDto) {
+    return ApiResponse.success(await this.customerService.createDispute(userId, dto), 'Support request submitted');
   }
 
   @Get('disputes')
   async getMyDisputes(@CurrentUser('id') userId: string) {
-    const data = await this.customerService.getMyDisputes(userId);
-    return ApiResponse.success(data);
+    return ApiResponse.success(await this.customerService.getMyDisputes(userId));
   }
 
   @Public()
   @Get('promotions')
   async getActivePromotions(): Promise<ApiResponse<unknown>> {
-    const promotions = await this.customerService.getActivePromotions();
-    return ApiResponse.success(promotions);
+    return ApiResponse.success(await this.customerService.getActivePromotions());
   }
 
   @Post('promotions/apply')
-  async applyPromotion(
-    @CurrentUser('id') userId: string,
-    @Body() dto: ApplyPromotionDto,
-  ): Promise<ApiResponse<unknown>> {
-    const result = await this.customerService.applyPromotion(userId, dto.bookingId, dto.promoCode);
-    return ApiResponse.success(result, 'Promotion applied');
+  async applyPromotion(@CurrentUser('id') userId: string, @Body() dto: ApplyPromotionDto): Promise<ApiResponse<unknown>> {
+    return ApiResponse.success(await this.customerService.applyPromotion(userId, dto.bookingId, dto.promoCode), 'Promotion applied');
   }
 }
