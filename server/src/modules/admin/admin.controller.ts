@@ -7,6 +7,7 @@ import {
   Patch,
   Param,
   Put,
+  UseGuards,
   UseInterceptors,
   UploadedFile,
 } from '@nestjs/common';
@@ -41,8 +42,11 @@ import {
   UpdateCustomerProfileDto,
 } from '../customer/dto/customer.dto';
 import { CustomerService } from '../customer/customer.service';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
 
 @Controller('api/admin')
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserRole.ADMIN)
 export class AdminController {
   constructor(
