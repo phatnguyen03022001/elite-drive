@@ -4,6 +4,7 @@ import { AdminController } from './admin.controller';
 import { AdminFinanceService } from './admin-finance.service';
 import { AdminPaymentReconciliationController } from './admin-payment-reconciliation.controller';
 import { AdminPromotionService } from './admin-promotion.service';
+import { AdminRefundService } from './admin-refund.service';
 import { AdminWalletReconciliationController } from './admin-wallet-reconciliation.controller';
 import { AdminService } from './admin.service';
 import { CustomerModule } from '../customer/customer.module';
@@ -24,7 +25,17 @@ import { PaymentModule } from '../payment/payment.module';
     AdminPaymentReconciliationController,
     AdminWalletReconciliationController,
   ],
-  providers: [AdminService, AdminFinanceService, AdminPromotionService],
-  exports: [AdminService, AdminFinanceService, AdminPromotionService],
+  providers: [
+    AdminService,
+    AdminFinanceService,
+    AdminPromotionService,
+    AdminRefundService,
+  ],
+  exports: [
+    AdminService,
+    AdminFinanceService,
+    AdminPromotionService,
+    AdminRefundService,
+  ],
 })
 export class AdminModule {}
