@@ -146,7 +146,7 @@ export class PendingCarResponseDto {
   @ApiProperty() createdAt: Date;
 }
 
-export type FinalDisputeStatus = DisputeStatus.RESOLVED | DisputeStatus.CLOSED;
+export type FinalDisputeStatus = 'RESOLVED' | 'CLOSED';
 
 export class ResolveDisputeDto {
   @ApiProperty() @IsNotEmpty() @IsString() @MaxLength(2000) resolution: string;
