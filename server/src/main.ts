@@ -1,8 +1,8 @@
-import { Logger, ValidationPipe } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { AppSwaggerConfig } from './config/swagger/swagger.module';
+import { GlobalValidationPipe } from './common/pipes/validation.pipe';
 import { PrismaService } from './prisma/prisma.service';
 
 async function bootstrap() {
@@ -17,28 +17,11 @@ async function bootstrap() {
     logger.error('Database connection failed', error);
   }
 
-  const swaggerConfig = new DocumentBuilder()
-    .setTitle('Elite Drive API')
-    .setDescription('Elite Drive marketplace API')
-    .setVersion('1.0.0')
-    .addBearerAuth()
-    .build();
+  if (process.env.NODE_ENV !== 'production') {
+    AppSwaggerConfig.setup(app);
+  }
 
-  const swaggerDocument = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup('docs', app, swaggerDocument);
-
-  app.getHttpAdapter().get('/docs-json', (_req, res) => {
-    res.json(swaggerDocument);
-  });
-
-  AppSwaggerConfig.setup(app);
-
-  app.useGlobalPipes(
-    new ValidationPipe({
-      transform: true,
-      whitelist: true,
-    }),
-  );
+  app.useGlobalPipes(GlobalValidationPipe);
 
   const configuredFrontendUrl = process.env.FRONTEND_URL;
   const allowedOrigins = new Set(
@@ -68,8 +51,6 @@ async function bootstrap() {
     allowedHeaders: 'Content-Type, Authorization, Accept',
   });
 
-  // Render and most PaaS providers inject PORT at runtime. APP_PORT remains
-  // available for local/self-hosted environments, but must not override PORT.
   const port = Number(process.env.PORT ?? process.env.APP_PORT ?? 8000);
   await app.listen(port, '0.0.0.0');
   logger.log(`Elite Drive API listening on port ${port}`);
