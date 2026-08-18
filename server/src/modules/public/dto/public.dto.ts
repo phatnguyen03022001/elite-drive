@@ -1,54 +1,53 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform, Type } from 'class-transformer';
 import {
+  IsBoolean,
+  IsDate,
+  IsInt,
+  IsNumber,
   IsOptional,
   IsString,
-  IsInt,
   Min,
-  IsNumber,
-  IsDate,
-  IsBoolean,
 } from 'class-validator';
-import { Type, Transform } from 'class-transformer';
-
-// --- GROUP 1: CAR SEARCH & DISCOVERY ---
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class PublicCarQueryDto {
-  @ApiPropertyOptional({ description: 'Tìm xe theo thành phố' })
+  @ApiPropertyOptional({ description: 'Filter vehicles by city' })
   @IsOptional()
   @IsString()
   city?: string;
 
-  @ApiPropertyOptional({ description: 'Lọc theo ID danh mục' })
+  @ApiPropertyOptional({ description: 'Filter by category ID' })
   @IsOptional()
   @IsString()
   categoryId?: string;
 
-  @ApiPropertyOptional({ minimum: 0 })
+  @ApiPropertyOptional({ minimum: 0, description: 'Minimum daily price in VND' })
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
   @Min(0)
   minPrice?: number;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ minimum: 0, description: 'Maximum daily price in VND' })
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
+  @Min(0)
   maxPrice?: number;
 
-  @ApiPropertyOptional({ type: Date, example: '2026-02-14T00:00:00Z' })
+  @ApiPropertyOptional({ type: Date, example: '2026-08-20T00:00:00Z' })
   @IsOptional()
   @Type(() => Date)
   @IsDate()
   startDate?: Date;
 
-  @ApiPropertyOptional({ type: Date, example: '2026-02-16T00:00:00Z' })
+  @ApiPropertyOptional({ type: Date, example: '2026-08-22T00:00:00Z' })
   @IsOptional()
   @Type(() => Date)
   @IsDate()
   endDate?: Date;
 
-  @ApiPropertyOptional({ description: 'Manual | Automatic' })
+  @ApiPropertyOptional({ description: 'Transmission, for example Automatic or Manual' })
   @IsOptional()
   @IsString()
   transmission?: string;
@@ -69,7 +68,7 @@ export class PublicCarQueryDto {
 }
 
 export class CarIdParamDto {
-  @ApiProperty({ description: 'ID của xe' })
+  @ApiProperty({ description: 'Vehicle ID' })
   @IsString()
   car_id: string;
 }
@@ -104,10 +103,8 @@ export class CarReviewQueryDto {
   limit?: number = 10;
 }
 
-// --- GROUP 2: BLOGS ---
-
 export class BlogQueryDto {
-  @ApiPropertyOptional({ description: 'Từ khóa tìm kiếm tiêu đề bài viết' })
+  @ApiPropertyOptional({ description: 'Search term for article titles' })
   @IsOptional()
   @IsString()
   search?: string;
@@ -128,12 +125,10 @@ export class BlogQueryDto {
 }
 
 export class BlogSlugParamDto {
-  @ApiProperty({ description: 'Slug duy nhất của bài viết' })
+  @ApiProperty({ description: 'Unique article slug' })
   @IsString()
   slug: string;
 }
-
-// --- GROUP 3: HOME & PROMOTIONS ---
 
 export class HomeQueryDto {
   @ApiPropertyOptional({ default: 4 })
@@ -152,21 +147,26 @@ export class HomeQueryDto {
 }
 
 export class PromotionQueryDto {
-  @ApiPropertyOptional({ description: 'Mã khuyến mãi cụ thể' })
+  @ApiPropertyOptional({ description: 'Specific promotion code' })
   @IsOptional()
   @IsString()
   code?: string;
 
   @ApiPropertyOptional({ default: true })
   @IsOptional()
-  @Transform(({ value }) => value === 'true')
+  @Transform(({ value }) => value === true || value === 'true')
   @IsBoolean()
   isActive?: boolean = true;
 }
 
-// --- GROUP 4: REVIEWS ---
-
 export class ReviewSummaryDto {
-  @ApiPropertyOptional() @IsOptional() @IsString() carId?: string;
-  @ApiPropertyOptional() @IsOptional() @IsString() userId?: string;
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  carId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  userId?: string;
 }

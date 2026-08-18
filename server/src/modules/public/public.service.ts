@@ -1,38 +1,37 @@
+import { Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import {
-  Injectable,
-  NotFoundException,
-  UnauthorizedException,
-} from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
-import { CarStatus, Prisma, VerificationStatus } from '@prisma/client';
-
-import {
-  // PublicCarQueryDto,
-  // CarIdParamDto,
-  CarAvailabilityQueryDto,
-  // BlogSlugParamDto,
-  // HomeQueryDto,
-  PromotionQueryDto,
-  CarReviewQueryDto,
-} from './dto/public.dto';
+  BookingStatus,
+  CarStatus,
+  Prisma,
+  VerificationStatus,
+} from '@prisma/client';
 import { PaginationDto } from '../../common/dto/pagination.dto';
+import { PrismaService } from '../../prisma/prisma.service';
+import {
+  CarAvailabilityQueryDto,
+  CarReviewQueryDto,
+  PromotionQueryDto,
+  PublicCarQueryDto,
+} from './dto/public.dto';
+
+const ACTIVE_BOOKING_STATUSES: BookingStatus[] = [
+  BookingStatus.PENDING,
+  BookingStatus.APPROVED,
+  BookingStatus.CONFIRMED,
+];
 
 @Injectable()
 export class PublicService {
-  constructor(private prisma: PrismaService) {}
-
-  // ───────────────── PROMOTIONS ───────────
+  constructor(private readonly prisma: PrismaService) {}
 
   async getProfile(userId: string): Promise<any> {
     if (!userId) {
-      throw new UnauthorizedException('Yêu cầu định danh người dùng');
+      throw new UnauthorizedException('User identity is required');
     }
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-    });
 
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
-      throw new NotFoundException('Không tìm thấy tài khoản người dùng');
+      throw new NotFoundException('User account not found');
     }
 
     return {
@@ -47,13 +46,14 @@ export class PublicService {
   }
 
   async getPromotions(query: PaginationDto & PromotionQueryDto) {
-    const { page = 1, limit = 10 } = query;
+    const { page = 1, limit = 10, code } = query;
     const skip = (page - 1) * limit;
 
     const where: Prisma.PromotionWhereInput = {
       isActive: true,
       startDate: { lte: new Date() },
       endDate: { gte: new Date() },
+      ...(code && { code: { equals: code, mode: 'insensitive' } }),
     };
 
     const [data, total] = await Promise.all([
@@ -69,35 +69,62 @@ export class PublicService {
     return { data, total, page, limit };
   }
 
-  // ───────────────── CARS ─────────────────
-
-  async getCars(query: any) {
+  async getCars(query: PaginationDto & PublicCarQueryDto) {
     const {
       page = 1,
       limit = 10,
-      brand,
+      city,
       categoryId,
-      locationId,
       minPrice,
       maxPrice,
+      startDate,
+      endDate,
+      transmission,
     } = query;
 
     const skip = (page - 1) * limit;
+    const hasDateRange = Boolean(startDate && endDate);
 
-    // Lọc theo Schema: status phải là APPROVED và verificationStatus phải là APPROVED
     const where: Prisma.CarWhereInput = {
       status: CarStatus.APPROVED,
       verificationStatus: VerificationStatus.APPROVED,
-      isAvailable: true, // Xe phải đang ở trạng thái sẵn sàng
-      ...(brand && { brand: { contains: brand, mode: 'insensitive' } }),
+      isAvailable: true,
       ...(categoryId && { categoryId }),
-      ...(locationId && { locationId }),
-      ...((minPrice || maxPrice) && {
-        pricePerDay: {
-          ...(minPrice && { gte: Number(minPrice) }),
-          ...(maxPrice && { lte: Number(maxPrice) }),
+      ...(city && {
+        location: {
+          is: {
+            city: { contains: city, mode: 'insensitive' },
+          },
         },
       }),
+      ...(transmission && {
+        transmission: { equals: transmission, mode: 'insensitive' },
+      }),
+      ...(minPrice !== undefined || maxPrice !== undefined
+        ? {
+            pricePerDay: {
+              ...(minPrice !== undefined && { gte: minPrice }),
+              ...(maxPrice !== undefined && { lte: maxPrice }),
+            },
+          }
+        : {}),
+      ...(hasDateRange
+        ? {
+            bookings: {
+              none: {
+                status: { in: ACTIVE_BOOKING_STATUSES },
+                startDate: { lte: endDate },
+                endDate: { gte: startDate },
+              },
+            },
+            availability: {
+              none: {
+                date: { gte: startDate, lte: endDate },
+                isAvailable: false,
+              },
+            },
+          }
+        : {}),
     };
 
     const [data, total] = await Promise.all([
@@ -115,19 +142,17 @@ export class PublicService {
               avatar: true,
             },
           },
-          // Lấy reviews theo quan hệ trong schema
           reviews: {
             select: {
               rating: true,
               content: true,
               createdAt: true,
               customer: {
-                // Trong schema là quan hệ 'customer' (User)
                 select: { firstName: true, lastName: true, avatar: true },
               },
             },
             orderBy: { createdAt: 'desc' },
-            take: 3, // Lấy nhanh 3 review tiêu biểu
+            take: 3,
           },
         },
         orderBy: { createdAt: 'desc' },
@@ -135,13 +160,7 @@ export class PublicService {
       this.prisma.car.count({ where }),
     ]);
 
-    // Trả về dữ liệu kèm theo các field đã gộp trong Prisma (averageRating, totalTrips)
-    return {
-      data, // averageRating và totalTrips đã có sẵn trong model Car của bạn
-      total,
-      page,
-      limit,
-    };
+    return { data, total, page, limit };
   }
 
   async getCarDetail(id: string) {
@@ -160,7 +179,7 @@ export class PublicService {
             lastName: true,
             avatar: true,
             createdAt: true,
-            _count: { select: { cars: true } }, // Xem chủ xe có bao nhiêu xe khác
+            _count: { select: { cars: true } },
           },
         },
         reviews: {
@@ -172,46 +191,69 @@ export class PublicService {
           orderBy: { createdAt: 'desc' },
         },
         documents: {
-          // Xem các tài liệu công khai nếu cần (VD: Bảo hiểm)
           where: { documentType: 'INSURANCE' },
         },
       },
     });
 
     if (!car) {
-      throw new NotFoundException('Xe không tồn tại hoặc chưa được duyệt');
+      throw new NotFoundException('Vehicle not found or not approved');
     }
 
     return car;
   }
 
-  // ───────────────── AVAILABILITY ─────────
   async getCarAvailability(
     carId: string,
     query: PaginationDto & CarAvailabilityQueryDto,
   ) {
-    const { startDate, endDate } = query;
-
-    if (!startDate || !endDate) {
-      return { available: true };
-    }
-
-    const conflict = await this.prisma.booking.findFirst({
+    const car = await this.prisma.car.findFirst({
       where: {
-        carId,
-        status: { in: ['PENDING', 'CONFIRMED'] },
-        startDate: { lte: new Date(endDate) },
-        endDate: { gte: new Date(startDate) },
+        id: carId,
+        status: CarStatus.APPROVED,
+        verificationStatus: VerificationStatus.APPROVED,
       },
+      select: { id: true, isAvailable: true },
     });
 
+    if (!car) {
+      throw new NotFoundException('Vehicle not found or not approved');
+    }
+
+    const { startDate, endDate } = query;
+    if (!startDate || !endDate) {
+      return { available: car.isAvailable };
+    }
+
+    const [bookingConflict, blockedDate] = await Promise.all([
+      this.prisma.booking.findFirst({
+        where: {
+          carId,
+          status: { in: ACTIVE_BOOKING_STATUSES },
+          startDate: { lte: endDate },
+          endDate: { gte: startDate },
+        },
+        select: { id: true },
+      }),
+      this.prisma.availability.findFirst({
+        where: {
+          carId,
+          date: { gte: startDate, lte: endDate },
+          isAvailable: false,
+        },
+        select: { id: true },
+      }),
+    ]);
+
     return {
-      available: !conflict,
+      available: car.isAvailable && !bookingConflict && !blockedDate,
     };
   }
 
-  // ───────────────── REVIEWS ──────────────
-  async getCarReviews(carId: string, query: PaginationDto & CarReviewQueryDto) {
+  async getCarReviews(
+    carId: string,
+    query: PaginationDto & CarReviewQueryDto,
+  ) {
     const { page = 1, limit = 10 } = query;
     const skip = (page - 1) * limit;
 
