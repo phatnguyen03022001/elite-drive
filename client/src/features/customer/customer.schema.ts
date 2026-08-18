@@ -1,51 +1,42 @@
 import { z } from "zod";
 
-// --- ENUMS (Khớp với Prisma Client) ---
 export const UserRole = z.enum(["CUSTOMER", "OWNER", "ADMIN"]);
 export const KYCStatus = z.enum(["PENDING", "APPROVED", "REJECTED"]);
 export const BookingStatus = z.enum(["PENDING", "APPROVED", "REJECTED", "CONFIRMED", "COMPLETED", "CANCELLED"]);
 export const TripStatus = z.enum(["UPCOMING", "ONGOING", "COMPLETED"]);
 export const PaymentStatus = z.enum(["PENDING", "COMPLETED", "FAILED", "REFUNDED"]);
 
-// --- GROUP 1: PROFILE & KYC ---
-
 export const UpdateCustomerProfileSchema = z.object({
-  firstName: z.string().min(2, "Tên tối thiểu 2 ký tự").optional(),
-  lastName: z.string().min(2, "Họ tối thiểu 2 ký tự").optional(),
+  firstName: z.string().min(2, "First name must be at least 2 characters.").optional(),
+  lastName: z.string().min(2, "Last name must be at least 2 characters.").optional(),
   phone: z
     .string()
-    .regex(/^0\d{9}$/, "Số điện thoại phải bắt đầu bằng số 0 và có 10 chữ số")
+    .regex(/^0\d{9}$/, "Phone number must start with 0 and contain 10 digits.")
     .optional(),
   avatar: z.any().optional(),
-
-  // Thông tin bằng lái / Định danh
   dateOfBirth: z.string().optional().or(z.date()),
-
-  // Thông tin địa chỉ (Thường thuộc bảng Profile trong Prisma)
-  address: z.string().min(1, "Địa chỉ không được để trống").optional(),
-  city: z.string().min(1, "Thành phố không được để trống").optional(),
-  country: z.string().min(1, "Quốc gia không được để trống").optional(),
-  postalCode: z.string().optional().nullable(), // Cho phép null nếu DB cho phép
+  address: z.string().min(1, "Address is required.").optional(),
+  city: z.string().min(1, "City is required.").optional(),
+  country: z.string().min(1, "Country is required.").optional(),
+  postalCode: z.string().optional().nullable(),
 });
 
 export const CreateKYCSchema = z.object({
-  documentType: z.string().min(1, "Loại giấy tờ là bắt buộc"),
-  documentNumber: z.string().min(1, "Số giấy tờ không được để trống"),
+  documentType: z.string().min(1, "Document type is required."),
+  documentNumber: z.string().min(1, "Document number is required."),
 });
-// --- GROUP 2: BOOKING & TRIPS ---
 
 export const CreateBookingSchema = z
   .object({
-    carId: z.string().min(1, "Vui lòng chọn xe"),
-    // Ép kiểu string sang Date ngay tại đây
-    startDate: z.string().transform((val) => new Date(val)),
-    endDate: z.string().transform((val) => new Date(val)),
+    carId: z.string().min(1, "Select a vehicle."),
+    startDate: z.string().transform((value) => new Date(value)),
+    endDate: z.string().transform((value) => new Date(value)),
     pickupLocation: z.string().optional(),
     dropoffLocation: z.string().optional(),
     notes: z.string().optional(),
   })
   .refine((data) => data.endDate > data.startDate, {
-    message: "Ngày kết thúc phải sau ngày bắt đầu",
+    message: "Return date must be after the pick-up date.",
     path: ["endDate"],
   });
 
@@ -58,11 +49,9 @@ export const TripQuerySchema = z.object({
   status: TripStatus.optional(),
 });
 
-// --- GROUP 3: PAYMENT & CONTRACT ---
-
 export const CreatePaymentSchema = z.object({
   bookingId: z.string().min(1),
-  paymentMethod: z.string().min(1, "Vui lòng chọn phương thức thanh toán"),
+  paymentMethod: z.string().min(1, "Select a payment method."),
 });
 
 export const ConfirmPaymentSchema = z.object({
@@ -71,26 +60,23 @@ export const ConfirmPaymentSchema = z.object({
 });
 
 export const SignContractSchema = z.object({
-  signatureData: z.string().min(1, "Vui lòng ký tên"),
+  signatureData: z.string().min(1, "Signature is required."),
 });
-
-// --- GROUP 4: WALLET & REVIEWS ---
 
 export const WalletRefundSchema = z.object({
   bookingId: z.string().min(1),
-  amount: z.number().min(0, "Số tiền không hợp lệ"),
-  reason: z.string().min(1, "Vui lòng nhập lý do"),
+  amount: z.number().min(0, "Refund amount is invalid."),
+  reason: z.string().min(1, "Refund reason is required."),
 });
 
 export const CreateReviewSchema = z.object({
   carId: z.string().min(1),
   bookingId: z.string().optional(),
-  rating: z.number().min(1, "Tối thiểu 1 sao").max(5, "Tối đa 5 sao"),
+  rating: z.number().min(1, "Rating must be at least 1 star.").max(5, "Rating cannot exceed 5 stars."),
   title: z.string().optional(),
-  content: z.string().min(5, "Nội dung tối thiểu 5 ký tự").optional(),
+  content: z.string().min(5, "Review must contain at least 5 characters.").optional(),
 });
 
-// ==================== WALLET ====================
 export const WalletSchema = z.object({
   id: z.string(),
   balance: z.number(),
@@ -102,7 +88,7 @@ export const WalletSchema = z.object({
 export const WalletTransactionSchema = z.object({
   id: z.string(),
   amount: z.number(),
-  type: z.string(), // TOPUP | PAYMENT | REFUND | REFUND_CANCEL | RENTAL_INCOME
+  type: z.string(),
   description: z.string().nullable(),
   createdAt: z.string(),
 });
@@ -115,12 +101,11 @@ export const WalletTransactionListSchema = z.object({
 });
 
 export const CreateWalletTopupSchema = z.object({
-  amount: z.number().min(1000, "Số tiền tối thiểu 1,000 VND"),
+  amount: z.number().min(1000, "Minimum top-up amount is 1,000 VND."),
   paymentMethod: z.enum(["MOCK_QR", "VNPAY", "MOMO"]),
   description: z.string().optional(),
 });
 
-// ==================== PROMOTIONS ====================
 export const PromotionSchema = z.object({
   id: z.string(),
   code: z.string(),
@@ -140,7 +125,6 @@ export const ApplyPromotionSchema = z.object({
   promoCode: z.string().min(1),
 });
 
-// ==================== BOOKING DETAIL ====================
 export const BookingDetailSchema = z.object({
   id: z.string(),
   status: BookingStatus,
@@ -148,14 +132,12 @@ export const BookingDetailSchema = z.object({
   endDate: z.string(),
   totalPrice: z.number(),
   discountAmount: z.number().nullable(),
-
   car: z.object({
     id: z.string(),
     name: z.string(),
     brand: z.string(),
     mainImageUrl: z.string().nullable(),
   }),
-
   payments: z.array(
     z.object({
       id: z.string(),
@@ -166,12 +148,10 @@ export const BookingDetailSchema = z.object({
       createdAt: z.string(),
     }),
   ),
-
   contract: z.any().nullable(),
   trip: z.any().nullable(),
 });
 
-// --- EXPORT TYPES ---
 export type CreateWalletTopupInput = z.infer<typeof CreateWalletTopupSchema>;
 export type UpdateCustomerProfileInput = z.infer<typeof UpdateCustomerProfileSchema>;
 export type CreateKYCInput = z.infer<typeof CreateKYCSchema>;
@@ -184,7 +164,6 @@ export type WalletRefundInput = z.infer<typeof WalletRefundSchema>;
 export type CreateReviewInput = z.infer<typeof CreateReviewSchema>;
 export const CancelBookingResponseSchema = BookingDetailSchema;
 export type Wallet = z.infer<typeof WalletSchema>;
-
 export type WalletTransaction = z.infer<typeof WalletTransactionSchema>;
 export type WalletTransactionList = z.infer<typeof WalletTransactionListSchema>;
 export type Promotion = z.infer<typeof PromotionSchema>;

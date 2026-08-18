@@ -1,235 +1,274 @@
 "use client";
 
-import React, { useState } from "react";
+import { useEffect, useState } from "react";
+import {
+  AlertCircle,
+  CalendarDays,
+  CheckCircle2,
+  Hash,
+  Loader2,
+  Mail,
+  MapPin,
+  Pencil,
+  Phone,
+  RotateCcw,
+  Save,
+  ShieldCheck,
+  Upload,
+  User,
+} from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { UpdateCustomerProfileSchema, UpdateCustomerProfileInput } from "@/features/customer/customer.schema";
-import { useProfile, useUpdateProfile } from "@/features/customer/customer.queries";
-
-// UI Components
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { toast } from "sonner";
+
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { useProfile, useUpdateProfile } from "@/features/customer/customer.queries";
 import {
-  Loader2,
-  Save,
-  User,
-  MapPin,
-  Phone,
-  Undo2,
-  Mail,
-  ShieldCheck,
-  AlertCircle,
-  Calendar,
-  Hash,
-  Image as ImageIcon,
-  Edit3,
-} from "lucide-react";
+  UpdateCustomerProfileInput,
+  UpdateCustomerProfileSchema,
+} from "@/features/customer/customer.schema";
 
-// Component con hiển thị thông tin dạng dòng
-const InfoRow = ({ icon: Icon, label, value }: { icon: any; label: string; value: string | null | undefined }) => (
-  <div className="flex flex-col space-y-1">
-    <span className="text-[10px] font-bold uppercase text-muted-foreground flex items-center gap-1">
-      <Icon className="w-3 h-3" /> {label}
-    </span>
-    <p className="text-sm font-medium">{value || "---"}</p>
-  </div>
-);
+function Detail({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: typeof User;
+  label: string;
+  value?: string | null;
+}) {
+  return (
+    <div className="rounded-xl border bg-card p-4">
+      <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <Icon className="h-3.5 w-3.5" />
+        {label}
+      </div>
+      <p className="mt-2 break-words text-sm font-semibold">{value || "Not provided"}</p>
+    </div>
+  );
+}
 
-export default function ProfilePage() {
-  const [isEditing, setIsEditing] = useState(false);
+function kycLabel(status?: string) {
+  if (status === "APPROVED") return "Verified";
+  if (status === "PENDING") return "Under review";
+  if (status === "REJECTED") return "Action required";
+  return "Not submitted";
+}
+
+export default function CustomerProfilePage() {
+  const [editing, setEditing] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-
   const { data: profile, isLoading } = useProfile();
   const updateProfile = useUpdateProfile();
 
   const form = useForm<UpdateCustomerProfileInput>({
     resolver: zodResolver(UpdateCustomerProfileSchema),
-    values: {
-      firstName: profile?.firstName || "",
-      lastName: profile?.lastName || "",
-      phone: profile?.phone || "",
-      avatar: profile?.avatar || "",
-      address: profile?.profile?.address || "",
-      city: profile?.profile?.city || "",
-      country: profile?.profile?.country || "Vietnam",
-      postalCode: profile?.profile?.postalCode || "",
-      dateOfBirth: profile?.profile?.dateOfBirth
-        ? new Date(profile.profile.dateOfBirth).toISOString().split("T")[0]
-        : "",
+    defaultValues: {
+      firstName: "",
+      lastName: "",
+      phone: "",
+      avatar: "",
+      address: "",
+      city: "",
+      country: "Vietnam",
+      postalCode: "",
+      dateOfBirth: "",
     },
   });
 
-  const { isDirty } = form.formState;
+  useEffect(() => {
+    if (!profile) return;
+    form.reset({
+      firstName: profile.firstName || "",
+      lastName: profile.lastName || "",
+      phone: profile.phone || "",
+      avatar: profile.avatar || "",
+      address: profile.profile?.address || "",
+      city: profile.profile?.city || "",
+      country: profile.profile?.country || "Vietnam",
+      postalCode: profile.profile?.postalCode || "",
+      dateOfBirth: profile.profile?.dateOfBirth
+        ? new Date(profile.profile.dateOfBirth).toISOString().split("T")[0]
+        : "",
+    });
+  }, [form, profile]);
 
-  const onSubmit = (data: UpdateCustomerProfileInput) => {
-    // 1. Tạo đối tượng FormData
-    const formData = new FormData();
+  useEffect(() => {
+    return () => {
+      if (previewUrl?.startsWith("blob:")) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
 
-    // 2. Duyệt qua các key trong data và append vào FormData
-    Object.entries(data).forEach(([key, value]) => {
-      if (value === undefined || value === null) return;
+  const submit = (values: UpdateCustomerProfileInput) => {
+    const body = new FormData();
 
+    Object.entries(values).forEach(([key, value]) => {
+      if (value === undefined || value === null || value === "") return;
       if (key === "avatar") {
-        if (value instanceof File) {
-          // Nếu là file mới chọn, append file vào
-          formData.append("avatar", value);
-        } else if (typeof value === "string" && value.startsWith("http")) {
-          // Nếu là URL cũ (không thay đổi ảnh), gửi chuỗi URL
-          formData.append("avatar", value);
-        }
-      } else {
-        // Các trường khác (firstName, phone, address...)
-        formData.append(key, value.toString());
+        if (value instanceof File) body.append("avatar", value);
+        return;
       }
+      body.append(key, value instanceof Date ? value.toISOString() : String(value));
     });
 
-    // 3. Gửi formData (ép kiểu any nếu hook mutate yêu cầu Object)
-    updateProfile.mutate(formData as any, {
+    updateProfile.mutate(body as any, {
       onSuccess: () => {
-        toast.success("Cập nhật hồ sơ thành công!");
-        setIsEditing(false);
+        toast.success("Profile updated.");
+        setEditing(false);
         setPreviewUrl(null);
       },
       onError: (error: any) => {
-        const msg = error?.response?.data?.message || "Không thể cập nhật hồ sơ";
-        toast.error(msg);
+        const message = error?.response?.data?.message;
+        toast.error(typeof message === "string" ? message : "Unable to update your profile.");
       },
     });
   };
 
-  const handleCancel = () => {
-    form.reset();
-    setIsEditing(false);
+  const cancel = () => {
+    if (profile) {
+      form.reset({
+        firstName: profile.firstName || "",
+        lastName: profile.lastName || "",
+        phone: profile.phone || "",
+        avatar: profile.avatar || "",
+        address: profile.profile?.address || "",
+        city: profile.profile?.city || "",
+        country: profile.profile?.country || "Vietnam",
+        postalCode: profile.profile?.postalCode || "",
+        dateOfBirth: profile.profile?.dateOfBirth
+          ? new Date(profile.profile.dateOfBirth).toISOString().split("T")[0]
+          : "",
+      });
+    }
+    setEditing(false);
     setPreviewUrl(null);
   };
 
   if (isLoading) {
     return (
-      <Card className="w-full bg-black/5 border-dashed border-2 flex items-center justify-center p-20">
-        <div className="flex flex-col items-center gap-2">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          <p className="text-muted-foreground animate-pulse text-sm">Đang tải dữ liệu...</p>
+      <Card className="flex min-h-[320px] items-center justify-center border-dashed">
+        <div className="text-center">
+          <Loader2 className="mx-auto h-7 w-7 animate-spin" />
+          <p className="mt-3 text-sm text-muted-foreground">Loading your profile…</p>
         </div>
       </Card>
     );
   }
 
-  const isKycApproved = profile?.kycStatus === "APPROVED";
+  const fullName = [profile?.firstName, profile?.lastName].filter(Boolean).join(" ") || "Elite Drive member";
+  const kycStatus = profile?.kycStatus || "NONE";
+  const approved = kycStatus === "APPROVED";
+  const avatarSrc = previewUrl || profile?.avatar || null;
 
   return (
-    <Card className="w-full border-none shadow-none bg-transparent">
-      <CardHeader className="px-0 pt-0">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="space-y-6">
+      <Card>
+        <CardHeader className="gap-5 md:flex-row md:items-start md:justify-between">
           <div>
-            <CardTitle className="text-2xl font-bold flex items-center gap-2">
-              <User className="w-6 h-6 text-primary" />
-              Hồ sơ của tôi
+            <CardTitle className="flex items-center gap-2 text-2xl">
+              <User className="h-6 w-6" />
+              Renter profile
             </CardTitle>
-            <CardDescription>Quản lý thông tin cá nhân và địa chỉ liên lạc.</CardDescription>
+            <CardDescription className="mt-2 max-w-2xl">
+              Keep your contact and residency details current for bookings and account verification.
+            </CardDescription>
           </div>
 
-          <div className="flex items-center gap-3">
-            {!isEditing && (
-              <Button onClick={() => setIsEditing(true)} variant="outline" size="sm" className="h-9 px-4 font-semibold">
-                <Edit3 className="w-4 h-4 mr-2" />
-                Chỉnh sửa
+          <div className="flex flex-wrap items-center gap-2">
+            <div
+              className={`flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold ${
+                approved
+                  ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                  : "border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+              }`}
+            >
+              {approved ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
+              KYC · {kycLabel(kycStatus)}
+            </div>
+            {!editing && (
+              <Button type="button" variant="outline" onClick={() => setEditing(true)}>
+                <Pencil className="mr-2 h-4 w-4" />
+                Edit profile
               </Button>
             )}
-            <div
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg border shadow-sm ${
-                isKycApproved
-                  ? "bg-emerald-500/5 border-emerald-500/20 text-emerald-600"
-                  : "bg-amber-500/5 border-amber-500/20 text-amber-600"
-              }`}>
-              {isKycApproved ? <ShieldCheck className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
-              <span className="text-xs font-bold uppercase tracking-wider">
-                {profile?.kycStatus || "Chưa xác minh"}
-              </span>
-            </div>
           </div>
-        </div>
-      </CardHeader>
+        </CardHeader>
 
-      <CardContent className="px-0 py-6">
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-10">
-            {/* AVATAR SECTION - Luôn hiển thị ở trên cùng */}
-            <div className="flex flex-col items-center gap-4 pb-8 border-b border-dashed">
-              <div className="relative group">
-                <div className="w-32 h-32 rounded-full border-4 border-background shadow-xl overflow-hidden bg-muted">
-                  {previewUrl || profile?.avatar ? (
-                    <img src={previewUrl || profile?.avatar} alt="Avatar" className="w-full h-full object-cover" />
+        <CardContent>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(submit)} className="space-y-8">
+              <section className="flex flex-col items-center gap-4 border-b pb-8 text-center">
+                <div className="relative h-28 w-28 overflow-hidden rounded-full border bg-muted shadow-sm">
+                  {avatarSrc ? (
+                    // Blob previews and remote account images are intentionally rendered without optimization.
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={avatarSrc} alt={`${fullName} profile`} className="h-full w-full object-cover" />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <User className="w-12 h-12 text-muted-foreground" />
+                    <div className="flex h-full w-full items-center justify-center">
+                      <User className="h-10 w-10 text-muted-foreground" />
                     </div>
                   )}
                 </div>
 
-                {isEditing && (
-                  <label className="absolute inset-0 flex items-center justify-center bg-black/40 text-white rounded-full opacity-0 group-hover:opacity-100 cursor-pointer transition-opacity">
-                    <div className="flex flex-col items-center gap-1">
-                      <ImageIcon className="w-6 h-6" />
-                      <span className="text-[10px] font-bold uppercase">Thay đổi</span>
-                    </div>
+                <div>
+                  <h2 className="text-xl font-bold">{fullName}</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">{profile?.email}</p>
+                </div>
+
+                {editing && (
+                  <label className="inline-flex cursor-pointer items-center rounded-md border bg-background px-3 py-2 text-sm font-medium hover:bg-accent">
+                    <Upload className="mr-2 h-4 w-4" />
+                    Choose profile image
                     <input
                       type="file"
-                      className="hidden"
                       accept="image/*"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) {
-                          form.setValue("avatar", file, { shouldDirty: true });
-                          setPreviewUrl(URL.createObjectURL(file));
-                        }
+                      className="hidden"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        if (!file) return;
+                        form.setValue("avatar", file, { shouldDirty: true });
+                        setPreviewUrl(URL.createObjectURL(file));
                       }}
                     />
                   </label>
                 )}
-              </div>
-              {!isEditing && <h2 className="text-xl font-bold">{`${profile?.lastName} ${profile?.firstName}`}</h2>}
-            </div>
+              </section>
 
-            {/* PHẦN 1: THÔNG TIN CƠ BẢN */}
-            <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-1">
-                <h3 className="text-lg font-semibold">Thông tin cá nhân</h3>
-                <p className="text-sm text-muted-foreground">Thông tin cơ bản định danh tài khoản.</p>
-              </div>
-              <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
-                {isEditing ? (
-                  <>
-                    <FormItem className="md:col-span-2 opacity-70">
-                      <FormLabel className="text-xs font-bold uppercase flex items-center gap-1">
-                        <Mail className="w-3 h-3" /> Email (Không thể thay đổi)
-                      </FormLabel>
-                      <Input value={profile?.email} disabled className="bg-muted" />
+              <section className="grid gap-6 lg:grid-cols-[240px_1fr]">
+                <div>
+                  <h3 className="font-semibold">Personal details</h3>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Core identity and contact information used by your account.
+                  </p>
+                </div>
+
+                {editing ? (
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <FormItem className="md:col-span-2">
+                      <FormLabel>Email</FormLabel>
+                      <Input value={profile?.email || ""} disabled />
                     </FormItem>
                     <FormField
                       control={form.control}
-                      name="lastName"
+                      name="firstName"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel className="text-xs font-bold uppercase">Họ & Đệm</FormLabel>
-                          <FormControl>
-                            <Input {...field} />
-                          </FormControl>
+                          <FormLabel>First name</FormLabel>
+                          <FormControl><Input {...field} /></FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
                     <FormField
                       control={form.control}
-                      name="firstName"
+                      name="lastName"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel className="text-xs font-bold uppercase">Tên</FormLabel>
-                          <FormControl>
-                            <Input {...field} />
-                          </FormControl>
+                          <FormLabel>Last name</FormLabel>
+                          <FormControl><Input {...field} /></FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -239,12 +278,8 @@ export default function ProfilePage() {
                       name="dateOfBirth"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel className="text-xs font-bold uppercase flex items-center gap-1">
-                            <Calendar className="w-3 h-3" /> Ngày sinh
-                          </FormLabel>
-                          <FormControl>
-                            <Input type="date" {...field} value={field.value as string} />
-                          </FormControl>
+                          <FormLabel>Date of birth</FormLabel>
+                          <FormControl><Input type="date" {...field} value={typeof field.value === "string" ? field.value : ""} /></FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -254,58 +289,44 @@ export default function ProfilePage() {
                       name="phone"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel className="text-xs font-bold uppercase flex items-center gap-1">
-                            <Phone className="w-3 h-3" /> Điện thoại
-                          </FormLabel>
-                          <FormControl>
-                            <Input {...field} />
-                          </FormControl>
+                          <FormLabel>Phone</FormLabel>
+                          <FormControl><Input inputMode="tel" placeholder="0901234567" {...field} /></FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
-                  </>
+                  </div>
                 ) : (
-                  <>
-                    <div className="md:col-span-2">
-                      <InfoRow icon={Mail} label="Email đăng nhập" value={profile?.email} />
-                    </div>
-                    <InfoRow icon={User} label="Họ và tên" value={`${profile?.lastName} ${profile?.firstName}`} />
-                    <InfoRow
-                      icon={Calendar}
-                      label="Ngày sinh"
-                      value={
-                        profile?.profile?.dateOfBirth
-                          ? new Date(profile.profile.dateOfBirth).toLocaleDateString("vi-VN")
-                          : "Chưa cập nhật"
-                      }
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Detail icon={Mail} label="Email" value={profile?.email} />
+                    <Detail icon={Phone} label="Phone" value={profile?.phone} />
+                    <Detail icon={User} label="Name" value={fullName} />
+                    <Detail
+                      icon={CalendarDays}
+                      label="Date of birth"
+                      value={profile?.profile?.dateOfBirth ? new Date(profile.profile.dateOfBirth).toLocaleDateString("en-US") : null}
                     />
-                    <InfoRow icon={Phone} label="Số điện thoại" value={profile?.phone} />
-                  </>
+                  </div>
                 )}
-              </div>
-            </section>
+              </section>
 
-            {/* PHẦN 2: ĐỊA CHỈ */}
-            <section className="grid grid-cols-1 lg:grid-cols-3 gap-6 pt-6 border-t border-dashed">
-              <div className="lg:col-span-1">
-                <h3 className="text-lg font-semibold">Địa chỉ & Liên lạc</h3>
-                <p className="text-sm text-muted-foreground">Thông tin nơi cư trú hiện tại.</p>
-              </div>
-              <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
-                {isEditing ? (
-                  <>
+              <section className="grid gap-6 border-t pt-8 lg:grid-cols-[240px_1fr]">
+                <div>
+                  <h3 className="font-semibold">Address</h3>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Residency details associated with your renter account.
+                  </p>
+                </div>
+
+                {editing ? (
+                  <div className="grid gap-4 md:grid-cols-2">
                     <FormField
                       control={form.control}
                       name="address"
                       render={({ field }) => (
                         <FormItem className="md:col-span-2">
-                          <FormLabel className="text-xs font-bold uppercase flex items-center gap-1">
-                            <MapPin className="w-3 h-3" /> Địa chỉ chi tiết
-                          </FormLabel>
-                          <FormControl>
-                            <Input {...field} />
-                          </FormControl>
+                          <FormLabel>Street address</FormLabel>
+                          <FormControl><Input {...field} /></FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -315,10 +336,19 @@ export default function ProfilePage() {
                       name="city"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel className="text-xs font-bold uppercase text-muted-foreground">Thành phố</FormLabel>
-                          <FormControl>
-                            <Input {...field} />
-                          </FormControl>
+                          <FormLabel>City</FormLabel>
+                          <FormControl><Input {...field} /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="country"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Country</FormLabel>
+                          <FormControl><Input {...field} /></FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -328,55 +358,51 @@ export default function ProfilePage() {
                       name="postalCode"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel className="text-xs font-bold uppercase flex items-center gap-1">
-                            <Hash className="w-3 h-3" /> Mã bưu chính
-                          </FormLabel>
-                          <FormControl>
-                            <Input {...field} value={field.value || ""} />
-                          </FormControl>
+                          <FormLabel>Postal code</FormLabel>
+                          <FormControl><Input {...field} value={field.value || ""} /></FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
-                  </>
+                  </div>
                 ) : (
-                  <>
-                    <div className="md:col-span-2">
-                      <InfoRow icon={MapPin} label="Địa chỉ" value={profile?.profile?.address} />
-                    </div>
-                    <InfoRow icon={MapPin} label="Thành phố" value={profile?.profile?.city} />
-                    <InfoRow icon={Hash} label="Mã bưu chính" value={profile?.profile?.postalCode} />
-                    <InfoRow icon={MapPin} label="Quốc gia" value={profile?.profile?.country} />
-                  </>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Detail icon={MapPin} label="Street address" value={profile?.profile?.address} />
+                    <Detail icon={MapPin} label="City" value={profile?.profile?.city} />
+                    <Detail icon={MapPin} label="Country" value={profile?.profile?.country} />
+                    <Detail icon={Hash} label="Postal code" value={profile?.profile?.postalCode} />
+                  </div>
                 )}
-              </div>
-            </section>
+              </section>
 
-            {/* ACTION BUTTONS */}
-            {isEditing && (
-              <div className="flex items-center justify-end gap-3 pt-6 border-t animate-in fade-in slide-in-from-bottom-2">
-                <Button type="button" variant="ghost" onClick={handleCancel} disabled={updateProfile.isPending}>
-                  <Undo2 className="w-4 h-4 mr-2" /> Hủy bỏ
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={!isDirty || updateProfile.isPending}
-                  className="min-w-[140px] font-bold shadow-lg">
-                  {updateProfile.isPending ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Đang lưu...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="mr-2 h-4 w-4" /> Lưu thay đổi
-                    </>
-                  )}
-                </Button>
-              </div>
-            )}
-          </form>
-        </Form>
-      </CardContent>
-    </Card>
+              <section className="rounded-xl border bg-muted/30 p-4">
+                <div className="flex gap-3">
+                  <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0" />
+                  <div>
+                    <p className="text-sm font-semibold">Identity verification</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      KYC documents are managed separately from profile contact details. Use the Identity verification page to submit or review your verification status.
+                    </p>
+                  </div>
+                </div>
+              </section>
+
+              {editing && (
+                <div className="flex flex-wrap justify-end gap-3 border-t pt-6">
+                  <Button type="button" variant="ghost" onClick={cancel} disabled={updateProfile.isPending}>
+                    <RotateCcw className="mr-2 h-4 w-4" />
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={!form.formState.isDirty || updateProfile.isPending}>
+                    {updateProfile.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                    Save changes
+                  </Button>
+                </div>
+              )}
+            </form>
+          </Form>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
