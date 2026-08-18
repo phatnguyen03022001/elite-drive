@@ -13,6 +13,7 @@ import {
   IsUrl,
   IsUUID,
   Max,
+  MaxLength,
   Min,
 } from 'class-validator';
 
@@ -89,31 +90,30 @@ export class CreateCarDto {
   description?: string;
 
   @ApiProperty({ example: 1000000 })
-  @IsNotEmpty()
-  @IsNumber()
-  @Min(0)
   @Type(() => Number)
+  @IsInt()
+  @Min(1)
   pricePerDay: number;
 
   @ApiPropertyOptional({ example: 50000 })
   @IsOptional()
-  @IsNumber()
-  @Min(0)
   @Type(() => Number)
+  @IsInt()
+  @Min(0)
   pricePerHour?: number;
 
   @ApiPropertyOptional({ example: 5000000 })
   @IsOptional()
-  @IsNumber()
-  @Min(0)
   @Type(() => Number)
+  @IsInt()
+  @Min(0)
   pricePerWeek?: number;
 
   @ApiPropertyOptional({ example: 15000000 })
   @IsOptional()
-  @IsNumber()
-  @Min(0)
   @Type(() => Number)
+  @IsInt()
+  @Min(0)
   pricePerMonth?: number;
 
   @ApiPropertyOptional({ description: 'ID danh mục xe' })
@@ -150,10 +150,10 @@ export class CarDocumentResponseDto {
 }
 
 export class CreatePricingDto {
-  @ApiProperty() @IsNotEmpty() @IsNumber() @Min(0) pricePerDay: number;
-  @ApiPropertyOptional() @IsOptional() @IsNumber() @Min(0) pricePerHour?: number;
-  @ApiPropertyOptional() @IsOptional() @IsNumber() @Min(0) pricePerWeek?: number;
-  @ApiPropertyOptional() @IsOptional() @IsNumber() @Min(0) pricePerMonth?: number;
+  @ApiProperty() @Type(() => Number) @IsInt() @Min(1) pricePerDay: number;
+  @ApiPropertyOptional() @IsOptional() @Type(() => Number) @IsInt() @Min(0) pricePerHour?: number;
+  @ApiPropertyOptional() @IsOptional() @Type(() => Number) @IsInt() @Min(0) pricePerWeek?: number;
+  @ApiPropertyOptional() @IsOptional() @Type(() => Number) @IsInt() @Min(0) pricePerMonth?: number;
   @ApiPropertyOptional() @IsOptional() @IsNumber() @Min(0) @Max(100) discountPercentage?: number;
   @ApiProperty() @IsNotEmpty() @IsDateString() effectiveFrom: string;
   @ApiPropertyOptional() @IsOptional() @IsDateString() effectiveTo?: string;
@@ -216,8 +216,8 @@ export class RejectBookingDto {
 
 export class WithdrawRequestDto {
   @ApiProperty({ example: 500000 })
-  @IsNotEmpty()
-  @IsNumber()
+  @Type(() => Number)
+  @IsInt()
   @Min(50000)
   amount: number;
 
@@ -227,7 +227,15 @@ export class WithdrawRequestDto {
 
   @ApiPropertyOptional() @IsOptional() @IsString() bankAccountNumber?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() bankAccountName?: string;
-  @ApiPropertyOptional() @IsOptional() @IsString() description?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(500) description?: string;
+}
+
+export class RespondDisputeDto {
+  @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(4000)
+  message: string;
 }
 
 export class EarningResponseDto {
