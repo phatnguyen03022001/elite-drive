@@ -49,7 +49,7 @@ import { CustomerService } from './customer.service';
 
 @Controller('api/customer')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.CUSTOMER, UserRole.OWNER, UserRole.ADMIN)
+@Roles(UserRole.CUSTOMER)
 export class CustomerController {
   constructor(
     private readonly customerService: CustomerService,
