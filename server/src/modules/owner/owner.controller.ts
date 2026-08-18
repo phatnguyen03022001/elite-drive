@@ -21,6 +21,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ApiResponse, PaginatedResponseDto } from '../../common/dto/response.dto';
 import { PaginationDto } from '../../common/dto/pagination.dto';
+import { imageUploadOptions } from '../../common/upload/image-upload-options';
 import {
   BlockCalendarDto,
   CarDocumentResponseDto,
@@ -69,11 +70,14 @@ export class OwnerController {
 
   @Post('kyc')
   @UseInterceptors(
-    FileFieldsInterceptor([
-      { name: 'documentFront', maxCount: 1 },
-      { name: 'documentBack', maxCount: 1 },
-      { name: 'faceImage', maxCount: 1 },
-    ]),
+    FileFieldsInterceptor(
+      [
+        { name: 'documentFront', maxCount: 1 },
+        { name: 'documentBack', maxCount: 1 },
+        { name: 'faceImage', maxCount: 1 },
+      ],
+      imageUploadOptions,
+    ),
   )
   async submitOwnerKyc(
     @CurrentUser('id') userId: string,
@@ -99,10 +103,13 @@ export class OwnerController {
 
   @Post('cars')
   @UseInterceptors(
-    FileFieldsInterceptor([
-      { name: 'mainImage', maxCount: 1 },
-      { name: 'images', maxCount: 3 },
-    ]),
+    FileFieldsInterceptor(
+      [
+        { name: 'mainImage', maxCount: 1 },
+        { name: 'images', maxCount: 3 },
+      ],
+      imageUploadOptions,
+    ),
   )
   async createCar(
     @CurrentUser('id') userId: string,
@@ -130,10 +137,13 @@ export class OwnerController {
 
   @Put('cars/:car_id')
   @UseInterceptors(
-    FileFieldsInterceptor([
-      { name: 'mainImage', maxCount: 1 },
-      { name: 'images', maxCount: 3 },
-    ]),
+    FileFieldsInterceptor(
+      [
+        { name: 'mainImage', maxCount: 1 },
+        { name: 'images', maxCount: 3 },
+      ],
+      imageUploadOptions,
+    ),
   )
   async updateCar(
     @CurrentUser('id') userId: string,
