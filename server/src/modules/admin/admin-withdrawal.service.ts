@@ -88,7 +88,10 @@ export class AdminWithdrawalService {
           id,
           type: 'WITHDRAW',
           status: 'pending',
-          processedAt: null,
+          OR: [
+            { processedAt: null },
+            { processedAt: { isSet: false } },
+          ],
         },
         data: {
           status: 'completed',
@@ -130,7 +133,15 @@ export class AdminWithdrawalService {
       assertVndAmount(withdraw.amount, { field: 'Số tiền rút' });
 
       const claim = await tx.ownerTransaction.updateMany({
-        where: { id, type: 'WITHDRAW', status: 'pending', processedAt: null },
+        where: {
+          id,
+          type: 'WITHDRAW',
+          status: 'pending',
+          OR: [
+            { processedAt: null },
+            { processedAt: { isSet: false } },
+          ],
+        },
         data: {
           status: 'failed',
           processedAt: new Date(),
