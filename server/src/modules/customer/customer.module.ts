@@ -5,6 +5,7 @@ import { CustomerCancellationService } from './customer-cancellation.service';
 import { CustomerContractService } from './customer-contract.service';
 import { CustomerController } from './customer.controller';
 import { CustomerPaymentService } from './customer-payment.service';
+import { CustomerProfileService } from './customer-profile.service';
 import { CustomerPromotionService } from './customer-promotion.service';
 import { CustomerReviewService } from './customer-review.service';
 import { CustomerService } from './customer.service';
@@ -23,6 +24,7 @@ import { CustomerSupportService } from './customer-support.service';
     CustomerService,
     CustomerPaymentService,
     CustomerBookingService,
+    CustomerProfileService,
     CustomerPromotionService,
     CustomerCancellationService,
     CustomerReviewService,
@@ -33,6 +35,7 @@ import { CustomerSupportService } from './customer-support.service';
     CustomerService,
     CustomerPaymentService,
     CustomerBookingService,
+    CustomerProfileService,
     CustomerPromotionService,
     CustomerCancellationService,
     CustomerReviewService,
