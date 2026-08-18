@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { MulterModule } from '@nestjs/platform-express';
+import { OwnerBookingService } from './owner-booking.service';
 import { OwnerController } from './owner.controller';
 import { OwnerFinanceService } from './owner-finance.service';
 import { OwnerService } from './owner.service';
@@ -13,7 +14,7 @@ import { OwnerService } from './owner.service';
     }),
   ],
   controllers: [OwnerController],
-  providers: [OwnerService, OwnerFinanceService],
-  exports: [OwnerService, OwnerFinanceService],
+  providers: [OwnerService, OwnerFinanceService, OwnerBookingService],
+  exports: [OwnerService, OwnerFinanceService, OwnerBookingService],
 })
 export class OwnerModule {}
