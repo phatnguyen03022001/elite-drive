@@ -9,6 +9,10 @@ import {
   IsBooleanString,
   IsEnum,
   IsUrl,
+  IsIn,
+  Matches,
+  Max,
+  Min,
 } from 'class-validator';
 import {
   PaymentStatus,
@@ -75,8 +79,16 @@ export class PromotionQueryDto {
 // --- GROUP 3: PAYMENTS & SETTLEMENTS ---
 
 export class RunSettlementDto {
-  @ApiProperty({ example: '2026-01' }) @IsNotEmpty() @IsString() period: string;
-  @ApiPropertyOptional() @IsOptional() @IsString() ownerId?: string;
+  @ApiProperty({ example: '2026-01' })
+  @IsNotEmpty()
+  @IsString()
+  @Matches(/^\d{4}-(0[1-9]|1[0-2])$/, { message: 'period phải có dạng YYYY-MM' })
+  period: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  ownerId?: string;
 }
 
 export class PaymentQueryDto {
@@ -86,8 +98,39 @@ export class PaymentQueryDto {
   status?: PaymentStatus;
   @ApiPropertyOptional() @IsOptional() @IsDateString() from?: string;
   @ApiPropertyOptional() @IsOptional() @IsDateString() to?: string;
-  @ApiPropertyOptional() @IsOptional() @IsString() page?: string;
-  @ApiPropertyOptional() @IsOptional() @IsString() limit?: string;
+}
+
+export class ReleasePaymentDto {
+  @ApiProperty()
+  @IsNotEmpty()
+  @IsString()
+  bookingId: string;
+
+  @ApiPropertyOptional({ minimum: 0, maximum: 100, default: 20 })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  platformFeePercent?: number;
+}
+
+export class RefundPaymentDto {
+  @ApiProperty()
+  @IsNotEmpty()
+  @IsString()
+  bookingId: string;
+
+  @ApiPropertyOptional({ minimum: 1, maximum: 100, default: 100 })
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  @Max(100)
+  refundPercent?: number;
+
+  @ApiProperty()
+  @IsNotEmpty()
+  @IsString()
+  reason: string;
 }
 
 export class SettlementResponseDto {
@@ -107,8 +150,6 @@ export class SettlementHistoryQueryDto {
   @IsEnum(SettlementStatus)
   status?: SettlementStatus;
   @ApiPropertyOptional() @IsOptional() @IsString() ownerId?: string;
-  @ApiPropertyOptional() @IsOptional() @IsString() page?: string;
-  @ApiPropertyOptional() @IsOptional() @IsString() limit?: string;
 }
 
 // --- GROUP 4: KYC & CAR APPROVAL ---
@@ -149,7 +190,7 @@ export class PendingCarResponseDto {
   @ApiProperty() licensePlate: string;
   @ApiProperty() ownerId: string;
   @ApiProperty() verificationStatus: string;
-  @ApiProperty() documents: any[];
+  @ApiProperty() documents: unknown[];
   @ApiProperty() createdAt: Date;
 }
 
@@ -168,8 +209,6 @@ export class DisputeQueryDto {
   @IsOptional()
   @IsEnum(DisputeStatus)
   status?: DisputeStatus;
-  @ApiPropertyOptional() @IsOptional() @IsString() page?: string;
-  @ApiPropertyOptional() @IsOptional() @IsString() limit?: string;
 }
 
 export class CreateCategoryDto {
@@ -184,4 +223,17 @@ export class CreateLocationDto {
   @ApiProperty() @IsNotEmpty() @IsString() city: string;
   @ApiPropertyOptional() @IsOptional() @IsNumber() latitude?: number;
   @ApiPropertyOptional() @IsOptional() @IsNumber() longitude?: number;
+}
+
+export class UpdateUserStatusDto {
+  @ApiProperty({ enum: ['ACTIVE', 'INACTIVE'] })
+  @IsIn(['ACTIVE', 'INACTIVE'])
+  status: 'ACTIVE' | 'INACTIVE';
+}
+
+export class RejectWithdrawDto {
+  @ApiProperty()
+  @IsNotEmpty()
+  @IsString()
+  reason: string;
 }
