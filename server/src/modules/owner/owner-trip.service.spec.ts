@@ -4,48 +4,65 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { OwnerTripService } from './owner-trip.service';
 
 describe('OwnerTripService invariants', () => {
-  it('checks in only with an atomic UPCOMING + CONFIRMED claim', async () => {
-    const trip = {
-      findFirst: jest.fn().mockResolvedValue({
-        id: 'trip-1',
-        status: 'UPCOMING',
-        booking: { status: BookingStatus.CONFIRMED },
-      }),
-      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
-      findUniqueOrThrow: jest.fn().mockResolvedValue({
-        id: 'trip-1',
-        status: 'ONGOING',
-      }),
+  it('serializes check-in through the CONFIRMED booking before changing the trip', async () => {
+    const tx = {
+      trip: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'trip-1',
+          bookingId: 'booking-1',
+          status: 'UPCOMING',
+          booking: { status: BookingStatus.CONFIRMED },
+        }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        findUniqueOrThrow: jest.fn().mockResolvedValue({
+          id: 'trip-1',
+          status: 'ONGOING',
+        }),
+      },
+      booking: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
     };
-    const service = new OwnerTripService({ trip } as unknown as PrismaService);
+    const db = {
+      $transaction: jest.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
+    } as unknown as PrismaService;
+    const service = new OwnerTripService(db);
 
     await service.checkinTrip('owner-1', 'trip-1', {
       startOdometer: 1000,
       startFuelLevel: 90,
     });
 
-    expect(trip.updateMany).toHaveBeenCalledWith({
-      where: {
-        id: 'trip-1',
-        status: 'UPCOMING',
-        car: { ownerId: 'owner-1' },
-        booking: { status: BookingStatus.CONFIRMED },
-      },
+    expect(tx.booking.updateMany).toHaveBeenCalledWith({
+      where: { id: 'booking-1', status: BookingStatus.CONFIRMED },
+      data: { updatedAt: expect.any(Date) },
+    });
+    expect(tx.trip.updateMany).toHaveBeenCalledWith({
+      where: { id: 'trip-1', status: 'UPCOMING' },
       data: expect.objectContaining({ status: 'ONGOING' }),
     });
   });
 
-  it('rejects check-in when another transition consumed the claim', async () => {
-    const trip = {
-      findFirst: jest.fn().mockResolvedValue({
-        id: 'trip-1',
-        status: 'UPCOMING',
-        booking: { status: BookingStatus.CONFIRMED },
-      }),
-      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
-      findUniqueOrThrow: jest.fn(),
+  it('does not transition the trip when cancellation or another flow consumed the booking lock', async () => {
+    const tx = {
+      trip: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'trip-1',
+          bookingId: 'booking-1',
+          status: 'UPCOMING',
+          booking: { status: BookingStatus.CONFIRMED },
+        }),
+        updateMany: jest.fn(),
+        findUniqueOrThrow: jest.fn(),
+      },
+      booking: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+      },
     };
-    const service = new OwnerTripService({ trip } as unknown as PrismaService);
+    const db = {
+      $transaction: jest.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
+    } as unknown as PrismaService;
+    const service = new OwnerTripService(db);
 
     await expect(
       service.checkinTrip('owner-1', 'trip-1', {
@@ -53,20 +70,27 @@ describe('OwnerTripService invariants', () => {
         startFuelLevel: 90,
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
-    expect(trip.findUniqueOrThrow).not.toHaveBeenCalled();
+    expect(tx.trip.updateMany).not.toHaveBeenCalled();
   });
 
   it('rejects checkout when the end odometer is lower than check-in', async () => {
-    const trip = {
-      findFirst: jest.fn().mockResolvedValue({
-        id: 'trip-1',
-        status: 'ONGOING',
-        startOdometer: 1200,
-        booking: { status: BookingStatus.CONFIRMED },
-      }),
-      updateMany: jest.fn(),
+    const tx = {
+      trip: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'trip-1',
+          bookingId: 'booking-1',
+          status: 'ONGOING',
+          startOdometer: 1200,
+          booking: { status: BookingStatus.CONFIRMED },
+        }),
+        updateMany: jest.fn(),
+      },
+      booking: { updateMany: jest.fn() },
     };
-    const service = new OwnerTripService({ trip } as unknown as PrismaService);
+    const db = {
+      $transaction: jest.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
+    } as unknown as PrismaService;
+    const service = new OwnerTripService(db);
 
     await expect(
       service.checkoutTrip('owner-1', 'trip-1', {
@@ -74,21 +98,31 @@ describe('OwnerTripService invariants', () => {
         endFuelLevel: 70,
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
-    expect(trip.updateMany).not.toHaveBeenCalled();
+    expect(tx.booking.updateMany).not.toHaveBeenCalled();
+    expect(tx.trip.updateMany).not.toHaveBeenCalled();
   });
 
-  it('requires the booking to remain CONFIRMED during checkout', async () => {
-    const trip = {
-      findFirst: jest.fn().mockResolvedValue({
-        id: 'trip-1',
-        status: 'ONGOING',
-        startOdometer: 1200,
-        booking: { status: BookingStatus.CONFIRMED },
-      }),
-      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
-      findUniqueOrThrow: jest.fn(),
+  it('serializes checkout through the booking and rejects a consumed trip claim', async () => {
+    const tx = {
+      trip: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'trip-1',
+          bookingId: 'booking-1',
+          status: 'ONGOING',
+          startOdometer: 1200,
+          booking: { status: BookingStatus.CONFIRMED },
+        }),
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        findUniqueOrThrow: jest.fn(),
+      },
+      booking: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
     };
-    const service = new OwnerTripService({ trip } as unknown as PrismaService);
+    const db = {
+      $transaction: jest.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
+    } as unknown as PrismaService;
+    const service = new OwnerTripService(db);
 
     await expect(
       service.checkoutTrip('owner-1', 'trip-1', {
@@ -96,6 +130,7 @@ describe('OwnerTripService invariants', () => {
         endFuelLevel: 70,
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
-    expect(trip.findUniqueOrThrow).not.toHaveBeenCalled();
+    expect(tx.booking.updateMany).toHaveBeenCalledTimes(1);
+    expect(tx.trip.findUniqueOrThrow).not.toHaveBeenCalled();
   });
 });
