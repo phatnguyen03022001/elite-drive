@@ -13,6 +13,7 @@ import {
 } from '@nestjs/common';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { UserRole } from '@prisma/client';
+import { OwnerFinanceService } from './owner-finance.service';
 import { OwnerService } from './owner.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -43,7 +44,10 @@ import {
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserRole.OWNER)
 export class OwnerController {
-  constructor(private readonly ownerService: OwnerService) {}
+  constructor(
+    private readonly ownerService: OwnerService,
+    private readonly financeService: OwnerFinanceService,
+  ) {}
 
   @Get('profile')
   async getProfile(
@@ -246,7 +250,7 @@ export class OwnerController {
     @CurrentUser('id') userId: string,
     @Query() query?: PaginationDto,
   ) {
-    const { data, total, page, limit } = await this.ownerService.getEarnings(
+    const { data, total, page, limit } = await this.financeService.getEarnings(
       userId,
       query,
     );
@@ -268,7 +272,7 @@ export class OwnerController {
     @CurrentUser('id') userId: string,
     @Body() dto: WithdrawRequestDto,
   ) {
-    const withdraw = await this.ownerService.requestWithdraw(userId, dto);
+    const withdraw = await this.financeService.requestWithdraw(userId, dto);
     return ApiResponse.success(withdraw, 'Withdrawal request submitted');
   }
 
