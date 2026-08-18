@@ -9,8 +9,9 @@ import {
   Min,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { PaginationDto } from '../../../common/dto/pagination.dto';
 
-export class PublicCarQueryDto {
+export class PublicCarQueryDto extends PaginationDto {
   @ApiPropertyOptional({ description: 'Filter vehicles by city' })
   @IsOptional()
   @IsString()
@@ -51,20 +52,6 @@ export class PublicCarQueryDto {
   @IsOptional()
   @IsString()
   transmission?: string;
-
-  @ApiPropertyOptional({ default: 1 })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  page?: number = 1;
-
-  @ApiPropertyOptional({ default: 10 })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  limit?: number = 10;
 }
 
 export class CarIdParamDto {
@@ -87,41 +74,13 @@ export class CarAvailabilityQueryDto {
   endDate?: Date;
 }
 
-export class CarReviewQueryDto {
-  @ApiPropertyOptional({ default: 1 })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  page?: number = 1;
+export class CarReviewQueryDto extends PaginationDto {}
 
-  @ApiPropertyOptional({ default: 10 })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  limit?: number = 10;
-}
-
-export class BlogQueryDto {
+export class BlogQueryDto extends PaginationDto {
   @ApiPropertyOptional({ description: 'Search term for article titles' })
   @IsOptional()
   @IsString()
   search?: string;
-
-  @ApiPropertyOptional({ default: 1 })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  page?: number = 1;
-
-  @ApiPropertyOptional({ default: 10 })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  limit?: number = 10;
 }
 
 export class BlogSlugParamDto {
@@ -146,7 +105,7 @@ export class HomeQueryDto {
   popularLocationsLimit?: number = 6;
 }
 
-export class PromotionQueryDto {
+export class PromotionQueryDto extends PaginationDto {
   @ApiPropertyOptional({ description: 'Specific promotion code' })
   @IsOptional()
   @IsString()
