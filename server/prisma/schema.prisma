@@ -88,21 +88,18 @@ model User {
   isVerified Boolean  @default(false)
   isActive   Boolean  @default(true)
 
-  // ====== CUSTOMER FIELDS ======
   customerLicenseNumber   String?
   customerLicenseExpiry   DateTime?
   customerLicenseFrontUrl String?
   customerLicenseBackUrl  String?
   customerDateOfBirth     DateTime?
 
-  // ====== OWNER FIELDS ======
   ownerCompanyName       String?
   ownerTaxId             String?
   ownerBankAccountName   String?
   ownerBankAccountNumber String?
   ownerBankCode          String?
 
-  // ====== SHARED FIELDS ======
   address            String?
   city               String?
   country            String?
@@ -112,7 +109,6 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // Relations
   kyc               KYC?
   bookings          Booking[]
   payments          Payment[]
@@ -127,8 +123,6 @@ model User {
   @@index([role])
   @@index([verificationStatus])
 }
-
-// ==================== KYC & VERIFICATION ====================
 
 model KYC {
   id               String    @id @default(auto()) @map("_id") @db.ObjectId
@@ -149,8 +143,6 @@ model KYC {
   @@index([status])
 }
 
-// ==================== CARS & VEHICLES ====================
-
 model Car {
   id           String   @id @default(auto()) @map("_id") @db.ObjectId
   ownerId      String   @db.ObjectId
@@ -167,7 +159,6 @@ model Car {
   mainImageUrl String?
   imageUrls    String[]
 
-  // ====== PRICING (GỘP VÀO) ======
   pricePerDay        Float
   pricePerHour       Float?
   pricePerWeek       Float?
@@ -338,14 +329,14 @@ model WalletTransaction {
 }
 
 model Contract {
-  id               String   @id @default(auto()) @map("_id") @db.ObjectId
-  bookingId        String   @unique @db.ObjectId
-  content          String
-  status           String   @default("DRAFT")
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  bookingId         String   @unique @db.ObjectId
+  content           String
+  status            String   @default("DRAFT")
   customerSignature String?
-  customerSignedAt DateTime?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  customerSignedAt  DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
 }
@@ -395,7 +386,7 @@ model Promotion {
   id               String   @id @default(auto()) @map("_id") @db.ObjectId
   code             String   @unique
   description      String?
-  discountType     String // 'PERCENTAGE', 'FIXED'
+  discountType     String
   discountValue    Float
   maxUses          Int?
   usedCount        Int      @default(0)
@@ -447,16 +438,18 @@ model DisputeMessage {
 }
 
 model OwnerTransaction {
-  id          String   @id @default(auto()) @map("_id") @db.ObjectId
-  ownerId     String   @db.ObjectId
-  bookingId   String?  @db.ObjectId
-  amount      Float
-  type        String
-  status      String   @default("pending")
-  description String?
-  metadata    Json?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  ownerId           String   @db.ObjectId
+  bookingId         String?  @db.ObjectId
+  amount            Float
+  type              String
+  status            String   @default("pending")
+  description       String?
+  metadata          Json?
+  externalReference String?
+  processedAt       DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
 
@@ -464,6 +457,7 @@ model OwnerTransaction {
   @@index([type])
   @@index([status])
   @@index([createdAt])
+  @@index([processedAt])
 }
 
 model Settlement {
