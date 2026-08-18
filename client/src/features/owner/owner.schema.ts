@@ -1,20 +1,22 @@
 import { z } from "zod";
 
-// ==================== ENUMS ====================
 export const BookingStatus = z.enum(["PENDING", "APPROVED", "REJECTED", "CONFIRMED", "COMPLETED", "CANCELLED"]);
 export const TripStatus = z.enum(["UPCOMING", "ONGOING", "COMPLETED"]);
 export const CarStatus = z.enum(["DRAFT", "PENDING", "APPROVED", "REJECTED"]);
 
-// ==================== 1. CAR MANAGEMENT ====================
+const integerVnd = z.coerce.number().int();
+
 export const CreateCarSchema = z.object({
   name: z.string().min(1, "Tên xe không được để trống"),
   brand: z.string().min(1),
   model: z.string().min(1),
-  year: z.coerce.number().min(1900).max(2026), // Sử dụng coerce để ép kiểu từ string sang number
+  year: z.coerce.number().int().min(1900).max(2100),
   licensePlate: z.string().min(1),
-  seatCount: z.coerce.number().min(2).max(50),
-  pricePerDay: z.coerce.number().min(0),
-  pricePerHour: z.coerce.number().optional(),
+  seatCount: z.coerce.number().int().min(1).max(100),
+  pricePerDay: integerVnd.min(1),
+  pricePerHour: integerVnd.min(0).optional(),
+  pricePerWeek: integerVnd.min(0).optional(),
+  pricePerMonth: integerVnd.min(0).optional(),
   categoryId: z.string().optional(),
   locationId: z.string().optional(),
   color: z.string().optional(),
@@ -22,11 +24,20 @@ export const CreateCarSchema = z.object({
   fuelType: z.string().optional(),
   description: z.string().optional(),
 });
-export const UpdateCarSchema = CreateCarSchema.partial().extend({
-  isAvailable: z.boolean().optional(),
+
+export const UpdateCarSchema = z.object({
+  name: z.string().min(1).optional(),
+  brand: z.string().min(1).optional(),
+  model: z.string().min(1).optional(),
+  year: z.coerce.number().int().min(1900).max(2100).optional(),
+  licensePlate: z.string().min(1).optional(),
+  seatCount: z.coerce.number().int().min(1).max(100).optional(),
+  pricePerDay: integerVnd.min(1).optional(),
+  pricePerHour: integerVnd.min(0).optional(),
+  categoryId: z.string().optional(),
+  locationId: z.string().optional(),
 });
 
-// ==================== 2. DOCUMENTS & PRICING ====================
 export const CreateCarDocumentSchema = z.object({
   documentType: z.string().min(1),
   documentUrl: z.string().url(),
@@ -39,22 +50,19 @@ export const CreateKYCSchema = z.object({
 });
 
 export const CreatePricingSchema = z.object({
-  pricePerDay: z.number().min(0),
-  pricePerHour: z.number().optional(),
-  pricePerWeek: z.number().optional(),
-  pricePerMonth: z.number().optional(),
+  pricePerDay: z.number().int().min(1),
+  pricePerHour: z.number().int().min(0).optional(),
+  pricePerWeek: z.number().int().min(0).optional(),
+  pricePerMonth: z.number().int().min(0).optional(),
   discountPercentage: z.number().min(0).max(100).optional(),
-  effectiveFrom: z.string(),
-  effectiveTo: z.string().optional(),
 });
 
 export const BlockCalendarSchema = z.object({
-  date: z.string(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}/, "Date must use YYYY-MM-DD format."),
   blockedReason: z.string().optional(),
   isBlocked: z.boolean().optional(),
 });
 
-// ==================== 3. TRIPS ====================
 export const TripCheckinSchema = z.object({
   startOdometer: z.coerce.number().min(0),
   startFuelLevel: z.coerce.number().min(0).max(100),
@@ -67,20 +75,17 @@ export const TripCheckoutSchema = z.object({
   dropoffNotes: z.string().optional(),
 });
 
-// ==================== 4. BOOKINGS ====================
 export const RejectBookingSchema = z.object({
-  reason: z.string().min(1, "Vui lòng nhập lý do từ chối"),
+  reason: z.string().optional(),
 });
 
-// ==================== 5. FINANCE ====================
 export const WithdrawRequestSchema = z.object({
-  amount: z.coerce.number().min(50000, "Số tiền tối thiểu 50,000 VND"),
-  bankAccountNumber: z.string().min(5).optional(),
-  bankAccountName: z.string().min(2).optional(),
-  description: z.string().optional(),
+  amount: z.coerce.number().int().min(50000, "Số tiền tối thiểu 50,000 VND"),
+  bankAccountNumber: z.string().optional(),
+  bankAccountName: z.string().optional(),
+  description: z.string().max(500).optional(),
 });
 
-// ==================== 6. PROFILE ====================
 export const UpdateOwnerProfileSchema = z.object({
   companyName: z.string().optional(),
   taxId: z.string().optional(),
@@ -93,11 +98,10 @@ export const UpdateOwnerProfileSchema = z.object({
 });
 
 export const GetCalendarSchema = z.object({
-  start_date: z.string().datetime().optional(),
-  end_date: z.string().datetime().optional(),
+  start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}/).optional(),
+  end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}/).optional(),
 });
 
-// ==================== EXPORT TYPES ====================
 export type CreateCarInput = z.infer<typeof CreateCarSchema>;
 export type UpdateCarInput = z.infer<typeof UpdateCarSchema>;
 export type CreateKYCInput = z.infer<typeof CreateKYCSchema>;
