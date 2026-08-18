@@ -82,6 +82,13 @@ export class OwnerFinanceService {
   async requestWithdraw(userId: string, dto: WithdrawRequestDto) {
     assertVndAmount(dto.amount, { min: 50000, field: 'Số tiền rút' });
 
+    const bankAccountNumber = dto.bankAccountNumber.trim();
+    const bankAccountName = dto.bankAccountName.trim().replace(/\s+/g, ' ');
+    const description = dto.description?.trim() || undefined;
+    if (!bankAccountNumber || !bankAccountName) {
+      throw new BadRequestException('Thông tin tài khoản nhận payout là bắt buộc');
+    }
+
     const withdrawId = createHash('sha256')
       .update(`withdraw:${userId}:${dto.idempotencyKey}`)
       .digest('hex')
@@ -91,14 +98,12 @@ export class OwnerFinanceService {
       where: { id: withdrawId },
     });
     if (existing) {
-      if (existing.ownerId !== userId || existing.type !== 'WITHDRAW') {
-        throw new BadRequestException('Idempotency key không hợp lệ');
-      }
-      if (existing.amount !== dto.amount) {
-        throw new BadRequestException(
-          'Idempotency key đã được dùng cho số tiền rút khác',
-        );
-      }
+      this.assertSameWithdrawRequest(existing, {
+        userId,
+        amount: dto.amount,
+        bankAccountNumber,
+        bankAccountName,
+      });
       return existing;
     }
 
@@ -131,11 +136,11 @@ export class OwnerFinanceService {
             amount: dto.amount,
             type: 'WITHDRAW',
             status: 'pending',
-            description: `Withdraw request - ${dto.description ?? 'No reason provided'}`,
+            description: `Withdraw request - ${description ?? 'No reason provided'}`,
             metadata: {
               idempotencyKey: dto.idempotencyKey,
-              bankAccountNumber: dto.bankAccountNumber,
-              bankAccountName: dto.bankAccountName,
+              bankAccountNumber,
+              bankAccountName,
             },
           },
         });
@@ -149,6 +154,7 @@ export class OwnerFinanceService {
             metadata: {
               withdrawId: withdraw.id,
               idempotencyKey: dto.idempotencyKey,
+              bankAccountNumber,
             },
           },
         });
@@ -166,16 +172,66 @@ export class OwnerFinanceService {
         const replay = await this.db.ownerTransaction.findUnique({
           where: { id: withdrawId },
         });
-        if (
-          replay &&
-          replay.ownerId === userId &&
-          replay.type === 'WITHDRAW' &&
-          replay.amount === dto.amount
-        ) {
+        if (replay) {
+          this.assertSameWithdrawRequest(replay, {
+            userId,
+            amount: dto.amount,
+            bankAccountNumber,
+            bankAccountName,
+          });
           return replay;
         }
       }
       throw error;
     }
+  }
+
+  private assertSameWithdrawRequest(
+    existing: {
+      ownerId: string;
+      amount: number;
+      type: string;
+      metadata: Prisma.JsonValue | null;
+    },
+    expected: {
+      userId: string;
+      amount: number;
+      bankAccountNumber: string;
+      bankAccountName: string;
+    },
+  ) {
+    if (
+      existing.ownerId !== expected.userId ||
+      existing.type !== 'WITHDRAW' ||
+      existing.amount !== expected.amount
+    ) {
+      throw new BadRequestException(
+        'Idempotency key đã được dùng cho yêu cầu rút tiền khác',
+      );
+    }
+
+    const metadata = this.jsonObject(existing.metadata);
+    const existingNumber =
+      typeof metadata?.bankAccountNumber === 'string'
+        ? metadata.bankAccountNumber.trim()
+        : '';
+    const existingName =
+      typeof metadata?.bankAccountName === 'string'
+        ? metadata.bankAccountName.trim().replace(/\s+/g, ' ')
+        : '';
+
+    if (
+      existingNumber !== expected.bankAccountNumber ||
+      existingName !== expected.bankAccountName
+    ) {
+      throw new BadRequestException(
+        'Idempotency key đã được dùng cho tài khoản payout khác',
+      );
+    }
+  }
+
+  private jsonObject(value: Prisma.JsonValue | null) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    return value as Prisma.JsonObject;
   }
 }
