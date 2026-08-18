@@ -1,22 +1,11 @@
 import axios from "axios";
-import Cookies from "js-cookie";
 
 const api = axios.create({
   // Browser requests stay on the Elite Drive origin and are routed through /api.
-  // This keeps backend host details out of client code and gives the app one
-  // consistent transport contract across local and hosted environments.
+  // Authentication is carried by an HttpOnly cookie issued by the backend.
   baseURL: "",
   timeout: 15000,
-});
-
-api.interceptors.request.use((config) => {
-  if (typeof window !== "undefined") {
-    const token = Cookies.get("token");
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-  }
-  return config;
+  withCredentials: true,
 });
 
 api.interceptors.response.use(
