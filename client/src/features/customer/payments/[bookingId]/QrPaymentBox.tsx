@@ -3,9 +3,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, Loader2, ShieldCheck } from "lucide-react";
-import { toast } from "sonner";
 import { CustomerService } from "@/features/customer/customer.service";
 import { Button } from "@/components/ui/button";
+import { notify, notifyError } from "@/lib/notifications";
 
 const currency = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -34,11 +34,19 @@ export function QrPaymentBox({
         bookingId,
         transactionId: payment.transactionId || `TEST-${payment.id}`,
       });
-      toast.success("Payment state updated and booking confirmed");
+      notify.success("Booking confirmed", {
+        id: `payment-confirm-${bookingId}`,
+        description: "The test payment record is complete and this booking has advanced to the confirmed trip state.",
+      });
       router.push("/customer/bookings");
       router.refresh();
-    } catch (error: any) {
-      toast.error(error?.message || "Could not confirm the payment");
+    } catch (error: unknown) {
+      notifyError(
+        "Checkout could not be completed",
+        error,
+        "The payment state was not confirmed. Keep this page open and try again.",
+        { id: `payment-confirm-${bookingId}` },
+      );
     } finally {
       setConfirming(false);
     }

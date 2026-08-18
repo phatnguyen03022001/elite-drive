@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import { CreditCard, Loader2 } from "lucide-react";
-import { toast } from "sonner";
 import { CustomerService } from "@/features/customer/customer.service";
 import { Button } from "@/components/ui/button";
+import { notifyError } from "@/lib/notifications";
 
 export function PaymentMethodForm({ bookingId, onSuccess }: { bookingId: string; onSuccess: (payment: any) => void }) {
   const [submitting, setSubmitting] = useState(false);
@@ -17,8 +17,13 @@ export function PaymentMethodForm({ bookingId, onSuccess }: { bookingId: string;
         paymentMethod: "SANDBOX",
       });
       onSuccess(payment);
-    } catch (error: any) {
-      toast.error(error?.message || "Could not create the payment record");
+    } catch (error: unknown) {
+      notifyError(
+        "Checkout could not be started",
+        error,
+        "No payment record was created. Return to your bookings and confirm this rental is still ready for payment.",
+        { id: `payment-create-${bookingId}` },
+      );
     } finally {
       setSubmitting(false);
     }
