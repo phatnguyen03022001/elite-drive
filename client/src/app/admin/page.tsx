@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowRight, Banknote, Car, CreditCard, Gavel, Loader2, RefreshCw, ShieldCheck, Vault } from "lucide-react";
+import { ArrowRight, Banknote, Car, CreditCard, Gavel, Loader2, RefreshCw, ShieldCheck, Vault, WalletCards } from "lucide-react";
 import api from "@/lib/axios";
 import { AdminService } from "@/features/admin/admin.service";
 import { Badge } from "@/components/ui/badge";
@@ -12,7 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { notify, notifyError } from "@/lib/notifications";
 
 type CollectionLike = { data?: unknown[]; items?: unknown[]; total?: number };
-type ReconcileSummary = { scanned?: number; completed?: number; failed?: number; pending?: number };
+type ReconcileSummary = { checked?: number; completed?: number; failed?: number; pending?: number };
 type DashboardState = {
   totalUsers: number;
   totalCars: number;
@@ -91,7 +91,7 @@ export default function AdminOperationsDashboardPage() {
       const result = response.data ?? {};
       notify.success("MoMo reconciliation completed", {
         id: "admin-momo-reconcile",
-        description: `Scanned ${result.scanned ?? 0}; completed ${result.completed ?? 0}; failed ${result.failed ?? 0}; still pending ${result.pending ?? 0}.`,
+        description: `Checked ${result.checked ?? 0}; completed ${result.completed ?? 0}; failed ${result.failed ?? 0}; still pending ${result.pending ?? 0}.`,
       });
       await load(true);
     } catch (requestError: unknown) {
@@ -150,8 +150,8 @@ export default function AdminOperationsDashboardPage() {
       </section>
 
       <Card>
-        <CardHeader><CardTitle className="text-lg">Payment operations</CardTitle><CardDescription>A MoMo redirect is never payment proof. Use the ledger for transaction investigation, escrow for held funds, and reconciliation for stale provider states.</CardDescription></CardHeader>
-        <CardContent className="flex flex-wrap gap-2"><Button asChild variant="outline"><Link href="/admin/reports"><CreditCard />Payment ledger</Link></Button><Button asChild variant="outline"><Link href="/admin/escrow"><Vault />Escrow</Link></Button><Button asChild variant="outline"><Link href="/admin/settlements"><Banknote />Settlements</Link></Button></CardContent>
+        <CardHeader><CardTitle className="text-lg">Payment operations</CardTitle><CardDescription>A MoMo redirect is never payment proof. Use the payment ledger for provider investigation, wallet reconciliation for balance integrity, and escrow for held funds.</CardDescription></CardHeader>
+        <CardContent className="flex flex-wrap gap-2"><Button asChild variant="outline"><Link href="/admin/reports"><CreditCard />Payment ledger</Link></Button><Button asChild variant="outline"><Link href="/admin/wallets"><WalletCards />Wallet reconciliation</Link></Button><Button asChild variant="outline"><Link href="/admin/escrow"><Vault />Escrow</Link></Button><Button asChild variant="outline"><Link href="/admin/settlements"><Banknote />Settlements</Link></Button></CardContent>
       </Card>
     </div>
   );
