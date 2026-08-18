@@ -24,16 +24,17 @@ describe('AdminSettlementService invariants', () => {
 
     await service.run({ period: '2026-08' });
 
+    const range = {
+      gte: new Date('2026-08-01T00:00:00.000Z'),
+      lt: new Date('2026-09-01T00:00:00.000Z'),
+    };
     expect(ownerTransaction.groupBy).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
         where: expect.objectContaining({
           type: 'RENTAL_INCOME',
           status: 'completed',
-          createdAt: {
-            gte: new Date('2026-08-01T00:00:00.000Z'),
-            lt: new Date('2026-09-01T00:00:00.000Z'),
-          },
+          createdAt: range,
         }),
       }),
     );
@@ -43,10 +44,10 @@ describe('AdminSettlementService invariants', () => {
         where: expect.objectContaining({
           type: 'WITHDRAW',
           status: 'completed',
-          updatedAt: {
-            gte: new Date('2026-08-01T00:00:00.000Z'),
-            lt: new Date('2026-09-01T00:00:00.000Z'),
-          },
+          OR: [
+            { processedAt: range },
+            { processedAt: null, updatedAt: range },
+          ],
         }),
       }),
     );
