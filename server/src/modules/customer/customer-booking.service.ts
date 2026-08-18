@@ -5,7 +5,13 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { BookingStatus, KYCStatus, Prisma } from '@prisma/client';
+import {
+  BookingStatus,
+  CarStatus,
+  KYCStatus,
+  Prisma,
+  VerificationStatus,
+} from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateBookingDto } from './dto/customer.dto';
 
@@ -27,6 +33,12 @@ export class CustomerBookingService {
       throw new BadRequestException('Ngày kết thúc phải sau ngày bắt đầu');
     }
 
+    const todayUtc = new Date();
+    todayUtc.setUTCHours(0, 0, 0, 0);
+    if (startDate < todayUtc) {
+      throw new BadRequestException('Không thể tạo booking trong quá khứ');
+    }
+
     for (let attempt = 1; attempt <= MAX_CREATE_ATTEMPTS; attempt += 1) {
       try {
         return await this.db.$transaction(async (tx) => {
@@ -40,11 +52,31 @@ export class CustomerBookingService {
             );
           }
 
-          const car = await tx.car.findUnique({
-            where: { id: dto.carId },
-            select: { id: true, pricePerDay: true },
+          const car = await tx.car.findFirst({
+            where: {
+              id: dto.carId,
+              status: CarStatus.APPROVED,
+              verificationStatus: VerificationStatus.APPROVED,
+              isAvailable: true,
+            },
+            select: {
+              id: true,
+              pricePerDay: true,
+              location: {
+                select: { name: true, address: true, city: true },
+              },
+            },
           });
-          if (!car) throw new NotFoundException('Không tìm thấy xe');
+          if (!car) {
+            throw new NotFoundException(
+              'Xe không tồn tại hoặc chưa sẵn sàng để nhận booking',
+            );
+          }
+          if (!car.location) {
+            throw new BadRequestException(
+              'Xe chưa được cấu hình địa điểm giao nhận',
+            );
+          }
 
           // Serialize competing booking transactions on the same car document.
           // A concurrent writer receives a transaction conflict; the retry then
@@ -103,15 +135,24 @@ export class CustomerBookingService {
             throw new BadRequestException('Tổng tiền booking vượt giới hạn an toàn');
           }
 
+          const bookingLocation = [
+            car.location.name,
+            car.location.address,
+            car.location.city,
+          ]
+            .map((value) => value.trim())
+            .filter(Boolean)
+            .join(', ');
+
           return tx.booking.create({
             data: {
               customerId: userId,
               carId: car.id,
               startDate,
               endDate,
-              pickupLocation: dto.pickupLocation,
-              dropoffLocation: dto.dropoffLocation,
-              notes: dto.notes,
+              pickupLocation: bookingLocation,
+              dropoffLocation: bookingLocation,
+              notes: dto.notes?.trim() || undefined,
               totalPrice,
               status: BookingStatus.PENDING,
             },
