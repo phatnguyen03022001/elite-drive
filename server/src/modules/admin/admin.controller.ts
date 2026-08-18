@@ -29,6 +29,7 @@ import {
   RefundPaymentDto,
   AdminKYCQueryDto,
   RejectKYCDto,
+  RejectCarDto,
   CreateCategoryDto,
   CreateLocationDto,
   ResolveDisputeDto,
@@ -115,11 +116,8 @@ export class AdminController {
   }
 
   @Post('cars/:car_id/reject')
-  async rejectCar(
-    @Param('car_id') carId: string,
-    @Body('reason') reason: string,
-  ) {
-    await this.adminService.rejectCar(carId, reason);
+  async rejectCar(@Param('car_id') carId: string, @Body() dto: RejectCarDto) {
+    await this.adminService.rejectCar(carId, dto.reason);
     return ApiResponse.success(null, 'Đã từ chối phê duyệt xe');
   }
 
