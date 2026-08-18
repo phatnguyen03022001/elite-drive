@@ -28,7 +28,8 @@ export default function CustomerWalletPage() {
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async (background = false) => {
-    background ? setRefreshing(true) : setLoading(true);
+    if (background) setRefreshing(true);
+    else setLoading(true);
     setError(null);
     try {
       const [walletResult, transactionResult] = await Promise.all([
