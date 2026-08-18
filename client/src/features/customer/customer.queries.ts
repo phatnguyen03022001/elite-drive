@@ -53,7 +53,8 @@ export const useCancelBooking = () => {
 export const useUpdateProfile = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (dto: UpdateCustomerProfileInput) => CustomerService.updateProfile(dto),
+    mutationFn: (dto: UpdateCustomerProfileInput | FormData) =>
+      CustomerService.updateProfile(dto),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: customerKeys.profile() });
     },
