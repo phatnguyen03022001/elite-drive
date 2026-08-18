@@ -37,7 +37,7 @@ export class PaymentService {
       throw new BadRequestException('Payment thiếu merchant order id');
     }
 
-    const requestId = `REQ-${payment.id}`;
+    const requestId = this.checkoutRequestId(payment.id);
     const result = await this.momo.createCheckout({
       orderId: payment.transactionId,
       requestId,
@@ -101,7 +101,8 @@ export class PaymentService {
 
     if (
       payment.transactionId !== payload.orderId ||
-      payment.amount !== payload.amount
+      payment.amount !== payload.amount ||
+      payload.requestId !== this.checkoutRequestId(payment.id)
     ) {
       throw new BadRequestException('MoMo notification không khớp payment');
     }
@@ -117,6 +118,10 @@ export class PaymentService {
     this.logger.warn(
       `MoMo payment ${payment.id} resultCode=${payload.resultCode}: ${payload.message}`,
     );
+  }
+
+  private checkoutRequestId(paymentId: string) {
+    return `REQ-${paymentId}`;
   }
 
   private async getOwnedPayment(userId: string, paymentId: string) {
