@@ -1,75 +1,93 @@
 import { NextRequest, NextResponse } from "next/server";
 import { jwtDecode } from "jwt-decode";
 
-// 1. Cấu hình các hằng số
-const PUBLIC_ROUTES = ["/", "/login", "/register", "/forgot-password", "/otp"];
+type Role = "ADMIN" | "OWNER" | "CUSTOMER";
 
-const ROLE_PATH_MAP: Record<string, string> = {
+type DecodedToken = {
+  role?: Role;
+  exp?: number;
+};
+
+const PUBLIC_EXACT_ROUTES = ["/", "/login", "/register", "/forgot-password", "/otp"];
+const PUBLIC_ROUTE_PREFIXES = ["/reset-password", "/customer/cars"];
+
+const ROLE_PREFIX: Record<Role, string> = {
+  ADMIN: "/admin",
+  OWNER: "/owner",
+  CUSTOMER: "/customer",
+};
+
+const ROLE_HOME: Record<Role, string> = {
   ADMIN: "/admin/kyc",
-  OWNER: "/owner/cars",
+  OWNER: "/owner/dashboard",
   CUSTOMER: "/customer/cars",
 };
+
+function isPublicRoute(pathname: string) {
+  return (
+    PUBLIC_EXACT_ROUTES.includes(pathname) ||
+    PUBLIC_ROUTE_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))
+  );
+}
+
+function redirectToLogin(req: NextRequest, clearToken = false) {
+  const loginUrl = new URL("/login", req.url);
+  const returnTo = `${req.nextUrl.pathname}${req.nextUrl.search}`;
+  if (returnTo !== "/login") loginUrl.searchParams.set("returnTo", returnTo);
+
+  const response = NextResponse.redirect(loginUrl);
+  if (clearToken) response.cookies.delete("token");
+  return response;
+}
 
 export function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const token = req.cookies.get("token")?.value;
+  const publicRoute = isPublicRoute(pathname);
 
-  // Kiểm tra xem route hiện tại có phải public không
-  const isPublicRoute = PUBLIC_ROUTES.some((p) => pathname === p || pathname.startsWith(p + "/"));
-
-  // --- TRƯỜNG HỢP 1: CHƯA ĐĂNG NHẬP ---
   if (!token) {
-    if (isPublicRoute) return NextResponse.next();
-
-    const loginUrl = new URL("/login", req.url);
-    loginUrl.searchParams.set("redirect", pathname);
-    return NextResponse.redirect(loginUrl);
+    return publicRoute ? NextResponse.next() : redirectToLogin(req);
   }
 
-  // --- TRƯỜNG HỢP 2: ĐÃ ĐĂNG NHẬP ---
+  let decoded: DecodedToken;
   try {
-    const decoded: any = jwtDecode(token);
-    const userRole = decoded.role as keyof typeof ROLE_PATH_MAP;
-    const allowedPrefix = ROLE_PATH_MAP[userRole];
-
-    // Nếu không tìm thấy role hợp lệ trong Map, xóa token và bắt login lại
-    if (!allowedPrefix) {
-      const res = NextResponse.redirect(new URL("/login", req.url));
-      res.cookies.delete("token");
-      return res;
-    }
-
-    // A. Nếu đang ở Login/Register hoặc trang Dashboard chung hoặc trang chủ
-    // Ép điều hướng về trang đúng của Role đó (ví dụ /admin)
-    const isCommonPath = ["/login", "/register", "/", "/dashboard"].includes(pathname);
-    if (isCommonPath) {
-      return NextResponse.redirect(new URL(allowedPrefix, req.url));
-    }
-
-    // B. Nếu vào đúng khu vực của mình (ví dụ /customer/...) -> Cho qua
-    if (pathname.startsWith(allowedPrefix)) {
-      return NextResponse.next();
-    }
-
-    // C. Nếu cố tình vào khu vực của Role khác (ví dụ Customer vào /admin)
-    const allPrefixes = Object.values(ROLE_PATH_MAP);
-    const isOtherRolePath = allPrefixes.some((p) => pathname.startsWith(p) && p !== allowedPrefix);
-
-    if (isOtherRolePath) {
-      return NextResponse.redirect(new URL(allowedPrefix, req.url));
-    }
-
-    // D. Cho phép các đường dẫn khác (không nằm trong danh sách cấm/phân vùng)
-    return NextResponse.next();
-  } catch (error) {
-    // Nếu token lỗi hoặc hết hạn
-    const res = NextResponse.redirect(new URL("/login", req.url));
-    res.cookies.delete("token");
-    return res;
+    decoded = jwtDecode<DecodedToken>(token);
+  } catch {
+    return redirectToLogin(req, true);
   }
+
+  const role = decoded.role;
+  if (!role || !(role in ROLE_PREFIX)) {
+    return redirectToLogin(req, true);
+  }
+
+  if (decoded.exp && decoded.exp * 1000 <= Date.now()) {
+    return redirectToLogin(req, true);
+  }
+
+  // Keep the marketing site and public marketplace available to signed-in users.
+  if (publicRoute) {
+    if (pathname === "/login" || pathname === "/register") {
+      return NextResponse.redirect(new URL(ROLE_HOME[role], req.url));
+    }
+    return NextResponse.next();
+  }
+
+  if (pathname === "/dashboard") {
+    return NextResponse.redirect(new URL(ROLE_HOME[role], req.url));
+  }
+
+  const requestedWorkspace = (Object.values(ROLE_PREFIX) as string[]).find(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
+
+  if (requestedWorkspace && requestedWorkspace !== ROLE_PREFIX[role]) {
+    return NextResponse.redirect(new URL(ROLE_HOME[role], req.url));
+  }
+
+  return NextResponse.next();
 }
 
-// Cấu hình Matcher: Loại bỏ các file tĩnh và API
 export const config = {
   matcher: ["/((?!api|_next/static|_next/image|favicon.ico|images|.*\\.json$).*)"],
 };

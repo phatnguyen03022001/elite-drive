@@ -11,31 +11,32 @@ import { ImageErrorHandler } from "../components/provider/ImageErrorHandler";
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://elite-drive-iota.vercel.app"),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "https://elite-drive-iota.vercel.app"),
   title: {
-    default: "Elite Drive | Premium Car Rental Platform",
+    default: "Elite Drive | Premium Car Rental Marketplace",
     template: "%s | Elite Drive",
   },
   description:
-    "Discover live vehicle availability, book securely, and manage renter and owner workflows with Elite Drive.",
+    "Search approved vehicles, check date availability, request bookings, and manage renter and owner rental workflows with Elite Drive.",
   applicationName: "Elite Drive",
-  keywords: ["car rental", "premium car rental", "vehicle booking", "Ho Chi Minh City", "Elite Drive"],
+  keywords: ["car rental", "premium car rental", "vehicle marketplace", "vehicle booking", "Ho Chi Minh City", "Elite Drive"],
+  alternates: { canonical: "/" },
   openGraph: {
-    title: "Elite Drive | Premium Car Rental Platform",
-    description: "Live vehicle discovery, authenticated bookings, and owner fleet operations in one platform.",
+    title: "Elite Drive | Premium Car Rental Marketplace",
+    description:
+      "Approved vehicle discovery, date-aware availability, booking requests, and owner rental operations in one marketplace.",
     type: "website",
     locale: "en_US",
     siteName: "Elite Drive",
+    url: "/",
+  },
+  twitter: {
+    card: "summary",
+    title: "Elite Drive | Premium Car Rental Marketplace",
+    description: "Approved vehicle discovery and rental operations for renters and owners.",
   },
   robots: { index: true, follow: true },
-  icons: {
-    icon: [
-      { url: "/favicon.ico" },
-      { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
-      { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
-    ],
-    apple: "/apple-touch-icon.png",
-  },
+  icons: { icon: "/favicon.ico" },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
