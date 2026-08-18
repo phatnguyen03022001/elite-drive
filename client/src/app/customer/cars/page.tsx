@@ -32,8 +32,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "https://elitedrive-demoversion.onrender.com";
-
 type SearchState = {
   city: string;
   startDate: string;
@@ -96,7 +94,7 @@ export default function FleetPage() {
       if (nextQuery.maxPrice) params.set("maxPrice", nextQuery.maxPrice);
       params.set("limit", "24");
 
-      const response = await fetch(`${API_BASE}/api/cars?${params.toString()}`, { cache: "no-store" });
+      const response = await fetch(`/api/cars?${params.toString()}`, { cache: "no-store" });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload?.message || "Unable to load vehicles.");
 
@@ -151,7 +149,7 @@ export default function FleetPage() {
     setBooking(true);
 
     try {
-      const response = await fetch(`${API_BASE}/api/customer/bookings`, {
+      const response = await fetch("/api/customer/bookings", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -221,7 +219,7 @@ export default function FleetPage() {
             <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-black"><Car className="h-5 w-5" /></span>
             <div>
               <p className="text-sm font-black tracking-[0.2em]">ELITE DRIVE</p>
-              <p className="text-[10px] uppercase tracking-[0.2em] text-white/40">Live fleet</p>
+              <p className="text-[10px] uppercase tracking-[0.2em] text-white/40">Fleet marketplace</p>
             </div>
           </Link>
           <Button asChild variant="ghost" className="text-white hover:bg-white/10 hover:text-white">
@@ -234,9 +232,9 @@ export default function FleetPage() {
         <div className="mx-auto max-w-7xl px-5 py-12 lg:px-8">
           <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
             <div>
-              <Badge className="rounded-full border border-white/15 bg-white/5 text-white">Real-time search</Badge>
+              <Badge className="rounded-full border border-white/15 bg-white/5 text-white">Availability search</Badge>
               <h1 className="mt-5 text-4xl font-black tracking-tight sm:text-5xl">Find your next drive.</h1>
-              <p className="mt-3 max-w-2xl text-white/50">Search the live fleet and create a real booking from the same workflow.</p>
+              <p className="mt-3 max-w-2xl text-white/50">Search verified marketplace inventory and create a booking from the same workflow.</p>
             </div>
             <div className="flex items-center gap-2 text-sm text-white/45">
               <ShieldCheck className="h-4 w-4" /> Authenticated booking confirmation
@@ -300,7 +298,7 @@ export default function FleetPage() {
             <p className="text-sm text-white/40">{loading ? "Checking availability…" : `${cars.length} vehicle${cars.length === 1 ? "" : "s"} found`}</p>
             <p className="mt-1 flex items-center gap-2 text-sm font-semibold"><CalendarDays className="h-4 w-4" /> {tripDays} day{tripDays === 1 ? "" : "s"} selected</p>
           </div>
-          <div className="flex items-center gap-2 text-xs text-white/40"><Filter className="h-4 w-4" /> API-backed filters</div>
+          <div className="flex items-center gap-2 text-xs text-white/40"><Filter className="h-4 w-4" /> Server-enforced filters</div>
         </div>
 
         {error && !loading ? (
