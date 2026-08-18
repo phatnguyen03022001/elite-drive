@@ -9,6 +9,42 @@ describe('AdminFinanceService invariants', () => {
     getOrThrow: jest.fn(() => 'platform-user-id'),
   } as unknown as ConfigService;
 
+  it('rejects fractional payment amounts before releasing escrow', async () => {
+    const tx = {
+      booking: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'booking-1',
+          status: 'CONFIRMED',
+          car: { ownerId: 'owner-1' },
+          trip: { status: 'COMPLETED' },
+          payments: [
+            {
+              id: 'payment-1',
+              amount: 100000.5,
+              status: PaymentStatus.COMPLETED,
+            },
+          ],
+        }),
+        updateMany: jest.fn(),
+      },
+      wallet: { updateMany: jest.fn(), upsert: jest.fn() },
+      walletTransaction: { create: jest.fn() },
+      ownerTransaction: { create: jest.fn() },
+    };
+    const db = {
+      $transaction: jest.fn(async (callback: (client: typeof tx) => unknown) =>
+        callback(tx),
+      ),
+    } as unknown as PrismaService;
+    const service = new AdminFinanceService(db, config);
+
+    await expect(
+      service.releasePayment({ bookingId: 'booking-1' }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(tx.booking.updateMany).not.toHaveBeenCalled();
+    expect(tx.wallet.updateMany).not.toHaveBeenCalled();
+  });
+
   it('does not mutate wallets when release claim is already consumed', async () => {
     const tx = {
       booking: {
@@ -86,6 +122,7 @@ describe('AdminFinanceService invariants', () => {
   it('selects only non-sensitive user fields in payment listing', async () => {
     const payment = {
       findMany: jest.fn().mockResolvedValue([]),
+      count: jest.fn().mockResolvedValue(0),
     };
     const db = { payment } as unknown as PrismaService;
     const service = new AdminFinanceService(db, config);
