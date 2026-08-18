@@ -22,7 +22,7 @@ export class PublicController {
   @Get('profile')
   async getProfile(
     @CurrentUser('id') userId: string,
-  ): Promise<ApiResponse<any>> {
+  ): Promise<ApiResponse<unknown>> {
     const profile = await this.publicService.getProfile(userId);
     return ApiResponse.success(profile);
   }
@@ -45,7 +45,11 @@ export class PublicController {
   @Get('cars/:car_id')
   async getCarDetail(@Param('car_id') carId: string) {
     const car = await this.publicService.getCarDetail(carId);
-    return ApiResponse.success(car);
+    const { documents, ...publicCar } = car;
+    return ApiResponse.success({
+      ...publicCar,
+      hasInsuranceDocument: documents.length > 0,
+    });
   }
 
   @Public()
