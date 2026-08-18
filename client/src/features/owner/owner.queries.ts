@@ -1,42 +1,32 @@
-// src/services/owner/owner.queries.ts
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { OwnerService } from "./owner.service"; // ✅ FIXED: Import OwnerService
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { OwnerService } from "./owner.service";
 import {
-  CreateCarInput,
-  UpdateCarInput,
-  CreateCarDocumentInput,
-  CreatePricingInput,
-  BlockCalendarInput,
+  CreateKYCInput,
+  RejectBookingInput,
   TripCheckinInput,
   TripCheckoutInput,
-  RejectBookingInput,
-  WithdrawRequestInput,
+  UpdateCarInput,
   UpdateOwnerProfileInput,
+  WithdrawRequestInput,
 } from "./owner.schema";
 
-// ==================== QUERY KEYS ====================
 export const ownerKeys = {
   all: ["owner"] as const,
   profile: () => [...ownerKeys.all, "profile"] as const,
-  cars: (params: any) => [...ownerKeys.all, "cars", params] as const,
+  cars: (params: unknown) => [...ownerKeys.all, "cars", params] as const,
   carDocuments: (carId: string) => [...ownerKeys.all, "cars", carId, "documents"] as const,
-  calendar: (carId: string, params: any) => [...ownerKeys.all, "cars", carId, "calendar", params] as const,
+  calendar: (carId: string, params: unknown) => [...ownerKeys.all, "cars", carId, "calendar", params] as const,
   kyc: () => [...ownerKeys.all, "kyc"] as const,
-  bookings: (params: any) => [...ownerKeys.all, "bookings", params] as const,
-  trips: (params: any) => [...ownerKeys.all, "trips", params] as const,
-  earnings: (params: any) => [...ownerKeys.all, "earnings", params] as const,
-  transactions: (params: any) => [...ownerKeys.all, "transactions", params] as const,
+  bookings: (params: unknown) => [...ownerKeys.all, "bookings", params] as const,
+  trips: (params: unknown) => [...ownerKeys.all, "trips", params] as const,
+  earnings: (params: unknown) => [...ownerKeys.all, "earnings", params] as const,
+  transactions: (params: unknown) => [...ownerKeys.all, "transactions", params] as const,
   wallet: () => [...ownerKeys.all, "wallet"] as const,
   dashboard: () => [...ownerKeys.all, "dashboard"] as const,
 };
 
-// ==================== 1. PROFILE ====================
-export const useOwnerProfile = () => {
-  return useQuery({
-    queryKey: ownerKeys.profile(),
-    queryFn: OwnerService.getProfile,
-  });
-};
+export const useOwnerProfile = () =>
+  useQuery({ queryKey: ownerKeys.profile(), queryFn: OwnerService.getProfile });
 
 export const useUpdateOwnerProfile = () => {
   const queryClient = useQueryClient();
@@ -48,23 +38,18 @@ export const useUpdateOwnerProfile = () => {
   });
 };
 
-// ==================== 2. CARS ====================
-export const useMyCars = (params?: { page?: number; limit?: number }) => {
-  return useQuery({
+export const useMyCars = (params?: { page?: number; limit?: number }) =>
+  useQuery({
     queryKey: ownerKeys.cars(params),
     queryFn: () => OwnerService.getMyCars(params),
   });
-};
 
 export const useCreateCar = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (formData: FormData) => OwnerService.createCar(formData),
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ownerKeys.all, // Hoặc ['owner', 'cars']
-        exact: false,
-      });
+      queryClient.invalidateQueries({ queryKey: ownerKeys.all, exact: false });
     },
   });
 };
@@ -72,13 +57,13 @@ export const useCreateCar = () => {
 export const useUpdateCar = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ carId, data, dto }: { carId: string; data?: FormData; dto?: UpdateCarInput }) =>
-      OwnerService.updateCar(carId, data || dto!),
+    mutationFn: ({ carId, data, dto }: { carId: string; data?: FormData; dto?: UpdateCarInput }) => {
+      const payload = data ?? dto;
+      if (!payload) throw new Error("Missing vehicle update payload");
+      return OwnerService.updateCar(carId, payload);
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ownerKeys.all,
-        exact: false,
-      });
+      queryClient.invalidateQueries({ queryKey: ownerKeys.all, exact: false });
     },
   });
 };
@@ -86,9 +71,14 @@ export const useUpdateCar = () => {
 export const useSubmitKyc = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ dto, files }: { dto: any; files: any }) => OwnerService.submitKyc(dto, files),
+    mutationFn: ({
+      dto,
+      files,
+    }: {
+      dto: CreateKYCInput;
+      files: { documentFront?: File; documentBack?: File; faceImage?: File };
+    }) => OwnerService.submitKyc(dto, files),
     onSuccess: () => {
-      // Cập nhật cả 2 để đồng bộ toàn bộ giao diện
       queryClient.invalidateQueries({ queryKey: ownerKeys.kyc() });
       queryClient.invalidateQueries({ queryKey: ownerKeys.profile() });
     },
@@ -105,16 +95,14 @@ export const useDeleteCar = () => {
   });
 };
 
-export const useKycStatus = () => {
-  return useQuery({
+export const useKycStatus = () =>
+  useQuery({
     queryKey: ownerKeys.kyc(),
     queryFn: async () => {
       const response = await OwnerService.getKycStatus();
-      // Bóc tách lớp vỏ bọc để trả về đúng object chứa status
       return response.data?.data || response.data || response;
     },
   });
-};
 
 export const useSubmitCarForReview = () => {
   const queryClient = useQueryClient();
@@ -126,13 +114,11 @@ export const useSubmitCarForReview = () => {
   });
 };
 
-// ==================== 3. TRIPS ====================
-export const useOwnerTrips = (params?: { page?: number; limit?: number }) => {
-  return useQuery({
+export const useOwnerTrips = (params?: { page?: number; limit?: number }) =>
+  useQuery({
     queryKey: ownerKeys.trips(params),
     queryFn: () => OwnerService.getTrips(params),
   });
-};
 
 export const useCheckinTrip = () => {
   const queryClient = useQueryClient();
@@ -156,13 +142,11 @@ export const useCheckoutTrip = () => {
   });
 };
 
-// ==================== 4. BOOKINGS ====================
-export const useOwnerBookings = (params?: { page?: number; limit?: number; status?: string }) => {
-  return useQuery({
+export const useOwnerBookings = (params?: { page?: number; limit?: number; status?: string }) =>
+  useQuery({
     queryKey: ownerKeys.bookings(params),
     queryFn: () => OwnerService.getBookings(params),
   });
-};
 
 export const useApproveBooking = () => {
   const queryClient = useQueryClient();
@@ -185,20 +169,14 @@ export const useRejectBooking = () => {
   });
 };
 
-// ==================== 5. FINANCE ====================
-export const useOwnerWallet = () => {
-  return useQuery({
-    queryKey: ownerKeys.wallet(),
-    queryFn: OwnerService.getWallet,
-  });
-};
+export const useOwnerWallet = () =>
+  useQuery({ queryKey: ownerKeys.wallet(), queryFn: OwnerService.getWallet });
 
-export const useOwnerEarnings = (params?: { page?: number; limit?: number }) => {
-  return useQuery({
+export const useOwnerEarnings = (params?: { page?: number; limit?: number }) =>
+  useQuery({
     queryKey: ownerKeys.earnings(params),
     queryFn: () => OwnerService.getEarnings(params),
   });
-};
 
 export const useRequestWithdraw = () => {
   const queryClient = useQueryClient();
@@ -211,10 +189,8 @@ export const useRequestWithdraw = () => {
   });
 };
 
-// ==================== 6. DASHBOARD ====================
-export const useOwnerDashboard = () => {
-  return useQuery({
+export const useOwnerDashboard = () =>
+  useQuery({
     queryKey: ownerKeys.dashboard(),
     queryFn: OwnerService.getDashboardOverview,
   });
-};
