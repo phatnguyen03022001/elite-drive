@@ -1,17 +1,11 @@
 import { Module } from '@nestjs/common';
 import { CustomerController } from './customer.controller';
+import { CustomerPaymentService } from './customer-payment.service';
 import { CustomerService } from './customer.service';
-import { SecureCustomerService } from './secure-customer.service';
 
 @Module({
   controllers: [CustomerController],
-  providers: [
-    SecureCustomerService,
-    {
-      provide: CustomerService,
-      useExisting: SecureCustomerService,
-    },
-  ],
-  exports: [CustomerService],
+  providers: [CustomerService, CustomerPaymentService],
+  exports: [CustomerService, CustomerPaymentService],
 })
 export class CustomerModule {}
