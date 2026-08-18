@@ -5,16 +5,22 @@ import { AppSwaggerConfig } from './config/swagger/swagger.module';
 import { GlobalValidationPipe } from './common/pipes/validation.pipe';
 import { PrismaService } from './prisma/prisma.service';
 
+const bootstrapLogger = new Logger('Bootstrap');
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  const logger = new Logger('Bootstrap');
+  const prismaService = app.get(PrismaService);
 
   try {
-    const prismaService = app.get(PrismaService);
     await prismaService.$connect();
-    logger.log('Database connection established');
+    bootstrapLogger.log('Database connection established');
   } catch (error) {
-    logger.error('Database connection failed', error);
+    bootstrapLogger.error(
+      'Database connection failed; refusing to start an unhealthy API process',
+      error instanceof Error ? error.stack : String(error),
+    );
+    await app.close();
+    throw error;
   }
 
   if (process.env.NODE_ENV !== 'production') {
@@ -53,7 +59,13 @@ async function bootstrap() {
 
   const port = Number(process.env.PORT ?? process.env.APP_PORT ?? 8000);
   await app.listen(port, '0.0.0.0');
-  logger.log(`Elite Drive API listening on port ${port}`);
+  bootstrapLogger.log(`Elite Drive API listening on port ${port}`);
 }
 
-bootstrap();
+void bootstrap().catch((error: unknown) => {
+  bootstrapLogger.error(
+    'Application bootstrap failed',
+    error instanceof Error ? error.stack : String(error),
+  );
+  process.exitCode = 1;
+});
