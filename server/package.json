@@ -11,7 +11,7 @@
     "start:prod": "NODE_ENV=production node dist/main",
     "start:debug": "nest start --watch --debug",
     "build": "nest build",
-    "db:seed": "ts-node prisma/reset-seed.ts && ts-node prisma/seed-v2.ts && ts-node prisma/seed-assets.ts",
+    "db:seed": "ts-node prisma/reset-seed.ts && ts-node prisma/seed.ts && ts-node prisma/seed-assets.ts",
     "tree": "tree -L 6 -I \"node_modules|dist|.git|test|coverage|Docs|generated|.vscode\"",
     "dump:shared": "find src/shared -type f -name \"*.ts\" -exec sh -c 'echo \"\\n===== {} =====\\n\"; cat {}' \\; > zcode/shared-code.txt",
     "dump:infrastructure": "find src/infrastructure -type f -name \"*.ts\" -exec sh -c 'echo \"\\n===== {} =====\\n\"; cat {}' \\; > zcode/infrastructure-code.txt",
