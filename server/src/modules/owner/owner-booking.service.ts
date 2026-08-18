@@ -42,20 +42,23 @@ export class OwnerBookingService {
     return this.claimDecision(ownerId, bookingId, BookingStatus.APPROVED);
   }
 
-  rejectBooking(ownerId: string, bookingId: string, dto: RejectBookingDto) {
-    return this.claimDecision(
+  async rejectBooking(
+    ownerId: string,
+    bookingId: string,
+    dto: RejectBookingDto,
+  ) {
+    const booking = await this.claimDecision(
       ownerId,
       bookingId,
       BookingStatus.REJECTED,
-      dto.reason,
     );
+    return { ...booking, decisionReason: dto.reason?.trim() || null };
   }
 
   private async claimDecision(
     ownerId: string,
     bookingId: string,
     targetStatus: BookingStatus.APPROVED | BookingStatus.REJECTED,
-    reason?: string,
   ) {
     const booking = await this.db.booking.findFirst({
       where: { id: bookingId, car: { ownerId } },
@@ -76,12 +79,7 @@ export class OwnerBookingService {
         status: BookingStatus.PENDING,
         car: { ownerId },
       },
-      data: {
-        status: targetStatus,
-        ...(targetStatus === BookingStatus.REJECTED && reason
-          ? { notes: reason.trim() }
-          : {}),
-      },
+      data: { status: targetStatus },
     });
     if (claim.count !== 1) {
       throw new BadRequestException(
