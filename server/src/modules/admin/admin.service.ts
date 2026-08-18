@@ -17,6 +17,7 @@ import {
   CreateCategoryDto,
   CreateLocationDto,
   CreatePromotionDto,
+  DisputeQueryDto,
   PromotionQueryDto,
   RejectKYCDto,
   ReportDateRangeDto,
@@ -147,9 +148,7 @@ export class AdminService {
   async getKycCustomers(query: PaginationDto & AdminKYCQueryDto) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
-    const where: Prisma.KYCWhereInput = query.status
-      ? { status: query.status }
-      : {};
+    const where: Prisma.KYCWhereInput = query.status ? { status: query.status } : {};
 
     const [items, total] = await Promise.all([
       this.prisma.kYC.findMany({
@@ -260,11 +259,13 @@ export class AdminService {
     });
   }
 
-  async getAllDisputes(query: PaginationDto) {
+  async getAllDisputes(query: PaginationDto & DisputeQueryDto) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 10;
+    const where: Prisma.DisputeWhereInput = query.status ? { status: query.status } : {};
     const [items, total] = await Promise.all([
       this.prisma.dispute.findMany({
+        where,
         skip: (page - 1) * limit,
         take: limit,
         include: {
@@ -275,7 +276,7 @@ export class AdminService {
         },
         orderBy: { createdAt: 'asc' },
       }),
-      this.prisma.dispute.count(),
+      this.prisma.dispute.count({ where }),
     ]);
     return { items, total, page, limit };
   }
@@ -291,10 +292,6 @@ export class AdminService {
   }
 
   async resolveDispute(disputeId: string, dto: ResolveDisputeDto) {
-    if (![DisputeStatus.RESOLVED, DisputeStatus.CLOSED].includes(dto.status)) {
-      throw new BadRequestException('Final dispute status must be RESOLVED or CLOSED');
-    }
-
     const dispute = await this.prisma.dispute.findUnique({
       where: { id: disputeId },
       select: { id: true },
