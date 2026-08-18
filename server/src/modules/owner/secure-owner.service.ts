@@ -1,4 +1,6 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { PaginationDto } from '../../common/dto/pagination.dto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UploadService } from '../upload/upload.service';
 import { WithdrawRequestDto } from './dto/owner.dto';
@@ -6,6 +8,8 @@ import { OwnerService } from './owner.service';
 
 @Injectable()
 export class SecureOwnerService extends OwnerService {
+  private readonly logger = new Logger(SecureOwnerService.name);
+
   constructor(
     private readonly db: PrismaService,
     uploadService: UploadService,
@@ -13,19 +17,49 @@ export class SecureOwnerService extends OwnerService {
     super(db, uploadService);
   }
 
+  override async getEarnings(userId: string, query: PaginationDto = {}) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 10;
+    const where: Prisma.OwnerTransactionWhereInput = {
+      ownerId: userId,
+      type: 'RENTAL_INCOME',
+      status: 'completed',
+    };
+
+    const [data, total, aggregate] = await Promise.all([
+      this.db.ownerTransaction.findMany({
+        where,
+        skip: (page - 1) * limit,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.db.ownerTransaction.count({ where }),
+      this.db.ownerTransaction.aggregate({
+        where,
+        _sum: { amount: true },
+      }),
+    ]);
+
+    return {
+      data,
+      total,
+      page,
+      limit,
+      totalEarnings: aggregate._sum.amount ?? 0,
+    };
+  }
+
   override async requestWithdraw(userId: string, dto: WithdrawRequestDto) {
     if (!Number.isFinite(dto.amount) || dto.amount < 50000) {
       throw new BadRequestException('Số tiền rút không hợp lệ');
     }
 
-    return this.db.$transaction(async (tx) => {
+    const result = await this.db.$transaction(async (tx) => {
       const wallet = await tx.wallet.findUnique({ where: { userId } });
       if (!wallet) {
         throw new BadRequestException('Wallet chưa được tạo');
       }
 
-      // Reserve funds atomically. Concurrent requests can no longer both pass
-      // a stale balance check and push the wallet below zero.
       const reserve = await tx.wallet.updateMany({
         where: {
           userId,
@@ -64,5 +98,8 @@ export class SecureOwnerService extends OwnerService {
 
       return withdraw;
     });
+
+    this.logger.log(`Created withdraw ${result.id} for owner ${userId}`);
+    return result;
   }
 }
