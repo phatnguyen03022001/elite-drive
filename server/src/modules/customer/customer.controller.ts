@@ -45,13 +45,17 @@ import {
   UpdateCustomerProfileDto,
   WalletTransactionResponseDto,
 } from './dto/customer.dto';
+import { CustomerPaymentService } from './customer-payment.service';
 import { CustomerService } from './customer.service';
 
 @Controller('api/customer')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserRole.CUSTOMER, UserRole.OWNER, UserRole.ADMIN)
 export class CustomerController {
-  constructor(private readonly customerService: CustomerService) {}
+  constructor(
+    private readonly customerService: CustomerService,
+    private readonly paymentService: CustomerPaymentService,
+  ) {}
 
   @Get('profile')
   async getProfile(
@@ -134,7 +138,7 @@ export class CustomerController {
     @CurrentUser('id') userId: string,
     @Param('booking_id') bookingId: string,
   ): Promise<ApiResponse<any>> {
-    const result = await this.customerService.cancelBooking(userId, bookingId);
+    const result = await this.paymentService.cancelBooking(userId, bookingId);
     return ApiResponse.success(result, 'Booking cancelled');
   }
 
@@ -143,21 +147,24 @@ export class CustomerController {
     @CurrentUser('id') userId: string,
     @Body() dto: CreatePaymentDto,
   ): Promise<ApiResponse<any>> {
-    const payment = await this.customerService.createPayment(userId, dto);
+    const payment = await this.paymentService.createPayment(userId, dto);
     return ApiResponse.success(
       {
         ...payment,
-        mockQrUrl: `/api/customer/payments/mock-scan/${payment.id}`,
+        ...(payment.paymentMethod === 'MOCK_QR' &&
+        this.paymentService.isMockPaymentsEnabled()
+          ? { mockQrUrl: `/api/customer/payments/mock-scan/${payment.id}` }
+          : {}),
       },
-      'Sandbox payment created',
+      'Payment created',
     );
   }
 
   @Public()
   @Get('payments/mock-scan/:payment_id')
   async mockScanPayment(@Param('payment_id') paymentId: string): Promise<string> {
-    await this.customerService.confirmPaymentByQr(paymentId);
-    return '<h1>Sandbox payment confirmed</h1>';
+    await this.paymentService.confirmMockPaymentByQr(paymentId);
+    return '<h1>Development mock payment confirmed</h1>';
   }
 
   @Post('payments/confirm')
@@ -165,8 +172,8 @@ export class CustomerController {
     @CurrentUser('id') userId: string,
     @Body() dto: ConfirmPaymentDto,
   ): Promise<ApiResponse<any>> {
-    const result = await this.customerService.confirmPayment(userId, dto);
-    return ApiResponse.success(result, 'Sandbox payment confirmed');
+    const result = await this.paymentService.confirmMockPayment(userId, dto);
+    return ApiResponse.success(result, 'Development mock payment confirmed');
   }
 
   @Get('payments/:booking_id')
@@ -234,21 +241,21 @@ export class CustomerController {
     @CurrentUser('id') userId: string,
     @Body() dto: CreateWalletTopupDto,
   ): Promise<ApiResponse<any>> {
-    const payment = await this.customerService.createWalletTopup(userId, dto);
+    const payment = await this.paymentService.createWalletTopup(userId, dto);
     return ApiResponse.success(
       {
         ...payment,
         mockQrUrl: `/api/customer/wallet/topup/mock-scan/${payment.id}`,
       },
-      'Sandbox wallet top-up created',
+      'Development mock wallet top-up created',
     );
   }
 
   @Public()
   @Get('wallet/topup/mock-scan/:payment_id')
   async mockScanWalletTopup(@Param('payment_id') paymentId: string) {
-    await this.customerService.confirmWalletTopup(paymentId);
-    return '<h1>Sandbox wallet top-up confirmed</h1>';
+    await this.paymentService.confirmMockWalletTopup(paymentId);
+    return '<h1>Development mock wallet top-up confirmed</h1>';
   }
 
   @Post('reviews')
@@ -263,7 +270,7 @@ export class CustomerController {
   @Get('reviews/my')
   async getMyReviews(
     @CurrentUser('id') userId: string,
-    @Query() query?: PaginationDto & any,
+    @Query() query?: PaginationDto,
   ): Promise<PaginatedResponseDto<any>> {
     const { data, total, page, limit } = await this.customerService.getMyReviews(userId, query);
     return new PaginatedResponseDto(data, total, page, limit);
