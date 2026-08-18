@@ -308,6 +308,9 @@ export class AuthService {
   private async recordFailedLogin(email: string) {
     const guard = await this.findLoginGuard(email);
     if (!guard) {
+      await this.prisma.oTP.deleteMany({
+        where: { email, type: AuthService.LOGIN_GUARD_TYPE },
+      });
       await this.prisma.oTP.create({
         data: {
           email,
