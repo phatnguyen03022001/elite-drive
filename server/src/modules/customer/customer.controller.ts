@@ -46,6 +46,7 @@ import { CustomerBookingService } from './customer-booking.service';
 import { CustomerCancellationService } from './customer-cancellation.service';
 import { CustomerPaymentService } from './customer-payment.service';
 import { CustomerPromotionService } from './customer-promotion.service';
+import { CustomerReviewService } from './customer-review.service';
 import { CustomerService } from './customer.service';
 
 @Controller('api/customer')
@@ -58,6 +59,7 @@ export class CustomerController {
     private readonly bookingService: CustomerBookingService,
     private readonly promotionService: CustomerPromotionService,
     private readonly cancellationService: CustomerCancellationService,
+    private readonly reviewService: CustomerReviewService,
   ) {}
 
   @Get('profile')
@@ -228,7 +230,7 @@ export class CustomerController {
 
   @Post('reviews')
   async createReview(@CurrentUser('id') userId: string, @Body() dto: CreateReviewDto): Promise<ApiResponse<unknown>> {
-    return ApiResponse.success(await this.customerService.createReview(userId, dto), 'Review submitted');
+    return ApiResponse.success(await this.reviewService.createReview(userId, dto), 'Review submitted');
   }
 
   @Get('reviews/my')
@@ -244,16 +246,6 @@ export class CustomerController {
   @Get('cars/search')
   searchCars(@Query() query: SearchCarQueryDto) {
     return this.customerService.searchCars(query);
-  }
-
-  @Get('bookings/:id/price-preview')
-  previewPrice(@CurrentUser('id') userId: string, @Param('id') bookingId: string) {
-    return this.customerService.previewBookingPrice(userId, bookingId);
-  }
-
-  @Post('bookings/:id/confirm')
-  confirmBooking(@CurrentUser('id') userId: string, @Param('id') bookingId: string) {
-    return this.customerService.confirmBooking(userId, bookingId);
   }
 
   @Post('disputes')
