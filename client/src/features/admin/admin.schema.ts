@@ -94,7 +94,7 @@ export const ReleasePaymentSchema = z.object({
 
 export const RefundPaymentSchema = z.object({
   bookingId: z.string().min(1),
-  refundPercent: z.number().min(1).max(100).optional(),
+  refundPercent: z.literal(100).optional(),
   reason: z.string().min(1, "Vui lòng nhập lý do hoàn tiền"),
 });
 
