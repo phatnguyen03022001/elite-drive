@@ -44,6 +44,7 @@ import {
 import { ApplyPromotionDto } from './dto/promotion.dto';
 import { CustomerBookingService } from './customer-booking.service';
 import { CustomerPaymentService } from './customer-payment.service';
+import { CustomerPromotionService } from './customer-promotion.service';
 import { CustomerService } from './customer.service';
 
 @Controller('api/customer')
@@ -54,6 +55,7 @@ export class CustomerController {
     private readonly customerService: CustomerService,
     private readonly paymentService: CustomerPaymentService,
     private readonly bookingService: CustomerBookingService,
+    private readonly promotionService: CustomerPromotionService,
   ) {}
 
   @Get('profile')
@@ -262,11 +264,11 @@ export class CustomerController {
   @Public()
   @Get('promotions')
   async getActivePromotions(): Promise<ApiResponse<unknown>> {
-    return ApiResponse.success(await this.customerService.getActivePromotions());
+    return ApiResponse.success(await this.promotionService.getActivePromotions());
   }
 
   @Post('promotions/apply')
   async applyPromotion(@CurrentUser('id') userId: string, @Body() dto: ApplyPromotionDto): Promise<ApiResponse<unknown>> {
-    return ApiResponse.success(await this.customerService.applyPromotion(userId, dto.bookingId, dto.promoCode), 'Promotion applied');
+    return ApiResponse.success(await this.promotionService.applyPromotion(userId, dto.bookingId, dto.promoCode), 'Promotion applied');
   }
 }
