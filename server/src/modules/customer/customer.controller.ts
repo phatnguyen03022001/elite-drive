@@ -46,6 +46,7 @@ import { CustomerBookingService } from './customer-booking.service';
 import { CustomerCancellationService } from './customer-cancellation.service';
 import { CustomerContractService } from './customer-contract.service';
 import { CustomerPaymentService } from './customer-payment.service';
+import { CustomerProfileService } from './customer-profile.service';
 import { CustomerPromotionService } from './customer-promotion.service';
 import { CustomerReviewService } from './customer-review.service';
 import { CustomerService } from './customer.service';
@@ -57,6 +58,7 @@ import { CustomerSupportService } from './customer-support.service';
 export class CustomerController {
   constructor(
     private readonly customerService: CustomerService,
+    private readonly profileService: CustomerProfileService,
     private readonly paymentService: CustomerPaymentService,
     private readonly bookingService: CustomerBookingService,
     private readonly promotionService: CustomerPromotionService,
@@ -68,7 +70,7 @@ export class CustomerController {
 
   @Get('profile')
   async getProfile(@CurrentUser('id') userId: string): Promise<ApiResponse<CustomerProfileResponseDto>> {
-    return ApiResponse.success(await this.customerService.getProfile(userId));
+    return ApiResponse.success(await this.profileService.getProfile(userId));
   }
 
   @Put('profile')
@@ -78,7 +80,7 @@ export class CustomerController {
     @Body() dto: UpdateCustomerProfileDto,
     @UploadedFile() avatarFile?: Express.Multer.File,
   ): Promise<ApiResponse<CustomerProfileResponseDto>> {
-    const updated = await this.customerService.updateProfile(userId, dto, avatarFile);
+    const updated = await this.profileService.updateProfile(userId, dto, avatarFile);
     return ApiResponse.success(updated, 'Profile updated');
   }
 
