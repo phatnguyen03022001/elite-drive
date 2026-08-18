@@ -8,17 +8,26 @@ import ReactQueryProvider from "@/components/provider/ReactQueryProvider";
 import { Toaster } from "sonner";
 import { ImageErrorHandler } from "../components/provider/ImageErrorHandler";
 
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-sans",
-});
+const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://elite-drive-iota.vercel.app"),
   title: {
-    default: "Elite Drive",
+    default: "Elite Drive | Premium Car Rental Platform",
     template: "%s | Elite Drive",
   },
-  description: "Nền tảng thuê xe tự lái uy tín tại Việt Nam",
+  description:
+    "Discover live vehicle availability, book securely, and manage renter and owner workflows with Elite Drive.",
+  applicationName: "Elite Drive",
+  keywords: ["car rental", "premium car rental", "vehicle booking", "Ho Chi Minh City", "Elite Drive"],
+  openGraph: {
+    title: "Elite Drive | Premium Car Rental Platform",
+    description: "Live vehicle discovery, authenticated bookings, and owner fleet operations in one platform.",
+    type: "website",
+    locale: "en_US",
+    siteName: "Elite Drive",
+  },
+  robots: { index: true, follow: true },
   icons: {
     icon: [
       { url: "/favicon.ico" },
@@ -31,8 +40,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="vi" suppressHydrationWarning>
-      <head />
+    <html lang="en" suppressHydrationWarning>
       <body className={cn("min-h-screen bg-background font-sans antialiased", inter.variable)}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
           <ReactQueryProvider>

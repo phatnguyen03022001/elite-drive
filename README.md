@@ -1,463 +1,292 @@
-# EliteDrive - Car Rental Management System
+# Elite Drive
 
-[![Live Demo](https://img.shields.io/badge/demo-live-brightgreen)](https://elite-drive-iota.vercel.app/)
+A production-oriented premium car rental platform for renters, vehicle owners, and administrators.
 
----
+**Live application:** https://elite-drive-iota.vercel.app
 
-EliteDrive is a comprehensive car rental management system built with **Next.js** (client), **NestJS** (server), and **MongoDB** (database).
+Elite Drive is built as a multi-role marketplace rather than a static showcase. The application includes live vehicle discovery, authenticated booking creation, customer account workflows, owner fleet operations, identity verification, reviews, promotions, support tooling, and administrative management.
 
-**🌐 Live Demo:** [https://elite-drive-iota.vercel.app/](https://elite-drive-iota.vercel.app/)
+## Product overview
 
-## 🏗️ Project Structure
+Elite Drive connects three operational roles:
 
+- **Renters** discover available vehicles, apply date and vehicle filters, create bookings, manage trips, complete identity verification, access promotions, make payments, leave reviews, and request support.
+- **Vehicle owners** manage cars, availability calendars, bookings, trips, profile verification, wallet activity, and support requests.
+- **Administrators** operate platform-level management workflows and oversee marketplace activity.
+
+The public API also exposes vehicle discovery, vehicle detail, availability, reviews, review summaries, and promotion endpoints.
+
+## Core capabilities
+
+| Area | Capability |
+| --- | --- |
+| Discovery | Live vehicle search backed by the API |
+| Availability | Date-aware vehicle availability queries |
+| Booking | Authenticated booking creation and booking management |
+| Identity | Customer and owner KYC workflows |
+| Marketplace | Separate renter, owner, and admin experiences |
+| Owner operations | Fleet, calendar, bookings, trips, wallet, and profile management |
+| Customer operations | Cars, bookings, payments, promotions, reviews, profile, and support |
+| Trust | Authentication, authorization guards, review workflows, and identity verification |
+| API | NestJS REST API with DTO validation and Swagger support |
+| Deployment | Next.js frontend deployed on Vercel |
+
+## Architecture
+
+```text
+┌──────────────────────────────┐
+│        Next.js client        │
+│  App Router · React · UI     │
+└──────────────┬───────────────┘
+               │ HTTPS / JSON
+               ▼
+┌──────────────────────────────┐
+│         NestJS API           │
+│ Auth · DTO validation · RBAC │
+└──────────────┬───────────────┘
+               │
+               ▼
+┌──────────────────────────────┐
+│      Application data        │
+│ MongoDB / persistence layer  │
+└──────────────────────────────┘
 ```
-EliteDrive/
-├── client/          # Frontend (Next.js)
-├── server/          # Backend (NestJS)
-├── docker/          # Docker configurations (MongoDB, MinIO, Garage)
-└── README.md        # This file
+
+Supporting integrations include transactional email and object/file storage tooling used by backend modules and local infrastructure.
+
+## Technology stack
+
+### Frontend
+
+- Next.js 16
+- React 19
+- TypeScript
+- Tailwind CSS
+- Radix UI / shadcn-style components
+- TanStack Query
+- Axios
+- React Hook Form + Zod
+- Framer Motion
+- Sonner notifications
+- Chart.js
+
+### Backend
+
+- NestJS 10
+- TypeScript
+- MongoDB / Mongoose
+- Prisma tooling
+- Passport + JWT authentication
+- class-validator / class-transformer
+- Swagger
+- bcrypt
+- Transactional email integrations
+- S3-compatible storage tooling
+
+## Repository structure
+
+```text
+.
+├── client/                 # Next.js application
+│   └── src/
+│       ├── app/            # Routes for public, customer, owner and admin experiences
+│       ├── components/     # Shared UI and providers
+│       ├── features/       # Feature-oriented frontend modules
+│       ├── hooks/          # Shared React hooks
+│       ├── lib/            # API/auth/utilities
+│       ├── styles/         # Global styling
+│       └── types/          # TypeScript definitions
+├── server/                 # NestJS API
+│   └── src/
+│       ├── common/         # Guards, decorators, DTOs and shared interfaces
+│       ├── config/         # App, DB, JWT and Swagger configuration
+│       ├── modules/        # Domain modules
+│       └── prisma/         # Persistence tooling
+└── docker/                 # Local service infrastructure
 ```
 
----
+## Local development
 
-## 📋 Prerequisites
+### Prerequisites
 
-- **Node.js**: v18 or higher
-- **npm**, **yarn**, or **pnpm**
-- **Docker** (optional, for running MongoDB, MinIO, Garage)
-- **Git**
+- Node.js 20 or later
+- npm
+- MongoDB, either local or hosted
+- Docker (optional, for local infrastructure)
 
----
-
-## 🚀 Quick Start Guide
-
-### 1️⃣ Clone and Install Dependencies
+### 1. Clone the repository
 
 ```bash
-# Clone repository
-git clone git@github.com:phatnguyen03022001/EliteDrive-Demo-Version-.git
-cd EliteDrive
-
-# Install client dependencies
-cd client
-npm install
-# or
-yarn install
-
-# Install server dependencies (from root directory)
-cd ../server
-npm install
-# or
-yarn install
+git clone <repository-url>
+cd <repository-directory>
 ```
 
-### 2️⃣ Database Configuration
-
-#### Option A: Use MongoDB Atlas (Cloud)
-
-Database is already configured at:
-```
-mongodb+srv://elitedrive:xxx
-```
-
-#### Option B: Run MongoDB Locally with Docker
-
-```bash
-cd docker/mongodb
-docker-compose up -d
-```
-
-MongoDB will run at `mongodb://localhost:27017`
-
-### 3️⃣ Environment Configuration
-
-#### Server (.env)
-
-Create `.env` file in `server/` directory:
-
-```env
-DATABASE_URL=xxxs
-# or for local MongoDB
-# DATABASE_URL=mongodb://localhost:27017/elitedrive
-
-JWT_SECRET=your_jwt_secret_key
-BCRYPT_ROUNDS=10
-BREVO_API_KEY=your_brevo_api_key
-EMAIL_FROM=your_email@domain.com
-EMAIL_FROM_NAME=Elite Drive
-APP_PORT=3001
-```
-
-#### Client (.env.local)
-
-Create `.env.local` file in `client/` directory:
-
-```env
-NEXT_PUBLIC_API_URL=http://localhost:3001
-```
-
-### 4️⃣ Start the Application
-
-#### Start Backend (NestJS)
-
-```bash
-cd server
-
-# Development mode
-npm run start:dev
-# or
-yarn start:dev
-
-# Production mode
-npm run build
-npm run start
-```
-
-Backend will run at `http://localhost:3001`
-
-#### Start Frontend (Next.js)
-
-Open a new terminal:
-
-```bash
-cd client
-
-# Development mode
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-```
-
-Frontend will run at `http://localhost:3000`
-
----
-
-## 🛠️ Database - Prisma
-
-### Prisma Migration
+### 2. Configure the API
 
 ```bash
 cd server
-
-# Create new migration
-npm run prisma:migrate:dev -- --name <migration_name>
-
-# Reset database
-npm run prisma:migrate:reset
-
-# Check migration status
-npm run prisma:migrate:status
-
-# Open Prisma Studio (UI for data management)
-npm run prisma:studio
-```
-
----
-
-## 📚 Detailed Project Structure
-
-### Frontend (Next.js)
-
-```
-client/src/
-├── app/                 # App router
-│   ├── (auth)/         # Auth routes
-│   ├── admin/          # Admin pages
-│   ├── customer/       # Customer pages
-│   └── owner/          # Owner pages
-├── components/         # Reusable components
-│   ├── layout/
-│   ├── provider/
-│   └── ui/
-├── features/           # Feature modules
-│   ├── admin/
-│   ├── auth/
-│   ├── customer/
-│   ├── home/
-│   ├── owner/
-│   └── shared/
-├── hooks/              # Custom React hooks
-├── lib/                # Utility functions
-└── types/              # TypeScript types
-```
-
-### Backend (NestJS)
-
-```
-server/src/
-├── app.controller.ts   # Main controller
-├── app.module.ts       # Main module
-├── app.service.ts      # Main service
-├── main.ts             # Entry point
-├── common/             # Common utilities, enums, decorators
-│   ├── decorators/     # Custom decorators (CurrentUser, Roles, Public)
-│   ├── dto/            # Data Transfer Objects
-│   ├── guards/         # Auth guards (JwtAuthGuard, RolesGuard)
-│   └── interfaces/     # TypeScript interfaces
-├── config/             # Configuration
-├── modules/            # Feature modules
-│   ├── admin/          # Admin management
-│   ├── auth/           # Authentication
-│   ├── customer/       # Customer operations
-│   ├── mail/           # Email service (Brevo integration)
-│   ├── public/         # Public endpoints
-│   └── upload/         # File upload service
-└── prisma/             # Prisma service
-```
-
----
-
-## 🔐 Authentication & Authorization
-
-The system supports three user roles with JWT-based authentication:
-
-### User Roles
-1. **Admin** - Full system management
-2. **Owner** - Car owners and fleet management
-3. **Customer** - Car rental customers
-
-### Authentication Flow
-- JWT tokens with role-based access control
-- Email verification via OTP
-- Password reset functionality
-- Session management
-
----
-
-## 📊 API Modules Overview
-
-### 1. Authentication Module (`/api/auth`)
-- User registration with email verification
-- Login with email/password or OTP
-- Password reset functionality
-- JWT token generation
-
-### 2. Customer Module (`/api/customer`)
-- Profile management
-- KYC submission and verification
-- Car search and booking
-- Payment processing
-- Contract management
-- Wallet operations
-- Reviews and ratings
-
-### 3. Admin Module (`/api/admin`)
-- System overview and analytics
-- Car approval and management
-- KYC customer verification
-- Promotion management
-- Payment and settlement processing
-- Dispute resolution
-- User management
-- Platform wallet management
-
-### 4. Public Module (`/api`)
-- Public car listings
-- Promotion display
-- Car availability checking
-- Review summaries
-
-### 5. Upload Module (`/upload`)
-- Image upload to Cloudinary
-- File validation and processing
-
----
-
-## 📧 Email Service
-
-The system uses **Brevo** (formerly Sendinblue) for transactional emails:
-- OTP delivery for registration/login
-- Password reset emails
-- Booking confirmations
-- System notifications
-
-### Configuration
-```env
-BREVO_API_KEY=your_api_key
-EMAIL_FROM=your_email@domain.com
-EMAIL_FROM_NAME=Elite Drive
-```
-
----
-
-## 🗄️ Database Schema
-
-### Core Models
-- **User**: User accounts with role-based permissions
-- **KYC**: Know Your Customer verification data
-- **Car**: Vehicle listings with pricing and availability
-- **Booking**: Rental reservations
-- **Payment**: Transaction records
-- **Wallet**: User wallet for payments
-- **Contract**: Rental agreements
-- **Review**: Customer feedback
-- **Promotion**: Discount codes and offers
-- **Dispute**: Conflict resolution system
-
-### Key Features
-- Multi-role user system (Admin, Owner, Customer)
-- KYC verification with document upload
-- Real-time car availability tracking
-- Escrow payment system
-- Contract signing workflow
-- Dispute management
-- Settlement processing for owners
-
----
-
-## 🐳 Docker Services (Optional)
-
-### MongoDB
-```bash
-cd docker/mongodb
-docker-compose up -d
-docker-compose down  # Stop service
-```
-
-### MinIO (Object Storage)
-```bash
-cd docker/minio
-docker-compose up -d
-```
-Access at: `http://localhost:9001`
-
-### Garage (Distributed Storage)
-```bash
-cd docker/garage
-docker-compose up -d
-```
-
----
-
-## 🔧 Development Commands
-
-### Backend (NestJS)
-```bash
-# Development with watch mode
-npm run start:dev
-
-# Production build
-npm run build
-npm run start:prod
-
-# Run tests
-npm run test
-npm run test:e2e
-
-# Linting
-npm run lint
-npm run format
-```
-
-### Frontend (Next.js)
-```bash
-# Development server
-npm run dev
-
-# Production build
-npm run build
-npm run start
-
-# Linting
-npm run lint
-```
-
----
-
-## 🐛 Troubleshooting
-
-### Port Already in Use
-```bash
-# Find process using port
-lsof -i :3000    # Frontend
-lsof -i :3001    # Backend
-
-# Kill process
-kill -9 <PID>
-```
-
-### Database Connection Error
-- Check MongoDB is running: `mongo --eval "db.adminCommand('ping')"`
-- Verify `DATABASE_URL` in `.env`
-
-### Dependencies Conflict
-```bash
-# Remove node_modules and package-lock.json
-rm -rf node_modules package-lock.json
+cp .env.example .env
 npm install
 ```
 
-### Email Service Issues
-- Verify Brevo API key is valid
-- Check email quota and rate limits
-- Ensure email templates are properly configured
+Set the required values in `server/.env`. Never commit production credentials.
 
----
+Start the API:
 
-## 📞 Support
-
-If you encounter issues, please check:
-
-1. Node.js version: `node --version`
-2. npm version: `npm --version`
-3. Server and client logs
-4. Database connection status
-5. Environment variable configuration
-
-For production deployment issues:
-- Verify all environment variables are set
-- Check database connection strings
-- Ensure email service API keys are valid
-- Review CORS configuration
-
----
-
-## 📝 License
-
-This project is proprietary software. All rights reserved.
-
----
-
-## 🔗 Useful Links
-
-- [Next.js Documentation](https://nextjs.org/docs)
-- [NestJS Documentation](https://docs.nestjs.com)
-- [Prisma Documentation](https://www.prisma.io/docs)
-- [MongoDB Documentation](https://docs.mongodb.com)
-- [Tailwind CSS Documentation](https://tailwindcss.com/docs)
-- [Brevo API Documentation](https://developers.brevo.com/docs)
-
----
-
-## 🚀 Deployment
-
-### Vercel (Frontend)
 ```bash
-# Install Vercel CLI
-npm i -g vercel
-
-# Deploy
-vercel
+npm run start:dev
 ```
 
-### Railway/Heroku (Backend)
+The recommended local API URL is `http://localhost:3001`.
+
+### 3. Configure the web application
+
+In a second terminal:
+
 ```bash
-# Build and deploy
+cd client
+cp .env.example .env.local
+npm install
+npm run dev
+```
+
+The web app is available at `http://localhost:3000`.
+
+## Environment variables
+
+### Client
+
+| Variable | Purpose |
+| --- | --- |
+| `NEXT_PUBLIC_API_URL` | Base URL of the Elite Drive API |
+
+### Server
+
+| Variable | Purpose |
+| --- | --- |
+| `NODE_ENV` | Runtime environment |
+| `APP_PORT` | API port |
+| `DATABASE_URL` | Database connection string |
+| `JWT_SECRET` | JWT signing secret |
+| `BCRYPT_ROUNDS` | Password hashing work factor |
+| `BREVO_API_KEY` | Transactional email provider credential |
+| `EMAIL_FROM` | Sender email address |
+| `EMAIL_FROM_NAME` | Sender display name |
+
+Additional storage/provider variables may be required by optional infrastructure modules.
+
+## API examples
+
+Public endpoints include:
+
+```http
+GET /api/cars
+GET /api/cars/:car_id
+GET /api/cars/:car_id/availability
+GET /api/cars/:car_id/reviews
+GET /api/reviews/summary
+GET /api/promotions
+```
+
+Vehicle search supports criteria such as city, category, price range, dates, and transmission.
+
+Authenticated customer booking creation:
+
+```http
+POST /api/customer/bookings
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+Example payload:
+
+```json
+{
+  "carId": "vehicle-id",
+  "startDate": "2026-08-20",
+  "endDate": "2026-08-22",
+  "pickupLocation": "Ho Chi Minh City",
+  "dropoffLocation": "Ho Chi Minh City"
+}
+```
+
+## User journeys
+
+### Renter
+
+1. Search the live fleet.
+2. Select dates and filters.
+3. Sign in or create an account.
+4. Complete required verification.
+5. Confirm a booking.
+6. Manage the booking and trip from the customer workspace.
+7. Use payment, review, promotion, and support workflows where applicable.
+
+### Vehicle owner
+
+1. Sign in to the owner workspace.
+2. Complete owner verification.
+3. Add and manage vehicles.
+4. Maintain availability through the calendar.
+5. Review incoming bookings and trips.
+6. Track wallet and operational activity.
+
+## Security notes
+
+- JWT-based authentication protects private routes.
+- Role-aware guards separate customer, owner, and administrative access.
+- Request DTOs are validated at the API boundary.
+- Secrets belong in environment variables and must never be committed to the repository.
+- Local Docker credentials must be treated as disposable development values and replaced before any shared or production deployment.
+
+If a credential has previously been committed, rotate it. Removing it from the latest revision does not remove it from Git history.
+
+## Quality commands
+
+Frontend:
+
+```bash
+cd client
+npm run lint
 npm run build
-# Configure environment variables in hosting platform
 ```
 
-### Docker Deployment
+Backend:
+
 ```bash
-# Build Docker images
-docker build -t elitedrive-client ./client
-docker build -t elitedrive-server ./server
-
-# Run with Docker Compose
-docker-compose up -d
+cd server
+npm run build
 ```
 
----
+## Deployment
 
+The frontend is deployed on Vercel and connected to the repository's `main` branch.
+
+For production deployments:
+
+1. Configure `NEXT_PUBLIC_API_URL` in Vercel.
+2. Configure server-side secrets in the backend hosting environment.
+3. Build both applications before release.
+4. Verify authentication, vehicle search, booking creation, and role-specific dashboards after deployment.
+
+## Engineering decisions
+
+### Why a role-based application structure?
+
+Rental marketplaces have materially different renter, owner, and operator workflows. Keeping these experiences separate at the route and authorization level makes permissions explicit and keeps each workspace focused.
+
+### Why API-backed landing and fleet experiences?
+
+Portfolio projects often fail by presenting polished static data that is disconnected from the real application. Elite Drive treats the public experience as an entry point into the same API-backed fleet and booking workflow used by authenticated renters.
+
+### Why keep infrastructure configuration outside application code?
+
+Application source should remain portable across local, preview, and production environments. Runtime URLs, signing secrets, database credentials, email credentials, and storage credentials therefore belong in environment-specific configuration.
+
+## Status
+
+Elite Drive is an actively developed full-stack product. The current focus is production polish: consistent English UX, stronger automated quality gates, security hardening, observability, and end-to-end verification of critical booking journeys.
+
+## License
+
+This repository is currently provided as a portfolio project. Add an explicit open-source license before granting reuse or redistribution rights.

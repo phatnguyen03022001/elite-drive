@@ -1,334 +1,389 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
-import {
-  Search,
-  Car,
-  Calendar,
-  Loader2,
-  Star,
-  AlertCircle,
-  ChevronRight,
-  Info,
-  FilterX,
-  MapPin,
-  Clock,
-  ShieldCheck,
-} from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Cookies from "js-cookie";
 import Image from "next/image";
+import Link from "next/link";
+import {
+  ArrowLeft,
+  CalendarDays,
+  Car,
+  CheckCircle2,
+  Filter,
+  Loader2,
+  MapPin,
+  Search,
+  ShieldCheck,
+  SlidersHorizontal,
+  Users,
+} from "lucide-react";
+import { toast } from "sonner";
 
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Separator } from "@/components/ui/separator";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
-  DialogTitle,
   DialogDescription,
   DialogFooter,
-} from "@/components/ui/dialog"; // Đảm bảo bạn đã cài shadcn dialog
-import { toast } from "sonner";
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "https://elitedrive-demoversion.onrender.com";
 
-export default function RentCarPage() {
-  const formatDate = (date: Date) => date.toISOString().split("T")[0];
+type SearchState = {
+  city: string;
+  startDate: string;
+  endDate: string;
+  transmission: string;
+  minPrice: string;
+  maxPrice: string;
+};
 
-  const [loading, setLoading] = useState(false);
-  const [initialLoading, setInitialLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+const formatDate = (date: Date) => date.toISOString().split("T")[0];
+const money = (value?: number) =>
+  typeof value === "number" ? new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(value) : "—";
+
+function defaultSearch(): SearchState {
+  const start = new Date();
+  const end = new Date();
+  end.setDate(start.getDate() + 1);
+  return {
+    city: "",
+    startDate: formatDate(start),
+    endDate: formatDate(end),
+    transmission: "",
+    minPrice: "",
+    maxPrice: "",
+  };
+}
+
+export default function FleetPage() {
+  const [query, setQuery] = useState<SearchState>(defaultSearch);
   const [cars, setCars] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [booking, setBooking] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedCar, setSelectedCar] = useState<any | null>(null);
+  const [completedBooking, setCompletedBooking] = useState<any | null>(null);
 
-  const [searchQuery, setSearchQuery] = useState(() => {
-    const today = new Date();
-    const tomorrow = new Date();
-    tomorrow.setDate(today.getDate() + 1);
-    return { startDate: formatDate(today), endDate: formatDate(tomorrow) };
-  });
+  const tripDays = useMemo(() => {
+    const start = new Date(query.startDate);
+    const end = new Date(query.endDate);
+    const value = Math.ceil((end.getTime() - start.getTime()) / 86400000);
+    return Number.isFinite(value) && value > 0 ? value : 1;
+  }, [query.endDate, query.startDate]);
 
-  // Booking States
-  const [carToBook, setCarToBook] = useState<any>(null); // Xe đang được chọn để xem xét
-  const [isModalOpen, setIsModalOpen] = useState(false); // Trạng thái mở Modal xác nhận
-  const [bookingData, setBookingData] = useState<any>(null); // Data trả về từ API sau khi đặt thành công
-  const [showConfirm, setShowConfirm] = useState(false); // Trạng thái hiển thị màn hình Success
+  const fetchCars = useCallback(async (nextQuery: SearchState, initial = false) => {
+    if (new Date(nextQuery.endDate) < new Date(nextQuery.startDate)) {
+      setError("Return date must be on or after the pick-up date.");
+      return;
+    }
 
-  const handleSearch = useCallback(
-    async (isInitial = false) => {
-      if (isInitial) setInitialLoading(true);
-      else setLoading(true);
-      setError(null);
-      try {
-        const params = new URLSearchParams(searchQuery);
-        const response = await fetch(`${API_BASE}/api/cars?${params}`);
-        const res = await response.json();
-        setCars(res.data || []);
-        if (res.data?.length === 0) setError("Không có xe nào khả dụng.");
-      } catch (err: any) {
-        setError("Lỗi kết nối hệ thống.");
-      } finally {
-        setInitialLoading(false);
-        setLoading(false);
+    setLoading(true);
+    setError(null);
+
+    try {
+      const params = new URLSearchParams();
+      if (nextQuery.city.trim()) params.set("city", nextQuery.city.trim());
+      if (nextQuery.startDate) params.set("startDate", nextQuery.startDate);
+      if (nextQuery.endDate) params.set("endDate", nextQuery.endDate);
+      if (nextQuery.transmission) params.set("transmission", nextQuery.transmission);
+      if (nextQuery.minPrice) params.set("minPrice", nextQuery.minPrice);
+      if (nextQuery.maxPrice) params.set("maxPrice", nextQuery.maxPrice);
+      params.set("limit", "24");
+
+      const response = await fetch(`${API_BASE}/api/cars?${params.toString()}`, { cache: "no-store" });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload?.message || "Unable to load vehicles.");
+
+      const data = Array.isArray(payload?.data) ? payload.data : [];
+      setCars(data);
+      if (!data.length) setError("No vehicles match these dates and filters. Try a broader search.");
+
+      if (!initial && typeof window !== "undefined") {
+        window.history.replaceState(null, "", `${window.location.pathname}?${params.toString()}`);
       }
-    },
-    [searchQuery],
-  );
-
-  useEffect(() => {
-    handleSearch(true);
+    } catch (requestError: any) {
+      setCars([]);
+      setError(requestError?.message || "The fleet service is temporarily unavailable.");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const calculateDays = () => {
-    const start = new Date(searchQuery.startDate);
-    const end = new Date(searchQuery.endDate);
-    const diff = Math.ceil((end.getTime() - start.getTime()) / 86400000);
-    return diff <= 0 ? 1 : diff;
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const base = defaultSearch();
+    const initialQuery: SearchState = {
+      city: params.get("city") || base.city,
+      startDate: params.get("startDate") || base.startDate,
+      endDate: params.get("endDate") || base.endDate,
+      transmission: params.get("transmission") || base.transmission,
+      minPrice: params.get("minPrice") || base.minPrice,
+      maxPrice: params.get("maxPrice") || base.maxPrice,
+    };
+    setQuery(initialQuery);
+    fetchCars(initialQuery, true);
+  }, [fetchCars]);
+
+  const resetFilters = () => {
+    const next = defaultSearch();
+    setQuery(next);
+    fetchCars(next);
   };
 
-  // Bước 1: Mở form xác nhận
-  const openConfirmModal = (car: any) => {
+  const openBooking = (car: any) => {
     const token = Cookies.get("token");
-    if (!token) return toast.error("Vui lòng đăng nhập trước khi đặt xe");
-    setCarToBook(car);
-    setIsModalOpen(true);
+    if (!token) {
+      toast.error("Sign in to confirm a booking.");
+      window.location.href = "/login";
+      return;
+    }
+    setSelectedCar(car);
   };
 
-  // Bước 2: Thực sự gọi API đặt xe
-  const handleFinalBooking = async () => {
-    setLoading(true);
+  const confirmBooking = async () => {
+    if (!selectedCar) return;
+    setBooking(true);
+
     try {
       const response = await fetch(`${API_BASE}/api/customer/bookings`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${Cookies.get("token")}`,
+          Authorization: `Bearer ${Cookies.get("token") || ""}`,
         },
         body: JSON.stringify({
-          carId: carToBook.id,
-          startDate: searchQuery.startDate,
-          endDate: searchQuery.endDate,
-          pickupLocation: carToBook.location?.name || "Hồ Chí Minh",
-          dropoffLocation: carToBook.location?.name || "Hồ Chí Minh",
+          carId: selectedCar.id,
+          startDate: query.startDate,
+          endDate: query.endDate,
+          pickupLocation: selectedCar.location?.name || query.city || "Ho Chi Minh City",
+          dropoffLocation: selectedCar.location?.name || query.city || "Ho Chi Minh City",
         }),
       });
 
-      const res = await response.json();
-      if (!response.ok) throw new Error(res.message);
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload?.message || "Unable to create this booking.");
 
-      setBookingData(res.data);
-      setIsModalOpen(false);
-      setShowConfirm(true);
-      toast.success("Đặt xe thành công!");
-    } catch (err: any) {
-      toast.error(err.message);
+      setCompletedBooking(payload?.data || null);
+      setSelectedCar(null);
+      toast.success("Booking confirmed.");
+    } catch (requestError: any) {
+      toast.error(requestError?.message || "Booking failed. Please try again.");
     } finally {
-      setLoading(false);
+      setBooking(false);
     }
   };
 
+  if (completedBooking) {
+    return (
+      <main className="min-h-screen bg-[#090909] px-5 py-20 text-white">
+        <div className="mx-auto max-w-xl">
+          <Card className="overflow-hidden rounded-[2rem] border-white/10 bg-[#111] text-white">
+            <div className="bg-white p-10 text-center text-black">
+              <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-black text-white">
+                <CheckCircle2 className="h-8 w-8" />
+              </span>
+              <h1 className="mt-5 text-3xl font-black tracking-tight">Booking confirmed</h1>
+              <p className="mt-2 text-sm text-black/55">Your trip is now in the Elite Drive booking workflow.</p>
+            </div>
+            <CardContent className="space-y-5 p-8">
+              <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 p-5">
+                <span className="text-sm text-white/45">Booking reference</span>
+                <span className="font-mono font-bold">#{String(completedBooking.id || "").slice(-8).toUpperCase()}</span>
+              </div>
+              <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 p-5">
+                <span className="text-sm text-white/45">Total</span>
+                <span className="text-xl font-black">{money(completedBooking.totalPrice)} ₫</span>
+              </div>
+              <Button asChild className="h-12 w-full rounded-xl bg-white text-black hover:bg-white/90">
+                <Link href="/customer/bookings">Manage booking</Link>
+              </Button>
+              <Button variant="ghost" className="w-full text-white hover:bg-white/10 hover:text-white" onClick={() => setCompletedBooking(null)}>
+                Continue browsing
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </main>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-background pb-20">
-      {/* Header (Giữ nguyên) */}
-      <div className="bg-card border-b sticky top-0 z-10 shadow-sm">
-        <div className="max-w-6xl mx-auto px-4 py-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-black italic text-primary uppercase">Elite Drive</h1>
+    <main className="min-h-screen bg-[#090909] text-white">
+      <header className="border-b border-white/10 bg-black/80 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-5 lg:px-8">
+          <Link href="/" className="flex items-center gap-3">
+            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-black"><Car className="h-5 w-5" /></span>
+            <div>
+              <p className="text-sm font-black tracking-[0.2em]">ELITE DRIVE</p>
+              <p className="text-[10px] uppercase tracking-[0.2em] text-white/40">Live fleet</p>
+            </div>
+          </Link>
+          <Button asChild variant="ghost" className="text-white hover:bg-white/10 hover:text-white">
+            <Link href="/"><ArrowLeft className="mr-2 h-4 w-4" /> Home</Link>
+          </Button>
+        </div>
+      </header>
+
+      <section className="border-b border-white/10 bg-white/[.025]">
+        <div className="mx-auto max-w-7xl px-5 py-12 lg:px-8">
+          <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
+            <div>
+              <Badge className="rounded-full border border-white/15 bg-white/5 text-white">Real-time search</Badge>
+              <h1 className="mt-5 text-4xl font-black tracking-tight sm:text-5xl">Find your next drive.</h1>
+              <p className="mt-3 max-w-2xl text-white/50">Search the live fleet and create a real booking from the same workflow.</p>
+            </div>
+            <div className="flex items-center gap-2 text-sm text-white/45">
+              <ShieldCheck className="h-4 w-4" /> Authenticated booking confirmation
+            </div>
           </div>
-          <div className="flex items-center gap-3">
-            <Badge variant={!showConfirm ? "default" : "outline"}>1. Chọn xe</Badge>
-            <ChevronRight className="h-4 w-4 opacity-20" />
-            <Badge variant={showConfirm ? "default" : "outline"}>2. Hoàn tất</Badge>
+
+          <div className="mt-9 rounded-[1.75rem] border border-white/10 bg-black/35 p-5 sm:p-6">
+            <div className="mb-5 flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm font-bold"><SlidersHorizontal className="h-4 w-4" /> Search filters</div>
+              <Button type="button" variant="ghost" size="sm" onClick={resetFilters} className="text-white/50 hover:bg-white/10 hover:text-white">Reset</Button>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+              <label className="xl:col-span-2">
+                <span className="mb-2 block text-[11px] font-bold uppercase tracking-wider text-white/40">City</span>
+                <div className="relative">
+                  <MapPin className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/35" />
+                  <Input value={query.city} onChange={(event) => setQuery((value) => ({ ...value, city: event.target.value }))} placeholder="Ho Chi Minh City" className="h-11 border-white/10 bg-white/5 pl-9 text-white" />
+                </div>
+              </label>
+              <label>
+                <span className="mb-2 block text-[11px] font-bold uppercase tracking-wider text-white/40">Pick-up</span>
+                <Input type="date" min={formatDate(new Date())} value={query.startDate} onChange={(event) => setQuery((value) => ({ ...value, startDate: event.target.value }))} className="h-11 border-white/10 bg-white/5 text-white [color-scheme:dark]" />
+              </label>
+              <label>
+                <span className="mb-2 block text-[11px] font-bold uppercase tracking-wider text-white/40">Return</span>
+                <Input type="date" min={query.startDate} value={query.endDate} onChange={(event) => setQuery((value) => ({ ...value, endDate: event.target.value }))} className="h-11 border-white/10 bg-white/5 text-white [color-scheme:dark]" />
+              </label>
+              <label>
+                <span className="mb-2 block text-[11px] font-bold uppercase tracking-wider text-white/40">Transmission</span>
+                <select value={query.transmission} onChange={(event) => setQuery((value) => ({ ...value, transmission: event.target.value }))} className="h-11 w-full rounded-md border border-white/10 bg-white/5 px-3 text-sm outline-none focus:ring-2 focus:ring-white/30">
+                  <option value="" className="text-black">Any</option>
+                  <option value="Automatic" className="text-black">Automatic</option>
+                  <option value="Manual" className="text-black">Manual</option>
+                </select>
+              </label>
+              <div className="flex items-end">
+                <Button onClick={() => fetchCars(query)} disabled={loading} className="h-11 w-full bg-white font-bold text-black hover:bg-white/90">
+                  {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />} Search
+                </Button>
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:max-w-xl">
+              <label>
+                <span className="mb-2 block text-[11px] font-bold uppercase tracking-wider text-white/40">Min price / day</span>
+                <Input inputMode="numeric" value={query.minPrice} onChange={(event) => setQuery((value) => ({ ...value, minPrice: event.target.value.replace(/\D/g, "") }))} placeholder="0" className="h-11 border-white/10 bg-white/5 text-white" />
+              </label>
+              <label>
+                <span className="mb-2 block text-[11px] font-bold uppercase tracking-wider text-white/40">Max price / day</span>
+                <Input inputMode="numeric" value={query.maxPrice} onChange={(event) => setQuery((value) => ({ ...value, maxPrice: event.target.value.replace(/\D/g, "") }))} placeholder="No limit" className="h-11 border-white/10 bg-white/5 text-white" />
+              </label>
+            </div>
           </div>
         </div>
-      </div>
+      </section>
 
-      <div className="max-w-6xl mx-auto px-4 mt-8">
-        {!showConfirm ? (
-          <div className="space-y-8">
-            {/* Search Panel (Giữ nguyên) */}
-            <Card className="border-none shadow-2xl ring-1 ring-border rounded-[2.5rem] p-8">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-                    Ngày nhận
-                  </label>
-                  <Input
-                    type="date"
-                    value={searchQuery.startDate}
-                    onChange={(e) => setSearchQuery({ ...searchQuery, startDate: e.target.value })}
-                    className="rounded-xl font-bold"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-                    Ngày trả
-                  </label>
-                  <Input
-                    type="date"
-                    value={searchQuery.endDate}
-                    onChange={(e) => setSearchQuery({ ...searchQuery, endDate: e.target.value })}
-                    className="rounded-xl font-bold"
-                  />
-                </div>
-                <Button onClick={() => handleSearch()} className="h-12 mt-auto rounded-xl font-black uppercase">
-                  Tìm kiếm
-                </Button>
-              </div>
-            </Card>
+      <section className="mx-auto max-w-7xl px-5 py-10 lg:px-8">
+        <div className="mb-7 flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="text-sm text-white/40">{loading ? "Checking availability…" : `${cars.length} vehicle${cars.length === 1 ? "" : "s"} found`}</p>
+            <p className="mt-1 flex items-center gap-2 text-sm font-semibold"><CalendarDays className="h-4 w-4" /> {tripDays} day{tripDays === 1 ? "" : "s"} selected</p>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-white/40"><Filter className="h-4 w-4" /> API-backed filters</div>
+        </div>
 
-            {/* Car Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              {initialLoading
-                ? Array(3)
-                    .fill(0)
-                    .map((_, i) => <Skeleton key={i} className="h-80 rounded-[2rem]" />)
-                : cars.map((car) => (
-                    <Card
-                      key={car.id}
-                      className="rounded-[2rem] overflow-hidden group border-none shadow-md hover:shadow-2xl transition-all ring-1 ring-border">
-                      <div className="relative h-56">
-                        <Image
-                          src={car.mainImageUrl || "/placeholder-car.png"}
-                          alt={car.name}
-                          fill
-                          className="object-cover group-hover:scale-105 transition-transform"
-                          unoptimized
-                        />
-                      </div>
-                      <CardHeader className="p-6">
-                        <CardTitle className="text-xl font-bold">{car.name}</CardTitle>
-                        <div className="flex gap-2 mt-2">
-                          <Badge variant="secondary" className="text-[10px] uppercase">
-                            {car.transmission || "Auto"}
-                          </Badge>
-                          <Badge variant="secondary" className="text-[10px] uppercase">
-                            {car.seatCount} Ghế
-                          </Badge>
-                        </div>
-                      </CardHeader>
-                      <CardContent className="px-6 flex justify-between items-center pb-6">
-                        <p className="text-2xl font-black text-primary">
-                          {car.pricePerDay?.toLocaleString()} ₫{" "}
-                          <span className="text-[10px] text-muted-foreground">/ngày</span>
-                        </p>
-                        <Button
-                          size="sm"
-                          onClick={() => openConfirmModal(car)}
-                          className="rounded-xl font-bold uppercase">
-                          Thuê
-                        </Button>
-                      </CardContent>
-                    </Card>
-                  ))}
-            </div>
+        {error && !loading ? (
+          <div className="mb-8 rounded-2xl border border-white/10 bg-white/[.04] p-5 text-sm text-white/65">{error}</div>
+        ) : null}
+
+        {loading ? (
+          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+            {[0, 1, 2, 3, 4, 5].map((item) => <div key={item} className="h-[430px] animate-pulse rounded-[1.75rem] border border-white/10 bg-white/5" />)}
           </div>
         ) : (
-          /* MÀN HÌNH THÀNH CÔNG (Sau khi đã có bookingData) */
-          <div className="max-w-xl mx-auto py-10 animate-in zoom-in-95">
-            <Card className="rounded-[2.5rem] overflow-hidden shadow-2xl border-none">
-              <div className="bg-primary p-12 text-center text-primary-foreground">
-                <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <ShieldCheck className="w-8 h-8" />
+          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+            {cars.map((car) => (
+              <Card key={car.id} className="group overflow-hidden rounded-[1.75rem] border-white/10 bg-[#111] text-white shadow-none transition hover:border-white/20">
+                <div className="relative h-60 overflow-hidden bg-white/5">
+                  <Image src={car.mainImageUrl || "/images/car3.png"} alt={car.name || "Vehicle"} fill unoptimized className="object-cover transition duration-500 group-hover:scale-[1.03]" />
+                  <div className="absolute left-4 top-4 flex gap-2">
+                    <Badge className="border border-white/15 bg-black/65 text-white backdrop-blur">{car.transmission || "Automatic"}</Badge>
+                    {car.seatCount ? <Badge className="border border-white/15 bg-black/65 text-white backdrop-blur"><Users className="mr-1 h-3 w-3" /> {car.seatCount}</Badge> : null}
+                  </div>
                 </div>
-                <h2 className="text-3xl font-black uppercase italic">Đặt xe thành công!</h2>
-                <p className="text-[10px] font-mono mt-2 tracking-widest opacity-80">
-                  MÃ ĐƠN: #{bookingData?.id.slice(-8).toUpperCase()}
-                </p>
-              </div>
-              <CardContent className="p-10 space-y-6">
-                <div className="bg-muted p-6 rounded-2xl border flex justify-between">
-                  <span className="font-bold text-muted-foreground uppercase text-[10px]">Tổng thanh toán</span>
-                  <span className="font-black text-xl text-primary">{bookingData?.totalPrice?.toLocaleString()} ₫</span>
-                </div>
-                <Button
-                  className="w-full h-14 rounded-2xl font-black uppercase"
-                  onClick={() => (window.location.href = "/customer/bookings")}>
-                  Quản lý đơn hàng
-                </Button>
-              </CardContent>
-            </Card>
+
+                <CardContent className="p-6">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.18em] text-white/35">{car.location?.name || query.city || "Elite Drive"}</p>
+                      <h2 className="mt-2 text-2xl font-black tracking-tight">{car.name || "Premium vehicle"}</h2>
+                    </div>
+                  </div>
+
+                  <div className="mt-5 flex items-end justify-between border-t border-white/10 pt-5">
+                    <div>
+                      <p className="text-xs text-white/40">Daily rate</p>
+                      <p className="mt-1 text-xl font-black">{money(car.pricePerDay)} ₫</p>
+                      <p className="mt-1 text-xs text-white/35">Est. {money((car.pricePerDay || 0) * tripDays)} ₫ for {tripDays} day{tripDays === 1 ? "" : "s"}</p>
+                    </div>
+                    <Button onClick={() => openBooking(car)} className="rounded-full bg-white px-5 font-bold text-black hover:bg-white/90">Book</Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
           </div>
         )}
-      </div>
+      </section>
 
-      {/* MODAL XÁC NHẬN - ĐÂY LÀ "FORM XÁC NHẬN" BẠN CẦN */}
-      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="sm:max-w-[450px] rounded-[2rem] p-0 overflow-hidden border-none shadow-2xl">
-          <DialogHeader className="p-8 bg-primary text-primary-foreground">
-            <DialogTitle className="text-2xl font-black uppercase italic">Xác nhận đặt xe</DialogTitle>
-            <DialogDescription className="text-primary-foreground/70 text-xs">
-              Vui lòng kiểm tra kỹ thông tin trước khi xác nhận.
-            </DialogDescription>
+      <Dialog open={Boolean(selectedCar)} onOpenChange={(open) => !open && setSelectedCar(null)}>
+        <DialogContent className="border-white/10 bg-[#111] text-white sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-black">Confirm your booking</DialogTitle>
+            <DialogDescription className="text-white/45">This action creates a booking through the authenticated customer API.</DialogDescription>
           </DialogHeader>
 
-          <div className="p-8 space-y-6">
-            <div className="flex items-center gap-4">
-              <div className="relative w-20 h-20 rounded-2xl overflow-hidden ring-1 ring-border shadow-sm">
-                <Image
-                  src={carToBook?.mainImageUrl || "/placeholder-car.png"}
-                  alt="car"
-                  fill
-                  className="object-cover"
-                  unoptimized
-                />
+          {selectedCar ? (
+            <div className="space-y-4 py-2">
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
+                <p className="text-lg font-bold">{selectedCar.name}</p>
+                <p className="mt-1 text-sm text-white/45">{selectedCar.location?.name || query.city || "Ho Chi Minh City"}</p>
               </div>
-              <div>
-                <h4 className="font-bold text-lg">{carToBook?.name}</h4>
-                <p className="text-xs text-muted-foreground flex items-center gap-1">
-                  <MapPin className="w-3 h-3" /> {carToBook?.location?.name || "Hồ Chí Minh"}
-                </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-2xl border border-white/10 p-4">
+                  <p className="text-xs uppercase tracking-wider text-white/35">Pick-up</p>
+                  <p className="mt-2 text-sm font-bold">{query.startDate}</p>
+                </div>
+                <div className="rounded-2xl border border-white/10 p-4">
+                  <p className="text-xs uppercase tracking-wider text-white/35">Return</p>
+                  <p className="mt-2 text-sm font-bold">{query.endDate}</p>
+                </div>
               </div>
-            </div>
-
-            <Separator />
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <p className="text-[10px] font-black uppercase text-muted-foreground flex items-center gap-1">
-                  <Clock className="w-3 h-3" /> Nhận xe
-                </p>
-                <p className="text-sm font-bold">{searchQuery.startDate}</p>
-              </div>
-              <div className="space-y-1 text-right">
-                <p className="text-[10px] font-black uppercase text-muted-foreground flex items-center gap-1 justify-end">
-                  Trả xe <Clock className="w-3 h-3" />
-                </p>
-                <p className="text-sm font-bold">{searchQuery.endDate}</p>
+              <div className="flex items-center justify-between rounded-2xl bg-white p-5 text-black">
+                <span className="text-sm font-semibold">Estimated total</span>
+                <span className="text-xl font-black">{money((selectedCar.pricePerDay || 0) * tripDays)} ₫</span>
               </div>
             </div>
+          ) : null}
 
-            <div className="bg-primary/5 p-4 rounded-2xl border border-primary/10">
-              <div className="flex justify-between items-center mb-1">
-                <span className="text-xs font-bold text-muted-foreground">Thời gian thuê:</span>
-                <span className="text-xs font-bold text-primary">{calculateDays()} ngày</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-xs font-black uppercase text-primary">Tổng tạm tính:</span>
-                <span className="text-xl font-black text-primary">
-                  {(carToBook?.pricePerDay * calculateDays()).toLocaleString()} ₫
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <DialogFooter className="p-8 bg-muted/30 pt-4 flex-col sm:flex-row gap-3">
-            <Button variant="ghost" onClick={() => setIsModalOpen(false)} className="rounded-xl font-bold">
-              Hủy bỏ
-            </Button>
-            <Button
-              onClick={handleFinalBooking}
-              disabled={loading}
-              className="rounded-xl font-black uppercase px-8 shadow-lg">
-              {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "Xác nhận đặt xe"}
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setSelectedCar(null)} className="text-white hover:bg-white/10 hover:text-white">Cancel</Button>
+            <Button onClick={confirmBooking} disabled={booking} className="bg-white font-bold text-black hover:bg-white/90">
+              {booking ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Confirm booking
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </main>
   );
 }
