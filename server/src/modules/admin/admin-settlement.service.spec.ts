@@ -47,6 +47,7 @@ describe('AdminSettlementService invariants', () => {
           OR: [
             { processedAt: range },
             { processedAt: null, updatedAt: range },
+            { processedAt: { isSet: false }, updatedAt: range },
           ],
         }),
       }),
