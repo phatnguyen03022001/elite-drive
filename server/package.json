@@ -41,7 +41,7 @@
     "mongoose": "^9.1.4",
     "nodemailer": "^7.0.12",
     "passport": "^0.7.0",
-    "passport-jwt": "^11.0.5",
+    "passport-jwt": "^0.7.0",
     "pug": "^3.0.3",
     "reflect-metadata": "^0.2.0",
     "resend": "^6.9.2",
