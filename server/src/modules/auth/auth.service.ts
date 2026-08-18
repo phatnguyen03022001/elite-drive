@@ -2,6 +2,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   HttpException,
   HttpStatus,
   Injectable,
@@ -29,6 +30,9 @@ export class AuthService {
   private static readonly OTP_TTL_MS = 5 * 60 * 1000;
   private static readonly OTP_RESEND_COOLDOWN_MS = 60 * 1000;
   private static readonly OTP_MAX_ATTEMPTS = 5;
+  private static readonly LOGIN_MAX_ATTEMPTS = 5;
+  private static readonly LOGIN_LOCK_MS = 15 * 60 * 1000;
+  private static readonly LOGIN_GUARD_TYPE = 'LOGIN_PASSWORD_GUARD';
 
   constructor(
     private readonly prisma: PrismaService,
@@ -113,17 +117,27 @@ export class AuthService {
   }
 
   async login(dto: LoginDto) {
+    await this.assertLoginNotLocked(dto.email);
+
     const user = await this.prisma.user.findUnique({
       where: { email: dto.email },
     });
 
     if (!user) {
+      await this.recordFailedLogin(dto.email);
       throw new UnauthorizedException('Email hoặc mật khẩu không đúng');
     }
 
     const passwordMatches = await bcrypt.compare(dto.password, user.password);
     if (!passwordMatches) {
+      await this.recordFailedLogin(dto.email);
       throw new UnauthorizedException('Email hoặc mật khẩu không đúng');
+    }
+
+    await this.clearLoginGuard(dto.email);
+
+    if (!user.isActive) {
+      throw new ForbiddenException('Tài khoản đã bị vô hiệu hóa');
     }
 
     if (!user.isVerified) {
@@ -143,7 +157,10 @@ export class AuthService {
     });
 
     if (!user) throw new NotFoundException('Tài khoản không tồn tại');
+    if (!user.isActive) throw new ForbiddenException('Tài khoản đã bị vô hiệu hóa');
+    if (!user.isVerified) throw new UnauthorizedException('Tài khoản chưa được xác thực');
 
+    await this.clearLoginGuard(dto.email);
     return this.generateTokens(user);
   }
 
@@ -156,6 +173,7 @@ export class AuthService {
       where: { email: dto.email },
       data: { password: hashedPassword },
     });
+    await this.clearLoginGuard(dto.email);
 
     return { message: 'Mật khẩu đã được cập nhật thành công' };
   }
@@ -274,6 +292,63 @@ export class AuthService {
       },
       orderBy: { createdAt: 'desc' },
       select: { id: true, code: true, attempts: true },
+    });
+  }
+
+  private async assertLoginNotLocked(email: string) {
+    const guard = await this.findLoginGuard(email);
+    if (guard && guard.attempts >= AuthService.LOGIN_MAX_ATTEMPTS) {
+      throw new HttpException(
+        'Đăng nhập tạm thời bị khóa do nhập sai quá nhiều lần',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+  }
+
+  private async recordFailedLogin(email: string) {
+    const guard = await this.findLoginGuard(email);
+    if (!guard) {
+      await this.prisma.oTP.create({
+        data: {
+          email,
+          type: AuthService.LOGIN_GUARD_TYPE,
+          code: this.hashOtp(email, AuthService.LOGIN_GUARD_TYPE, 'guard'),
+          attempts: 1,
+          expiresAt: new Date(Date.now() + AuthService.LOGIN_LOCK_MS),
+        },
+      });
+      return;
+    }
+
+    const updated = await this.prisma.oTP.update({
+      where: { id: guard.id },
+      data: { attempts: { increment: 1 } },
+      select: { attempts: true },
+    });
+
+    if (updated.attempts >= AuthService.LOGIN_MAX_ATTEMPTS) {
+      throw new HttpException(
+        'Đăng nhập tạm thời bị khóa do nhập sai quá nhiều lần',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+  }
+
+  private findLoginGuard(email: string) {
+    return this.prisma.oTP.findFirst({
+      where: {
+        email,
+        type: AuthService.LOGIN_GUARD_TYPE,
+        expiresAt: { gt: new Date() },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, attempts: true },
+    });
+  }
+
+  private clearLoginGuard(email: string) {
+    return this.prisma.oTP.deleteMany({
+      where: { email, type: AuthService.LOGIN_GUARD_TYPE },
     });
   }
 
