@@ -123,6 +123,10 @@ export const CustomerService = {
     return response.data;
   },
 
+  getMyReviews: async (params?: { page?: number; limit?: number }) => {
+    return axios.get(`${BASE_URL}/reviews/my`, { params });
+  },
+
   getActivePromotions: async () => {
     const response = await axios.get(`${BASE_URL}/promotions`);
     return response.data;
