@@ -1,252 +1,70 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
-import api from "@/lib/axios";
 import Image from "next/image";
-
-// Shadcn UI Components
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { useEffect, useState } from "react";
+import { CheckCircle2, Loader2, RefreshCw, XCircle } from "lucide-react";
+import { toast } from "sonner";
+import api from "@/lib/axios";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Textarea } from "@/components/ui/textarea";
 
-interface WithdrawRequest {
+const currency = new Intl.NumberFormat("en-US", { style: "currency", currency: "VND", maximumFractionDigits: 0 });
+const dateFormatter = new Intl.DateTimeFormat("en-US", { day: "2-digit", month: "short", year: "numeric" });
+
+type WithdrawRequest = {
   id: string;
   amount: number;
-  status: "pending" | "completed" | "failed"; // JSON trả về chữ thường
-  description: string;
-  metadata: {
-    bankAccountNumber: string;
-    bankAccountName: string;
-  };
+  status: string;
+  description?: string;
+  metadata?: { bankAccountNumber?: string; bankAccountName?: string };
   createdAt: string;
-  owner: {
-    // Trong JSON là "owner", không phải "user"
-    firstName: string;
-    lastName: string;
-    email: string;
-    avatar: string;
-  };
-}
+  owner?: { firstName?: string; lastName?: string; email?: string; avatar?: string };
+};
 
-export default function AdminWithdrawPage() {
+export default function AdminWithdrawalsPage() {
   const [requests, setRequests] = useState<WithdrawRequest[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedRequest, setSelectedRequest] = useState<WithdrawRequest | null>(null);
-  const [actionType, setActionType] = useState<"approve" | "reject" | null>(null);
-  const [rejectReason, setRejectReason] = useState("");
+  const [processing, setProcessing] = useState<string | null>(null);
+  const [rejecting, setRejecting] = useState<WithdrawRequest | null>(null);
+  const [reason, setReason] = useState("");
 
-  const fetchRequests = useCallback(async () => {
+  const load = async () => {
     setLoading(true);
     try {
-      const res = await api.get("/api/admin/withdraws/pending");
-
-      // Dựa trên log: res.data đã là object {items, total...}
-      // Nên actualData sẽ lấy từ res.data.items
-      const actualData = res.data?.items || [];
-
-      setRequests(actualData);
-    } catch (error) {
-      console.error("Lỗi fetch:", error);
-      setRequests([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchRequests();
-  }, [fetchRequests]);
-  const handleProcessAction = async () => {
-    if (!selectedRequest || !actionType) return;
-
-    try {
-      if (actionType === "approve") {
-        await api.post(`/api/admin/withdraws/${selectedRequest.id}/approve`);
-      } else {
-        await api.post(`/api/admin/withdraws/${selectedRequest.id}/reject`, {
-          reason: rejectReason,
-        });
-      }
-
-      // Reset & Refresh
-      closeModal();
-      fetchRequests();
+      const response: any = await api.get("/api/admin/withdraws/pending", { params: { page: 1, limit: 100 } });
+      setRequests(Array.isArray(response?.data?.items) ? response.data.items : []);
     } catch (error: any) {
-      alert(error.response?.data?.message || "Thao tác thất bại");
-    }
+      toast.error(error?.response?.data?.message || error?.message || "Could not load withdrawal requests");
+    } finally { setLoading(false); }
   };
+  useEffect(() => { void load(); }, []);
 
-  const closeModal = () => {
-    setSelectedRequest(null);
-    setActionType(null);
-    setRejectReason("");
+  const approve = async (request: WithdrawRequest) => {
+    if (!window.confirm(`Confirm this ${currency.format(Number(request.amount || 0))} withdrawal as approved?`)) return;
+    setProcessing(request.id);
+    try { await api.post(`/api/admin/withdraws/${request.id}/approve`); toast.success("Withdrawal approved"); await load(); }
+    catch (error: any) { toast.error(error?.response?.data?.message || error?.message || "Could not approve withdrawal"); }
+    finally { setProcessing(null); }
+  };
+  const reject = async () => {
+    if (!rejecting || reason.trim().length < 5) return;
+    setProcessing(rejecting.id);
+    try { await api.post(`/api/admin/withdraws/${rejecting.id}/reject`, { reason: reason.trim() }); toast.success("Withdrawal rejected and funds returned to owner wallet"); setRejecting(null); setReason(""); await load(); }
+    catch (error: any) { toast.error(error?.response?.data?.message || error?.message || "Could not reject withdrawal"); }
+    finally { setProcessing(null); }
   };
 
   return (
-    <div className="max-w-6xl mx-auto p-6 space-y-6">
-      <header className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Phê duyệt rút tiền</h1>
-          <p className="text-muted-foreground">Quản lý các yêu cầu rút tiền từ ví của chủ xe.</p>
-        </div>
-        {!loading && (
-          <Badge variant="secondary" className="text-sm px-3 py-1">
-            {requests.length} Yêu cầu đang chờ
-          </Badge>
-        )}
-      </header>
-
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-[250px]">Chủ xe</TableHead>
-                <TableHead>Thông tin ngân hàng</TableHead>
-                <TableHead>Số tiền</TableHead>
-                <TableHead>Ngày yêu cầu</TableHead>
-                <TableHead className="text-right">Thao tác</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                // Hiển thị Skeleton khi đang tải
-                Array.from({ length: 3 }).map((_, i) => (
-                  <TableRow key={i}>
-                    <TableCell>
-                      <Skeleton className="h-12 w-full" />
-                    </TableCell>
-                    <TableCell>
-                      <Skeleton className="h-12 w-full" />
-                    </TableCell>
-                    <TableCell>
-                      <Skeleton className="h-12 w-full" />
-                    </TableCell>
-                    <TableCell>
-                      <Skeleton className="h-12 w-full" />
-                    </TableCell>
-                    <TableCell>
-                      <Skeleton className="h-12 w-full" />
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : requests.length > 0 ? (
-                requests.map((req) => (
-                  <TableRow key={req.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <div className="relative w-10 h-10 rounded-full overflow-hidden bg-slate-100">
-                          <Image
-                            src={req.owner.avatar || "/default-avatar.png"}
-                            alt="Avatar"
-                            fill
-                            className="object-cover"
-                            unoptimized // Thêm cái này nếu avatar từ localhost/IP lạ chưa config domain trong next.config.js
-                          />
-                        </div>
-                        <div>
-                          <div className="font-medium leading-none">
-                            {req.owner.firstName} {req.owner.lastName}
-                          </div>
-                          <div className="text-xs text-muted-foreground mt-1">{req.owner.email}</div>
-                        </div>
-                      </div>
-                    </TableCell>
-
-                    <TableCell>
-                      <div className="text-sm font-semibold text-blue-600 uppercase">
-                        {req.metadata?.bankAccountName}
-                      </div>
-                      <div className="text-xs font-mono font-bold">{req.metadata?.bankAccountNumber}</div>
-                    </TableCell>
-
-                    <TableCell className="font-bold text-slate-900">{req.amount.toLocaleString("vi-VN")}đ</TableCell>
-
-                    <TableCell className="text-sm text-muted-foreground">
-                      {new Date(req.createdAt).toLocaleDateString("vi-VN")}
-                    </TableCell>
-
-                    <TableCell className="text-right space-x-2">
-                      {/* Buttons giữ nguyên logic của bạn */}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setSelectedRequest(req);
-                          setActionType("reject");
-                        }}>
-                        Từ chối
-                      </Button>
-                      <Button
-                        size="sm"
-                        className="bg-emerald-600 hover:bg-emerald-700"
-                        onClick={() => {
-                          setSelectedRequest(req);
-                          setActionType("approve");
-                        }}>
-                        Duyệt
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-center py-20 text-muted-foreground italic">
-                    🎉 Tuyệt vời! Không còn yêu cầu nào cần xử lý.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-      {/* Dialog Xác nhận Action */}
-      <Dialog open={!!actionType} onOpenChange={closeModal}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{actionType === "approve" ? "Xác nhận chuyển khoản" : "Từ chối yêu cầu"}</DialogTitle>
-            <DialogDescription>
-              {actionType === "approve"
-                ? `Bạn xác nhận đã chuyển khoản số tiền ${selectedRequest?.amount.toLocaleString()}đ cho ${selectedRequest?.metadata?.bankAccountName}?`
-                : `Vui lòng nhập lý do từ chối yêu cầu rút tiền này.`}
-            </DialogDescription>
-          </DialogHeader>
-
-          {actionType === "reject" && (
-            <div className="py-4">
-              <Input
-                placeholder="Lý do: Thông tin ngân hàng không chính xác..."
-                value={rejectReason}
-                onChange={(e) => setRejectReason(e.target.value)}
-              />
-            </div>
-          )}
-
-          <DialogFooter>
-            <Button variant="ghost" onClick={closeModal}>
-              Hủy
-            </Button>
-            <Button
-              variant={actionType === "reject" ? "destructive" : "default"}
-              onClick={handleProcessAction}
-              disabled={actionType === "reject" && !rejectReason}>
-              Xác nhận {actionType === "approve" ? "Đã chuyển" : "Từ chối"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+    <div className="mx-auto w-full max-w-7xl space-y-7 py-2">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Finance</p><h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">Withdrawal approvals</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">Review owner payout requests that have already reserved funds from the owner wallet.</p></div><div className="flex items-center gap-2"><Badge variant="secondary">{requests.length} pending</Badge><Button variant="outline" onClick={load} disabled={loading}><RefreshCw className={loading ? "animate-spin" : ""} />Refresh</Button></div></div>
+      <Card><CardHeader><CardTitle className="text-lg">Pending requests</CardTitle><CardDescription>Approve only after external payout verification; rejecting returns the reserved amount to the owner wallet through the backend transaction.</CardDescription></CardHeader><CardContent><div className="overflow-x-auto rounded-xl border"><Table><TableHeader><TableRow><TableHead>Owner</TableHead><TableHead>Payout account</TableHead><TableHead>Amount</TableHead><TableHead>Requested</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader><TableBody>
+        {loading ? Array.from({ length: 4 }).map((_, index) => <TableRow key={index}><TableCell colSpan={5}><Skeleton className="h-12 w-full" /></TableCell></TableRow>) : requests.length === 0 ? <TableRow><TableCell colSpan={5} className="h-32 text-center text-muted-foreground">No withdrawal requests are waiting for review.</TableCell></TableRow> : requests.map((request) => <TableRow key={request.id}><TableCell><div className="flex items-center gap-3"><div className="relative h-10 w-10 overflow-hidden rounded-full border bg-muted">{request.owner?.avatar ? <Image src={request.owner.avatar} alt="Owner avatar" fill className="object-cover" unoptimized /> : null}</div><div><div className="font-medium">{[request.owner?.firstName, request.owner?.lastName].filter(Boolean).join(" ") || "Owner"}</div><div className="text-xs text-muted-foreground">{request.owner?.email || "—"}</div></div></div></TableCell><TableCell><div className="font-medium">{request.metadata?.bankAccountName || "—"}</div><div className="mt-1 font-mono text-xs text-muted-foreground">{request.metadata?.bankAccountNumber || "—"}</div></TableCell><TableCell className="font-semibold">{currency.format(Number(request.amount || 0))}</TableCell><TableCell className="text-sm text-muted-foreground">{dateFormatter.format(new Date(request.createdAt))}</TableCell><TableCell className="text-right"><div className="flex justify-end gap-2"><Button size="sm" variant="outline" onClick={() => { setRejecting(request); setReason(""); }} disabled={Boolean(processing)}><XCircle />Reject</Button><Button size="sm" onClick={() => approve(request)} disabled={Boolean(processing)}>{processing === request.id ? <Loader2 className="animate-spin" /> : <CheckCircle2 />}Approve</Button></div></TableCell></TableRow>)}</TableBody></Table></div></CardContent></Card>
+      <Dialog open={Boolean(rejecting)} onOpenChange={(open) => !open && setRejecting(null)}><DialogContent><DialogHeader><DialogTitle>Reject withdrawal request</DialogTitle><DialogDescription>Give the owner a specific reason. The backend will restore the reserved balance when this request is rejected.</DialogDescription></DialogHeader><Textarea className="min-h-28" value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Bank account details could not be verified..." /><DialogFooter><Button variant="ghost" onClick={() => setRejecting(null)}>Cancel</Button><Button variant="destructive" onClick={reject} disabled={reason.trim().length < 5 || Boolean(processing)}>{processing === rejecting?.id ? <Loader2 className="animate-spin" /> : <XCircle />}Reject request</Button></DialogFooter></DialogContent></Dialog>
     </div>
   );
 }

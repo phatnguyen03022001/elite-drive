@@ -1,327 +1,71 @@
-// app/admin/settlement/page.tsx
 "use client";
 
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { CheckCircle2, Loader2, RefreshCw, RotateCcw, Zap } from "lucide-react";
+import { toast } from "sonner";
 import api from "@/lib/axios";
-import { format } from "date-fns";
-import { vi } from "date-fns/locale";
-
-// Shadcn + Icons
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { Coins, RotateCcw, Zap, History, CheckCircle2, Loader2 } from "lucide-react";
 
-interface PendingSettlement {
-  id: string;
-  bookingId: string;
-  amount: number;
-  fee: number;
-  netAmount: number;
-  status: string;
-  createdAt: string;
-  customerName: string;
-  ownerName: string;
-  dropoffNotes?: string;
-}
+const currency = new Intl.NumberFormat("en-US", { style: "currency", currency: "VND", maximumFractionDigits: 0 });
+const dateTime = new Intl.DateTimeFormat("en-US", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 
-interface PaymentHistory {
-  id: string;
-  bookingId: string;
-  amount: number;
-  fee: number;
-  netAmount: number;
-  status: string;
-  createdAt: string;
-  customerName: string;
-  ownerName: string;
-}
+type PendingTrip = { id: string; bookingId: string; updatedAt?: string; booking?: { totalPrice?: number; customer?: { firstName?: string; lastName?: string }; payments?: any[] }; car?: { name?: string; owner?: { firstName?: string; lastName?: string } } };
+type Payment = { id: string; bookingId?: string; amount: number; status: string; createdAt: string; user?: { firstName?: string; lastName?: string } };
 
-// ── Query Keys ──────────────────────────────────────────────────
-const settlementKeys = {
-  pending: ["admin", "settlement", "pending"] as const,
-  history: ["admin", "settlement", "history"] as const,
-};
+export default function AdminSettlementsPage() {
+  const [pending, setPending] = useState<PendingTrip[]>([]);
+  const [history, setHistory] = useState<Payment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [action, setAction] = useState<string | null>(null);
 
-// ── Fetchers ────────────────────────────────────────────────────
-const fetchPending = async (): Promise<PendingSettlement[]> => {
-  const res = await api.get("/api/admin/escrow/pending-release");
-  return (res.data?.items || []).map((item: any) => {
-    const total = item.booking?.totalPrice || 0;
-    const fee = Math.round(total * 0.2);
-    return {
-      id: item.id,
-      bookingId: item.bookingId,
-      amount: total,
-      fee,
-      netAmount: total - fee,
-      status: item.status,
-      createdAt: item.createdAt,
-      customerName: item.booking?.customer
-        ? `${item.booking.customer.firstName} ${item.booking.customer.lastName}`
-        : "Khách hàng",
-      ownerName: item.car?.owner ? `${item.car.owner.firstName} ${item.car.owner.lastName}` : "Chủ xe",
-      dropoffNotes: item.dropoffNotes,
-    };
-  });
-};
+  const load = async () => {
+    setLoading(true);
+    try {
+      const [pendingRes, paymentRes]: any[] = await Promise.all([
+        api.get("/api/admin/escrow/pending-release", { params: { page: 1, limit: 100 } }),
+        api.get("/api/admin/payments", { params: { page: 1, limit: 100 } }),
+      ]);
+      setPending(Array.isArray(pendingRes?.data?.items) ? pendingRes.data.items : []);
+      setHistory(Array.isArray(paymentRes?.data) ? paymentRes.data : []);
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || error?.message || "Could not load settlement data");
+    } finally {
+      setLoading(false);
+    }
+  };
+  useEffect(() => { void load(); }, []);
 
-const fetchHistory = async (): Promise<PaymentHistory[]> => {
-  const res = await api.get("/api/admin/payments");
-  return (res.data || []).map((p: any) => ({
-    id: p.id,
-    bookingId: p.bookingId,
-    amount: p.amount,
-    fee: Math.round(p.amount * 0.1),
-    netAmount: p.amount - Math.round(p.amount * 0.1),
-    status: p.status,
-    createdAt: p.createdAt,
-    customerName: p.user ? `${p.user.firstName} ${p.user.lastName}` : "N/A",
-    ownerName: p.booking?.carId ? `Xe ${p.booking.carId.slice(-4)}` : "Hệ thống",
-  }));
-};
+  const run = async (key: string, request: () => Promise<any>, success: string) => {
+    setAction(key);
+    try { await request(); toast.success(success); await load(); }
+    catch (error: any) { toast.error(error?.response?.data?.message || error?.message || "Settlement action failed"); }
+    finally { setAction(null); }
+  };
 
-// ── Mutations ───────────────────────────────────────────────────
-const useReleaseMutation = () => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (bookingId: string) => api.post("/api/admin/payments/release", { bookingId }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: settlementKeys.pending });
-      queryClient.invalidateQueries({ queryKey: settlementKeys.history });
-    },
-  });
-};
-
-const useRefundMutation = () => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (bookingId: string) =>
-      api.post("/api/admin/payments/refund", {
-        bookingId,
-        reason: "Admin thực hiện hoàn tiền",
-        refundPercent: 100,
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: settlementKeys.pending });
-      queryClient.invalidateQueries({ queryKey: settlementKeys.history });
-    },
-  });
-};
-
-const useAutoReleaseMutation = () => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: () => api.post("/api/admin/settlements/auto-release"),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: settlementKeys.pending });
-      queryClient.invalidateQueries({ queryKey: settlementKeys.history });
-    },
-  });
-};
-
-// ── Main Page ───────────────────────────────────────────────────
-export default function AdminSettlementPage() {
-  const {
-    data: pending = [],
-    isLoading: pendingLoading,
-    isError: pendingError,
-  } = useQuery<PendingSettlement[]>({
-    queryKey: settlementKeys.pending,
-    queryFn: fetchPending,
-    staleTime: 45 * 1000,
-  });
-  const { data: history = [], isLoading: historyLoading } = useQuery<PaymentHistory[]>({
-    queryKey: settlementKeys.history,
-    queryFn: fetchHistory,
-    staleTime: 2 * 60 * 1000,
-  });
-
-  const releaseMutation = useReleaseMutation();
-  const refundMutation = useRefundMutation();
-  const autoReleaseMutation = useAutoReleaseMutation();
-
-  const isLoading = pendingLoading || historyLoading;
-  const isMutating = releaseMutation.isPending || refundMutation.isPending || autoReleaseMutation.isPending;
-
-  if (pendingError) {
-    return <div className="p-8 text-center text-destructive">Lỗi tải dữ liệu giải ngân. Vui lòng thử lại.</div>;
-  }
+  const release = (trip: PendingTrip) => {
+    if (!window.confirm(`Release the completed booking ${trip.bookingId} using the backend settlement policy?`)) return;
+    void run(`release:${trip.bookingId}`, () => api.post("/api/admin/payments/release", { bookingId: trip.bookingId }), "Payment released to owner wallet");
+  };
+  const refund = (trip: PendingTrip) => {
+    if (!window.confirm(`Refund 100% of booking ${trip.bookingId} to the customer wallet?`)) return;
+    void run(`refund:${trip.bookingId}`, () => api.post("/api/admin/payments/refund", { bookingId: trip.bookingId, refundPercent: 100, reason: "Operations full refund" }), "Customer refund recorded");
+  };
+  const autoRelease = () => {
+    if (!window.confirm("Release every completed trip that currently satisfies the backend settlement checks?")) return;
+    void run("auto", () => api.post("/api/admin/settlements/auto-release"), "Eligible completed trips processed");
+  };
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 p-6">
-      {/* Header */}
-      <div className="flex items-end justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Giao dịch & Giải ngân</h1>
-          <p className="text-muted-foreground">Quản lý dòng tiền Escrow</p>
-        </div>
-
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button disabled={isMutating || pending.length === 0} className="bg-emerald-600 hover:bg-emerald-700">
-              {isMutating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
-              Giải ngân tự động
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Xác nhận giải ngân tự động?</AlertDialogTitle>
-              <AlertDialogDescription>Hệ thống sẽ chuyển tiền cho tất cả đơn đủ điều kiện.</AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Hủy</AlertDialogCancel>
-              <AlertDialogAction onClick={() => autoReleaseMutation.mutate()}>Thực hiện</AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      </div>
-
-      {/* Tabs */}
-      <Tabs defaultValue="pending">
-        <TabsList className="grid w-[400px] grid-cols-2">
-          <TabsTrigger value="pending">Chờ giải ngân ({pending.length})</TabsTrigger>
-          <TabsTrigger value="history">Lịch sử</TabsTrigger>
-        </TabsList>
-
-        {/* Pending */}
-        <TabsContent value="pending" className="mt-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Coins className="h-5 w-5 text-orange-500" />
-                Danh sách chờ xử lý
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Mã đơn</TableHead>
-                      <TableHead>Chủ xe / Khách</TableHead>
-                      <TableHead>Tổng tiền</TableHead>
-                      <TableHead>Phí</TableHead>
-                      <TableHead>Thực nhận</TableHead>
-                      <TableHead className="text-right">Thao tác</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {isLoading ? (
-                      <TableRow>
-                        <TableCell colSpan={6} className="h-32 text-center">
-                          Đang tải...
-                        </TableCell>
-                      </TableRow>
-                    ) : pending.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
-                          Không có giao dịch chờ xử lý
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      pending.map((task) => (
-                        <TableRow key={task.id}>
-                          <TableCell className="font-mono text-xs">{task.bookingId}</TableCell>
-                          <TableCell>
-                            <p>Chủ: {task.ownerName}</p>
-                            <p className="text-xs text-muted-foreground">Khách: {task.customerName}</p>
-                          </TableCell>
-                          <TableCell>{task.amount.toLocaleString()}₫</TableCell>
-                          <TableCell className="text-destructive">-{task.fee.toLocaleString()}₫</TableCell>
-                          <TableCell className="font-bold text-emerald-600">
-                            {task.netAmount.toLocaleString()}₫
-                          </TableCell>
-                          <TableCell className="text-right space-x-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              disabled={isMutating}
-                              onClick={() => refundMutation.mutate(task.bookingId)}>
-                              <RotateCcw className="mr-1 h-3 w-3" />
-                              Hoàn tiền
-                            </Button>
-                            <Button
-                              size="sm"
-                              disabled={isMutating}
-                              onClick={() => releaseMutation.mutate(task.bookingId)}>
-                              Giải ngân
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* History */}
-        <TabsContent value="history" className="mt-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <History className="h-5 w-5 text-blue-500" />
-                Nhật ký giao dịch
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Thời gian</TableHead>
-                      <TableHead>Loại</TableHead>
-                      <TableHead>Số tiền</TableHead>
-                      <TableHead>Đối tượng</TableHead>
-                      <TableHead>Trạng thái</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {history.map((h) => (
-                      <TableRow key={h.id}>
-                        <TableCell className="text-xs">
-                          {format(new Date(h.createdAt), "dd/MM/yyyy HH:mm", { locale: vi })}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{h.status}</Badge>
-                        </TableCell>
-                        <TableCell>{h.amount.toLocaleString()}₫</TableCell>
-                        <TableCell>{h.ownerName}</TableCell>
-                        <TableCell className="flex items-center text-emerald-600 text-xs">
-                          <CheckCircle2 className="mr-1 h-3 w-3" />
-                          Thành công
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                    {history.length === 0 && !isLoading && (
-                      <TableRow>
-                        <TableCell colSpan={5} className="py-10 text-center text-muted-foreground">
-                          Chưa có lịch sử giao dịch
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
+    <div className="mx-auto w-full max-w-7xl space-y-7 py-2">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Finance</p><h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">Settlements</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">Release completed-trip payments to owner wallets or record customer refunds. Fee calculation remains in the backend settlement service.</p></div><div className="flex gap-2"><Button variant="outline" onClick={load} disabled={loading}><RefreshCw className={loading ? "animate-spin" : ""} />Refresh</Button><Button onClick={autoRelease} disabled={Boolean(action) || pending.length === 0}>{action === "auto" ? <Loader2 className="animate-spin" /> : <Zap />}Auto-release eligible</Button></div></div>
+      <Tabs defaultValue="pending"><TabsList><TabsTrigger value="pending">Pending release ({pending.length})</TabsTrigger><TabsTrigger value="history">Payment history</TabsTrigger></TabsList>
+        <TabsContent value="pending" className="mt-5"><Card><CardHeader><CardTitle className="text-lg">Completed trips awaiting settlement</CardTitle><CardDescription>Only backend-qualified completed trips appear in this queue.</CardDescription></CardHeader><CardContent><div className="overflow-x-auto rounded-xl border"><Table><TableHeader><TableRow><TableHead>Booking</TableHead><TableHead>Vehicle / owner</TableHead><TableHead>Customer</TableHead><TableHead>Booking total</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader><TableBody>{loading ? Array.from({ length: 4 }).map((_, index) => <TableRow key={index}><TableCell colSpan={5}><Skeleton className="h-10 w-full" /></TableCell></TableRow>) : pending.length === 0 ? <TableRow><TableCell colSpan={5} className="h-32 text-center text-muted-foreground">No completed trips are waiting for release.</TableCell></TableRow> : pending.map((trip) => <TableRow key={trip.id}><TableCell className="font-mono text-xs">#{trip.bookingId.slice(-8).toUpperCase()}</TableCell><TableCell><div className="font-medium">{trip.car?.name || "Vehicle"}</div><div className="text-xs text-muted-foreground">{[trip.car?.owner?.firstName, trip.car?.owner?.lastName].filter(Boolean).join(" ") || "Owner"}</div></TableCell><TableCell>{[trip.booking?.customer?.firstName, trip.booking?.customer?.lastName].filter(Boolean).join(" ") || "Customer"}</TableCell><TableCell className="font-semibold">{currency.format(Number(trip.booking?.totalPrice || 0))}</TableCell><TableCell className="text-right"><div className="flex justify-end gap-2"><Button size="sm" variant="outline" disabled={Boolean(action)} onClick={() => refund(trip)}>{action === `refund:${trip.bookingId}` ? <Loader2 className="animate-spin" /> : <RotateCcw />}Refund</Button><Button size="sm" disabled={Boolean(action)} onClick={() => release(trip)}>{action === `release:${trip.bookingId}` ? <Loader2 className="animate-spin" /> : <CheckCircle2 />}Release</Button></div></TableCell></TableRow>)}</TableBody></Table></div></CardContent></Card></TabsContent>
+        <TabsContent value="history" className="mt-5"><Card><CardHeader><CardTitle className="text-lg">Payment records</CardTitle><CardDescription>Recorded payment state after booking checkout and settlement actions.</CardDescription></CardHeader><CardContent><div className="overflow-x-auto rounded-xl border"><Table><TableHeader><TableRow><TableHead>Created</TableHead><TableHead>Booking</TableHead><TableHead>Customer</TableHead><TableHead>Amount</TableHead><TableHead>Status</TableHead></TableRow></TableHeader><TableBody>{history.length === 0 && !loading ? <TableRow><TableCell colSpan={5} className="h-28 text-center text-muted-foreground">No payment records yet.</TableCell></TableRow> : history.map((payment) => <TableRow key={payment.id}><TableCell className="text-sm text-muted-foreground">{dateTime.format(new Date(payment.createdAt))}</TableCell><TableCell className="font-mono text-xs">{payment.bookingId ? `#${payment.bookingId.slice(-8).toUpperCase()}` : "—"}</TableCell><TableCell>{[payment.user?.firstName, payment.user?.lastName].filter(Boolean).join(" ") || "Customer"}</TableCell><TableCell className="font-semibold">{currency.format(Number(payment.amount || 0))}</TableCell><TableCell><Badge variant="outline">{payment.status}</Badge></TableCell></TableRow>)}</TableBody></Table></div></CardContent></Card></TabsContent>
       </Tabs>
     </div>
   );
