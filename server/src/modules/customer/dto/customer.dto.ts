@@ -15,17 +15,17 @@ import { BookingStatus, KYCStatus, TripStatus, UserRole } from '@prisma/client';
 import { Type } from 'class-transformer';
 
 export class UpdateCustomerProfileDto {
-  @ApiPropertyOptional() @IsOptional() @IsString() firstName?: string;
-  @ApiPropertyOptional() @IsOptional() @IsString() lastName?: string;
-  @ApiPropertyOptional() @IsOptional() @IsString() phone?: string;
-  @ApiPropertyOptional() @IsOptional() @IsString() avatar?: string;
-  @ApiPropertyOptional() @IsOptional() @IsString() licenseNumber?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(100) firstName?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(100) lastName?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(30) phone?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(2048) avatar?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(100) licenseNumber?: string;
   @ApiPropertyOptional() @IsOptional() @IsDateString() licenseExpiry?: string;
   @ApiPropertyOptional() @IsOptional() @IsDateString() dateOfBirth?: string;
-  @ApiPropertyOptional() @IsOptional() @IsString() address?: string;
-  @ApiPropertyOptional() @IsOptional() @IsString() city?: string;
-  @ApiPropertyOptional() @IsOptional() @IsString() country?: string;
-  @ApiPropertyOptional() @IsOptional() @IsString() postalCode?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(300) address?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(100) city?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(100) country?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(30) postalCode?: string;
 }
 
 export type SharedProfileResponse = {
@@ -64,8 +64,8 @@ export class CustomerProfileResponseDto {
 }
 
 export class CreateKYCDto {
-  @ApiProperty() @IsNotEmpty() @IsString() documentType: string;
-  @ApiProperty() @IsNotEmpty() @IsString() documentNumber: string;
+  @ApiProperty() @IsNotEmpty() @IsString() @MaxLength(50) documentType: string;
+  @ApiProperty() @IsNotEmpty() @IsString() @MaxLength(100) documentNumber: string;
 }
 
 export class KYCStatusResponseDto {
@@ -80,12 +80,12 @@ export class KYCStatusResponseDto {
 }
 
 export class CreateBookingDto {
-  @ApiProperty() @IsNotEmpty() @IsString() carId: string;
+  @ApiProperty() @IsNotEmpty() @IsString() @MaxLength(64) carId: string;
   @ApiProperty() @IsNotEmpty() @IsDateString() startDate: string;
   @ApiProperty() @IsNotEmpty() @IsDateString() endDate: string;
-  @ApiPropertyOptional() @IsOptional() @IsString() pickupLocation?: string;
-  @ApiPropertyOptional() @IsOptional() @IsString() dropoffLocation?: string;
-  @ApiPropertyOptional() @IsOptional() @IsString() notes?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(300) pickupLocation?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(300) dropoffLocation?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(1000) notes?: string;
 }
 
 export class BookingQueryDto {
@@ -115,21 +115,25 @@ export class TripStatusResponseDto {
 }
 
 export class CreatePaymentDto {
-  @ApiProperty() @IsNotEmpty() @IsString() bookingId: string;
+  @ApiProperty() @IsNotEmpty() @IsString() @MaxLength(64) bookingId: string;
   @ApiProperty({ enum: ['MOCK_QR', 'MOMO'] }) @IsString() @IsIn(['MOCK_QR', 'MOMO']) paymentMethod: string;
 }
 
 export class ConfirmPaymentDto {
-  @ApiProperty() @IsNotEmpty() @IsString() bookingId: string;
-  @ApiProperty() @IsNotEmpty() @IsString() transactionId: string;
+  @ApiProperty() @IsNotEmpty() @IsString() @MaxLength(64) bookingId: string;
+  @ApiProperty() @IsNotEmpty() @IsString() @MaxLength(128) transactionId: string;
 }
 
 export class PaymentBookingParamDto {
-  @ApiProperty() @IsString() booking_id: string;
+  @ApiProperty() @IsString() @MaxLength(64) booking_id: string;
 }
 
 export class SignContractDto {
-  @ApiProperty({ description: 'Base64 hoặc URL chữ ký' }) @IsNotEmpty() @IsString() signatureData: string;
+  @ApiProperty({ description: 'Base64 hoặc URL chữ ký' })
+  @IsNotEmpty()
+  @IsString()
+  @MaxLength(200000)
+  signatureData: string;
 }
 
 export class ContractResponseDto {
@@ -149,8 +153,8 @@ export class WalletTransactionResponseDto {
 }
 
 export class CreateReviewDto {
-  @ApiProperty() @IsNotEmpty() @IsString() carId: string;
-  @ApiProperty() @IsNotEmpty() @IsString() bookingId: string;
+  @ApiProperty() @IsNotEmpty() @IsString() @MaxLength(64) carId: string;
+  @ApiProperty() @IsNotEmpty() @IsString() @MaxLength(64) bookingId: string;
   @ApiProperty({ minimum: 1, maximum: 5 }) @IsInt() @Min(1) @Max(5) rating: number;
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(120) title?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(2000) content?: string;
@@ -159,21 +163,21 @@ export class CreateReviewDto {
 export class CreateWalletTopupDto {
   @Type(() => Number) @IsInt() @Min(1000) amount: number;
   @IsString() @IsIn(['MOCK_QR']) paymentMethod: string;
-  @IsOptional() @IsString() description?: string;
+  @IsOptional() @IsString() @MaxLength(500) description?: string;
 }
 
 export class CreateDisputeDto {
-  @IsString() @IsNotEmpty() type: string;
-  @IsOptional() @IsString() bookingId?: string;
-  @IsString() @IsNotEmpty() title: string;
-  @IsString() @IsNotEmpty() description: string;
+  @IsString() @IsNotEmpty() @MaxLength(50) type: string;
+  @IsOptional() @IsString() @MaxLength(64) bookingId?: string;
+  @IsString() @IsNotEmpty() @MaxLength(200) title: string;
+  @IsString() @IsNotEmpty() @MaxLength(4000) description: string;
 }
 
 export class SearchCarQueryDto {
   @IsDateString() startDate: string;
   @IsDateString() endDate: string;
-  @IsOptional() @IsString() locationId?: string;
-  @IsOptional() @IsString() categoryId?: string;
+  @IsOptional() @IsString() @MaxLength(64) locationId?: string;
+  @IsOptional() @IsString() @MaxLength(64) categoryId?: string;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) page?: number = 1;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(50) limit?: number = 20;
 }
