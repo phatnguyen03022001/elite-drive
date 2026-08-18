@@ -1,21 +1,18 @@
-# --- Existing Gitignore ---
 node_modules/
 dist/
 .next/
 .DS_Store
 .env
 .env.*
-tsconfig.tsbuildinfo
+!.env.example
+!**/.env.example
+*.tsbuildinfo
 
-# --- DATABASE & DOCKER DATA ---
-# Chặn toàn bộ dữ liệu database thực tế
+# Runtime database and object-storage state
 docker/mongodb/mongo-data/
 docker/garage/data/
 docker/garage/meta/
 
-# Chặn logs của MongoDB Shell
-docker/mongodb/mongo-data/.mongodb/
-
-# Logs chung
+# Logs
 *.log
 npm-debug.log*

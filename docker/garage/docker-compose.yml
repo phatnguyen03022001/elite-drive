@@ -7,10 +7,13 @@ services:
       - ./meta:/var/lib/garage/meta
       - ./data:/var/lib/garage/data
     ports:
-      - "3900:3900" # S3 API (upload/download)
-      - "3903:3903" # Admin API + UI cơ bản
+      - "3900:3900"
+      - "3903:3903"
     environment:
-      GARAGE_RPC_PUBLIC_ADDR: "auto" # tự detect IP
+      GARAGE_RPC_PUBLIC_ADDR: "auto"
+      GARAGE_RPC_SECRET: "${GARAGE_RPC_SECRET:?Set GARAGE_RPC_SECRET in docker/garage/.env}"
+      GARAGE_ADMIN_TOKEN: "${GARAGE_ADMIN_TOKEN:?Set GARAGE_ADMIN_TOKEN in docker/garage/.env}"
+
   garage-ui:
     image: khairul169/garage-webui:latest
     restart: unless-stopped
@@ -18,7 +21,8 @@ services:
       - "3909:3909"
     environment:
       API_BASE_URL: "http://garage:3903"
-      S3_ENDPOINT_URL: "http://localhost:3900" # hoặc IP máy nếu truy cập ngoài
-      AUTH_USER_PASS: "admin:$$2y$$10$$Kg9f/Gc4wRQ7yIbzOx5V0./aNzocBHNu5cVGmP0kMTaYdFED6zOLy"
+      API_ADMIN_KEY: "${GARAGE_ADMIN_TOKEN:?Set GARAGE_ADMIN_TOKEN in docker/garage/.env}"
+      S3_ENDPOINT_URL: "http://localhost:3900"
+      AUTH_USER_PASS: "${GARAGE_UI_AUTH_USER_PASS:?Set GARAGE_UI_AUTH_USER_PASS in docker/garage/.env}"
     depends_on:
       - garage

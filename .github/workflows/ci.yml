@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   frontend:
-    name: Frontend build
+    name: Frontend quality
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -37,10 +37,15 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Typecheck
+        run: npm run typecheck
+
       - name: Build
         run: npm run build
         env:
+          BACKEND_URL: https://elitedrive-demoversion.onrender.com
           NEXT_PUBLIC_API_URL: https://elitedrive-demoversion.onrender.com
+          NEXT_PUBLIC_APP_URL: https://elite-drive-iota.vercel.app
 
   backend:
     name: Backend build
