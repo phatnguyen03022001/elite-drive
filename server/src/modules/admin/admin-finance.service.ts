@@ -14,6 +14,7 @@ import {
 } from '@prisma/client';
 import { createHash } from 'crypto';
 import { PaginationDto } from '../../common/dto/pagination.dto';
+import { assertVndAmount, calculateVndPercent } from '../../common/money/vnd';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   PaymentQueryDto,
@@ -94,7 +95,7 @@ export class AdminFinanceService {
   }
 
   async getPlatformWallet() {
-    return this.db.wallet.findUnique({
+    const wallet = await this.db.wallet.findUnique({
       where: { userId: this.platformUserId },
       select: {
         id: true,
@@ -105,6 +106,13 @@ export class AdminFinanceService {
         updatedAt: true,
       },
     });
+    if (wallet) {
+      assertVndAmount(wallet.balance, {
+        allowZero: true,
+        field: 'Số dư ví nền tảng',
+      });
+    }
+    return wallet;
   }
 
   async runSettlement(dto: RunSettlementDto) {
@@ -142,6 +150,10 @@ export class AdminFinanceService {
         .digest('hex')
         .slice(0, 24);
       const totalEarnings = totalByOwner.get(owner.id) ?? 0;
+      assertVndAmount(totalEarnings, {
+        allowZero: true,
+        field: 'Tổng thu nhập settlement',
+      });
 
       try {
         await this.db.settlement.create({
@@ -224,6 +236,7 @@ export class AdminFinanceService {
           'Không tìm thấy giao dịch thanh toán thành công',
         );
       }
+      assertVndAmount(payment.amount, { field: 'Số tiền payment' });
 
       const bookingClaim = await tx.booking.updateMany({
         where: { id: bookingId, status: BookingStatus.CONFIRMED },
@@ -235,8 +248,16 @@ export class AdminFinanceService {
         );
       }
 
-      const platformFee = Math.round((payment.amount * platformFeePercent) / 100);
+      const platformFee = calculateVndPercent(
+        payment.amount,
+        platformFeePercent,
+      );
       const ownerAmount = payment.amount - platformFee;
+      assertVndAmount(ownerAmount, {
+        allowZero: platformFeePercent === 100,
+        field: 'Số tiền owner nhận',
+      });
+
       const escrowDebit = await tx.wallet.updateMany({
         where: {
           userId: this.platformUserId,
@@ -311,6 +332,7 @@ export class AdminFinanceService {
           'Đơn hàng chưa được thanh toán hoặc đã được hoàn tiền',
         );
       }
+      assertVndAmount(payment.amount, { field: 'Số tiền payment' });
 
       const paymentClaim = await tx.payment.updateMany({
         where: { id: payment.id, status: PaymentStatus.COMPLETED },
@@ -324,7 +346,8 @@ export class AdminFinanceService {
         throw new BadRequestException('Giao dịch đã được hoàn tiền');
       }
 
-      const refundAmount = Math.round((payment.amount * refundPercent) / 100);
+      const refundAmount = calculateVndPercent(payment.amount, refundPercent);
+      assertVndAmount(refundAmount, { field: 'Số tiền hoàn' });
       const escrowDebit = await tx.wallet.updateMany({
         where: {
           userId: this.platformUserId,
@@ -397,6 +420,17 @@ export class AdminFinanceService {
   }
 
   async approveWithdraw(id: string) {
+    const withdraw = await this.db.ownerTransaction.findUnique({
+      where: { id },
+      select: { amount: true, type: true, status: true },
+    });
+    if (!withdraw || withdraw.type !== 'WITHDRAW' || withdraw.status !== 'pending') {
+      throw new BadRequestException(
+        'Yêu cầu rút tiền không tồn tại hoặc đã được xử lý',
+      );
+    }
+    assertVndAmount(withdraw.amount, { field: 'Số tiền rút' });
+
     const claim = await this.db.ownerTransaction.updateMany({
       where: { id, type: 'WITHDRAW', status: 'pending' },
       data: { status: 'completed' },
@@ -416,6 +450,7 @@ export class AdminFinanceService {
       if (withdraw.type !== 'WITHDRAW') {
         throw new BadRequestException('Transaction không phải yêu cầu rút tiền');
       }
+      assertVndAmount(withdraw.amount, { field: 'Số tiền rút' });
 
       const claim = await tx.ownerTransaction.updateMany({
         where: { id, type: 'WITHDRAW', status: 'pending' },
