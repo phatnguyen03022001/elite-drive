@@ -3,6 +3,7 @@ import { MulterModule } from '@nestjs/platform-express';
 import { CustomerBookingService } from './customer-booking.service';
 import { CustomerController } from './customer.controller';
 import { CustomerPaymentService } from './customer-payment.service';
+import { CustomerPromotionService } from './customer-promotion.service';
 import { CustomerService } from './customer.service';
 
 @Module({
@@ -14,7 +15,17 @@ import { CustomerService } from './customer.service';
     }),
   ],
   controllers: [CustomerController],
-  providers: [CustomerService, CustomerPaymentService, CustomerBookingService],
-  exports: [CustomerService, CustomerPaymentService, CustomerBookingService],
+  providers: [
+    CustomerService,
+    CustomerPaymentService,
+    CustomerBookingService,
+    CustomerPromotionService,
+  ],
+  exports: [
+    CustomerService,
+    CustomerPaymentService,
+    CustomerBookingService,
+    CustomerPromotionService,
+  ],
 })
 export class CustomerModule {}
