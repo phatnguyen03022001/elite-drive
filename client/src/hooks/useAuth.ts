@@ -1,8 +1,8 @@
 import { useRouter } from "next/navigation";
-import Cookies from "js-cookie";
 import { jwtDecode } from "jwt-decode";
 import { useAuthQueries } from "../features/auth/auth.queries";
 import { LoginRequest, LoginResponse } from "../features/auth/auth.schema";
+import { authService } from "../features/auth/auth.service";
 import { notify, notifyError } from "@/lib/notifications";
 
 interface DecodedToken {
@@ -17,9 +17,7 @@ function getSafeReturnTo(role: DecodedToken["role"]) {
   const candidate = new URLSearchParams(window.location.search).get("returnTo");
   if (!candidate || !candidate.startsWith("/") || candidate.startsWith("//")) return null;
 
-  // Marketplace discovery is public and safe for every authenticated role.
   if (candidate === "/customer/cars" || candidate.startsWith("/customer/cars/")) return candidate;
-
   if (role === "CUSTOMER" && candidate.startsWith("/customer/")) return candidate;
   if (role === "OWNER" && candidate.startsWith("/owner/")) return candidate;
   if (role === "ADMIN" && candidate.startsWith("/admin/")) return candidate;
@@ -31,9 +29,10 @@ export const useAuth = () => {
   const router = useRouter();
   const authQueries = useAuthQueries();
 
+  // The backend already persisted this token in an HttpOnly cookie. The token is
+  // decoded only from the immediate login response to choose the landing page;
+  // it is never stored in localStorage or a JavaScript-readable cookie.
   const handleAuthSuccess = (token: string) => {
-    Cookies.set("token", token, { expires: 7, path: "/" });
-
     const decoded = jwtDecode<DecodedToken>(token);
     const returnTo = getSafeReturnTo(decoded.role);
 
@@ -74,7 +73,7 @@ export const useAuth = () => {
 
   const handleVerifyLoginOtp = (data: { email: string; code: string }) => {
     authQueries.otp.verify.login.mutate(data, {
-      onSuccess: (res: any) => {
+      onSuccess: (res: LoginResponse) => {
         const token = res.data?.token;
         if (token) handleAuthSuccess(token);
       },
@@ -89,14 +88,17 @@ export const useAuth = () => {
     });
   };
 
-  const handleLogout = () => {
-    Cookies.remove("token");
-    notify.info("Signed out", {
-      id: "auth-session",
-      description: "This browser no longer has an active Elite Drive session.",
-    });
-    router.push("/login");
-    router.refresh();
+  const handleLogout = async () => {
+    try {
+      await authService.logout();
+    } finally {
+      notify.info("Signed out", {
+        id: "auth-session",
+        description: "This browser no longer has an active Elite Drive session.",
+      });
+      router.push("/login");
+      router.refresh();
+    }
   };
 
   return {
@@ -105,14 +107,11 @@ export const useAuth = () => {
     logout: handleLogout,
     register: authQueries.register.mutate,
     resetPassword: authQueries.resetPassword.mutate,
-
     sendOtp: authQueries.otp.send,
     verifyOtp: authQueries.otp.verify,
-
     registerLoading: authQueries.register.isPending,
     verifyRegisterOtpLoading: authQueries.otp.verify.register.isPending,
     sendOtpRegisterLoading: authQueries.otp.send.register.isPending,
-
     isLoading: authQueries.login.isPending || authQueries.otp.verify.login.isPending,
     isOtpLoading:
       authQueries.otp.send.login.isPending ||
