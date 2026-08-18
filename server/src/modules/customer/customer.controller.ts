@@ -46,6 +46,7 @@ import {
   UpdateCustomerProfileDto,
   WalletTransactionResponseDto,
 } from './dto/customer.dto';
+import { ApplyPromotionDto } from './dto/promotion.dto';
 import { CustomerBookingService } from './customer-booking.service';
 import { CustomerPaymentService } from './customer-payment.service';
 import { CustomerService } from './customer.service';
@@ -326,7 +327,7 @@ export class CustomerController {
   @Post('promotions/apply')
   async applyPromotion(
     @CurrentUser('id') userId: string,
-    @Body() dto: { bookingId: string; promoCode: string },
+    @Body() dto: ApplyPromotionDto,
   ): Promise<ApiResponse<unknown>> {
     const result = await this.customerService.applyPromotion(userId, dto.bookingId, dto.promoCode);
     return ApiResponse.success(result, 'Promotion applied');
