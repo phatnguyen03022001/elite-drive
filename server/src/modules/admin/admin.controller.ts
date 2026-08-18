@@ -27,6 +27,7 @@ import {
 import { CustomerService } from '../customer/customer.service';
 import { AdminFinanceService } from './admin-finance.service';
 import { AdminPromotionService } from './admin-promotion.service';
+import { AdminRefundService } from './admin-refund.service';
 import { AdminService } from './admin.service';
 import {
   AdminKYCQueryDto,
@@ -57,6 +58,7 @@ export class AdminController {
     private readonly adminService: AdminService,
     private readonly financeService: AdminFinanceService,
     private readonly promotionService: AdminPromotionService,
+    private readonly refundService: AdminRefundService,
     private readonly customerService: CustomerService,
   ) {}
 
@@ -196,7 +198,7 @@ export class AdminController {
 
   @Post('payments/refund')
   async refundPayment(@Body() dto: RefundPaymentDto) {
-    const result = await this.financeService.refundPayment(dto);
+    const result = await this.refundService.refundPayment(dto);
     return ApiResponse.success(result, `Đã hoàn ${result.refundAmount} VND cho khách`);
   }
 
