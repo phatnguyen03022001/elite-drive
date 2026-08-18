@@ -16,6 +16,7 @@ import { UserRole } from '@prisma/client';
 import { OwnerBookingService } from './owner-booking.service';
 import { OwnerFinanceService } from './owner-finance.service';
 import { OwnerService } from './owner.service';
+import { OwnerTripService } from './owner-trip.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -51,6 +52,7 @@ export class OwnerController {
     private readonly ownerService: OwnerService,
     private readonly financeService: OwnerFinanceService,
     private readonly bookingService: OwnerBookingService,
+    private readonly tripService: OwnerTripService,
   ) {}
 
   @Get('profile')
@@ -329,7 +331,7 @@ export class OwnerController {
     @CurrentUser('id') userId: string,
     @Query() query?: PaginationDto,
   ) {
-    const { data, total, page, limit } = await this.ownerService.getTrips(
+    const { data, total, page, limit } = await this.tripService.getTrips(
       userId,
       query,
     );
@@ -342,7 +344,7 @@ export class OwnerController {
     @Param('trip_id') tripId: string,
     @Body() dto: TripCheckinDto,
   ) {
-    const trip = await this.ownerService.checkinTrip(userId, tripId, dto);
+    const trip = await this.tripService.checkinTrip(userId, tripId, dto);
     return ApiResponse.success(trip, 'Vehicle pickup recorded');
   }
 
@@ -352,7 +354,7 @@ export class OwnerController {
     @Param('trip_id') tripId: string,
     @Body() dto: TripCheckoutDto,
   ) {
-    const trip = await this.ownerService.checkoutTrip(userId, tripId, dto);
+    const trip = await this.tripService.checkoutTrip(userId, tripId, dto);
     return ApiResponse.success(trip, 'Vehicle return recorded');
   }
 }
