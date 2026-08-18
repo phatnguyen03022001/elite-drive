@@ -7,6 +7,11 @@ export class OwnerDisputeService {
   constructor(private readonly db: PrismaService) {}
 
   async respond(userId: string, disputeId: string, message: string) {
+    const normalizedMessage = message.trim();
+    if (!normalizedMessage) {
+      throw new BadRequestException('Nội dung phản hồi không được để trống');
+    }
+
     return this.db.$transaction(async (tx) => {
       const dispute = await tx.dispute.findFirst({
         where: {
@@ -49,7 +54,7 @@ export class OwnerDisputeService {
         data: {
           disputeId: dispute.id,
           senderId: userId,
-          message: message.trim(),
+          message: normalizedMessage,
         },
       });
     });
