@@ -9,6 +9,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { BookingStatus, PaymentStatus, Prisma } from '@prisma/client';
 import { createHash, randomUUID } from 'crypto';
+import { assertVndAmount } from '../../common/money/vnd';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   ConfirmPaymentDto,
@@ -49,6 +50,7 @@ export class CustomerPaymentService {
         'Booking phải ở trạng thái APPROVED mới có thể thanh toán',
       );
     }
+    assertVndAmount(booking.totalPrice, { field: 'Tổng tiền booking' });
 
     const paymentMethod = dto.paymentMethod.toUpperCase();
     if (!['MOCK_QR', 'MOMO'].includes(paymentMethod)) {
@@ -70,6 +72,12 @@ export class CustomerPaymentService {
       if (existing.paymentMethod !== paymentMethod) {
         throw new BadRequestException(
           'Booking đã có payment bằng phương thức khác',
+        );
+      }
+      assertVndAmount(existing.amount, { field: 'Số tiền payment' });
+      if (existing.amount !== booking.totalPrice) {
+        throw new BadRequestException(
+          'Payment hiện tại không khớp tổng tiền booking',
         );
       }
       return existing;
@@ -153,6 +161,7 @@ export class CustomerPaymentService {
         (payment) => payment.status === PaymentStatus.COMPLETED,
       );
       if (completedPayment) {
+        assertVndAmount(completedPayment.amount, { field: 'Số tiền hoàn' });
         const refundClaim = await tx.payment.updateMany({
           where: {
             id: completedPayment.id,
@@ -208,9 +217,7 @@ export class CustomerPaymentService {
   }
 
   async createWalletTopup(userId: string, dto: CreateWalletTopupDto) {
-    if (!Number.isSafeInteger(dto.amount) || dto.amount < 1000) {
-      throw new BadRequestException('Số tiền nạp phải là số nguyên VND hợp lệ');
-    }
+    assertVndAmount(dto.amount, { min: 1000, field: 'Số tiền nạp' });
     const paymentMethod = dto.paymentMethod.toUpperCase();
     if (paymentMethod !== 'MOCK_QR') {
       throw new BadRequestException(
@@ -249,6 +256,7 @@ export class CustomerPaymentService {
       ) {
         throw new BadRequestException('Giao dịch top-up không hợp lệ');
       }
+      assertVndAmount(payment.amount, { field: 'Số tiền top-up' });
 
       const claim = await tx.payment.updateMany({
         where: {
@@ -297,6 +305,15 @@ export class CustomerPaymentService {
       });
       if (!payment || !payment.booking) {
         throw new NotFoundException('Giao dịch không hợp lệ');
+      }
+      assertVndAmount(payment.amount, { field: 'Số tiền payment' });
+      assertVndAmount(payment.booking.totalPrice, {
+        field: 'Tổng tiền booking',
+      });
+      if (payment.amount !== payment.booking.totalPrice) {
+        throw new BadRequestException(
+          'Số tiền payment không khớp tổng tiền booking',
+        );
       }
       if (payment.status === PaymentStatus.COMPLETED) return payment;
 
