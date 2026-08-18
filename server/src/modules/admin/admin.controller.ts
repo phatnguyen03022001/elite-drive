@@ -11,6 +11,7 @@ import {
   UploadedFile,
 } from '@nestjs/common';
 import { AdminService } from './admin.service';
+import { AdminFinanceService } from './admin-finance.service';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { UserRole } from '@prisma/client';
 import { ApiResponse } from '../../common/dto/response.dto';
@@ -46,6 +47,7 @@ import { CustomerService } from '../customer/customer.service';
 export class AdminController {
   constructor(
     private readonly adminService: AdminService,
+    private readonly financeService: AdminFinanceService,
     private readonly customerService: CustomerService,
   ) {}
 
@@ -158,13 +160,13 @@ export class AdminController {
 
   @Get('payments')
   async getPayments(@Query() query: PaginationDto & PaymentQueryDto) {
-    const payments = await this.adminService.getPayments(query);
+    const payments = await this.financeService.getPayments(query);
     return ApiResponse.success(payments);
   }
 
   @Post('settlements/run')
   async runSettlement(@Body() dto: RunSettlementDto) {
-    const settlement = await this.adminService.runSettlement(dto);
+    const settlement = await this.financeService.runSettlement(dto);
     return ApiResponse.success(settlement, 'Settlement đã chạy');
   }
 
@@ -172,7 +174,7 @@ export class AdminController {
   async getSettlementHistory(
     @Query() query: PaginationDto & SettlementHistoryQueryDto,
   ) {
-    const history = await this.adminService.getSettlementHistory(query);
+    const history = await this.financeService.getSettlementHistory(query);
     return ApiResponse.success(history);
   }
 
@@ -205,7 +207,7 @@ export class AdminController {
 
   @Post('payments/release')
   async releasePayment(@Body() dto: ReleasePaymentDto) {
-    const result = await this.adminService.releasePayment(dto);
+    const result = await this.financeService.releasePayment(dto);
     return ApiResponse.success(
       result,
       `Đã chuyển ${result.ownerReceived} VND cho owner`,
@@ -214,7 +216,7 @@ export class AdminController {
 
   @Post('payments/refund')
   async refundPayment(@Body() dto: RefundPaymentDto) {
-    const result = await this.adminService.refundPayment(dto);
+    const result = await this.financeService.refundPayment(dto);
     return ApiResponse.success(
       result,
       `Đã hoàn ${result.refundAmount} VND cho khách`,
@@ -223,7 +225,7 @@ export class AdminController {
 
   @Get('wallets/platform')
   async getPlatformWallet() {
-    return ApiResponse.success(await this.adminService.getPlatformWallet());
+    return ApiResponse.success(await this.financeService.getPlatformWallet());
   }
 
   @Get('bookings/all')
@@ -252,31 +254,31 @@ export class AdminController {
 
   @Get('escrow/pending-release')
   async getPendingReleaseTrips(@Query() query: PaginationDto) {
-    const result = await this.adminService.getPendingReleaseTrips(query);
+    const result = await this.financeService.getPendingReleaseTrips(query);
     return ApiResponse.success(result);
   }
 
   @Get('withdraws/pending')
   async getPendingWithdraws(@Query() query: PaginationDto) {
-    const result = await this.adminService.getPendingWithdraws(query);
+    const result = await this.financeService.getPendingWithdraws(query);
     return ApiResponse.success(result);
   }
 
   @Post('withdraws/:id/approve')
   async approveWithdraw(@Param('id') id: string) {
-    await this.adminService.approveWithdraw(id);
+    await this.financeService.approveWithdraw(id);
     return ApiResponse.success(null, 'Đã duyệt rút tiền');
   }
 
   @Post('withdraws/:id/reject')
   async rejectWithdraw(@Param('id') id: string, @Body() dto: RejectWithdrawDto) {
-    await this.adminService.rejectWithdraw(id, dto.reason);
+    await this.financeService.rejectWithdraw(id, dto.reason);
     return ApiResponse.success(null, 'Đã từ chối rút tiền');
   }
 
   @Post('settlements/auto-release')
   async autoReleasePayments() {
-    const result = await this.adminService.autoReleaseCompletedTrips();
+    const result = await this.financeService.autoReleaseCompletedTrips();
     return ApiResponse.success(
       result,
       `Đã release ${result.processed} payments`,
