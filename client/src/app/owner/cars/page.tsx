@@ -1,107 +1,190 @@
 "use client";
 
-import { CarTable, CreateCarDialog } from "@/features/owner/car/CarComponents";
-import { ShieldCheck, Info, CarFront, Clock, CheckCircle2 } from "lucide-react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useMyCars } from "@/features/owner/owner.queries";
+import Image from "next/image";
+import { useMemo, useState } from "react";
+import { Car, CheckCircle2, Clock3, Edit3, ImagePlus, Loader2, MoreHorizontal, Plus, RefreshCw, Trash2, XCircle } from "lucide-react";
+import { toast } from "sonner";
+import { useCreateCar, useDeleteCar, useMyCars, useUpdateCar } from "@/features/owner/owner.queries";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-export default function OwnerCarPage() {
-  // 1. Fetch data tại đây
-  const { data: cars = [], isLoading, refetch } = useMyCars();
+const currency = new Intl.NumberFormat("en-US", { style: "currency", currency: "VND", maximumFractionDigits: 0 });
 
-  // 2. Logic lọc dữ liệu
-  const activeCars = cars.filter((car: any) => car.verificationStatus === "APPROVED");
-  const pendingCars = cars.filter(
-    (car: any) => car.verificationStatus === "PENDING" || car.verificationStatus === "DRAFT",
-  );
+type CarRecord = {
+  id: string;
+  name: string;
+  brand: string;
+  model: string;
+  year: number;
+  licensePlate: string;
+  seatCount: number;
+  pricePerDay: number;
+  mainImageUrl?: string | null;
+  verificationStatus?: string | null;
+};
+
+type VehicleForm = {
+  name: string;
+  brand: string;
+  model: string;
+  year: string;
+  licensePlate: string;
+  seatCount: string;
+  pricePerDay: string;
+};
+
+const blankVehicle: VehicleForm = {
+  name: "",
+  brand: "",
+  model: "",
+  year: String(new Date().getFullYear()),
+  licensePlate: "",
+  seatCount: "5",
+  pricePerDay: "",
+};
+
+export default function OwnerCarsPage() {
+  const carsQuery = useMyCars({ page: 1, limit: 100 });
+  const createCar = useCreateCar();
+  const updateCar = useUpdateCar();
+  const deleteCar = useDeleteCar();
+  const [filter, setFilter] = useState("ALL");
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editing, setEditing] = useState<CarRecord | null>(null);
+
+  const cars: CarRecord[] = Array.isArray(carsQuery.data) ? carsQuery.data : carsQuery.data?.data ?? [];
+  const counts = useMemo(() => ({
+    ALL: cars.length,
+    APPROVED: cars.filter((car) => car.verificationStatus === "APPROVED").length,
+    PENDING: cars.filter((car) => car.verificationStatus === "PENDING").length,
+    REJECTED: cars.filter((car) => car.verificationStatus === "REJECTED").length,
+  }), [cars]);
+  const visibleCars = filter === "ALL" ? cars : cars.filter((car) => car.verificationStatus === filter);
+
+  const remove = (car: CarRecord) => {
+    if (!window.confirm(`Delete ${car.name}? This permanently removes the vehicle from your fleet.`)) return;
+    deleteCar.mutate(car.id, {
+      onSuccess: async () => { toast.success("Vehicle deleted"); await carsQuery.refetch(); },
+      onError: (error: any) => toast.error(error?.response?.data?.message || "Could not delete vehicle"),
+    });
+  };
 
   return (
-    <div className="container mx-auto py-10 space-y-8 max-w-7xl">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b pb-6">
+    <div className="mx-auto w-full max-w-7xl space-y-7 py-2">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-4xl font-extrabold tracking-tight lg:text-5xl">Xe của tôi</h1>
-          <p className="text-muted-foreground text-lg mt-2">Quản lý đội xe và theo dõi hiệu suất kinh doanh của bạn.</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Fleet</p>
+          <h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">Vehicles</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">Register vehicles, maintain listing details, and follow marketplace approval status.</p>
         </div>
-        <CreateCarDialog />
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => carsQuery.refetch()} disabled={carsQuery.isFetching}><RefreshCw className={carsQuery.isFetching ? "animate-spin" : ""} />Refresh</Button>
+          <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+            <DialogTrigger asChild><Button><Plus />Add vehicle</Button></DialogTrigger>
+            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+              <DialogHeader><DialogTitle>Register a vehicle</DialogTitle><DialogDescription>New vehicles enter operations review immediately. An approved owner identity record is required.</DialogDescription></DialogHeader>
+              <VehicleEditor mode="create" pending={createCar.isPending} onSubmit={(values, mainImage, gallery) => {
+                if (!mainImage) { toast.error("Choose a main vehicle image"); return; }
+                createCar.mutate(toFormData(values, mainImage, gallery), {
+                  onSuccess: async () => { toast.success("Vehicle registered for review"); setCreateOpen(false); await carsQuery.refetch(); },
+                  onError: (error: any) => toast.error(error?.response?.data?.message || error?.message || "Could not register vehicle"),
+                });
+              }} />
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
-      {/* Stats Overview - Hiển thị số thực tế */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Tổng số xe</CardTitle>
-            <CarFront className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{cars.length}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Chờ phê duyệt</CardTitle>
-            <Clock className="h-4 w-4 text-orange-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{pendingCars.length}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Đang hoạt động</CardTitle>
-            <CheckCircle2 className="h-4 w-4 text-green-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{activeCars.length}</div>
-          </CardContent>
-        </Card>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <Metric label="Total fleet" value={counts.ALL} icon={<Car />} />
+        <Metric label="Approved" value={counts.APPROVED} icon={<CheckCircle2 />} />
+        <Metric label="Under review" value={counts.PENDING} icon={<Clock3 />} />
+        <Metric label="Needs changes" value={counts.REJECTED} icon={<XCircle />} />
       </div>
 
-      {/* Alert Thông báo */}
-      <Alert variant="default" className="bg-primary/5 border-primary/20">
-        <Info className="h-5 w-5 text-primary" />
-        <AlertTitle className="font-semibold text-primary">Hướng dẫn</AlertTitle>
-        <AlertDescription className="text-primary/80">
-          Xe mới đăng ký cần được gửi duyệt. Sau khi quản trị viên xác nhận, xe sẽ hiển thị ở trạng thái{" "}
-        </AlertDescription>
-      </Alert>
+      <Tabs value={filter} onValueChange={setFilter}>
+        <TabsList className="grid h-auto w-full max-w-2xl grid-cols-2 gap-1 sm:grid-cols-4">
+          <TabsTrigger value="ALL">All ({counts.ALL})</TabsTrigger>
+          <TabsTrigger value="APPROVED">Approved ({counts.APPROVED})</TabsTrigger>
+          <TabsTrigger value="PENDING">Review ({counts.PENDING})</TabsTrigger>
+          <TabsTrigger value="REJECTED">Changes ({counts.REJECTED})</TabsTrigger>
+        </TabsList>
+      </Tabs>
 
-      {/* Main Content - Danh sách xe */}
-      <Card className="shadow-sm">
-        <CardHeader className="p-6 pb-2">
-          <CardTitle className="text-xl flex items-center gap-2">
-            <ShieldCheck className="h-5 w-5 text-primary" />
-            Danh sách phương tiện
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="px-6 pb-6">
-          <Tabs defaultValue="all" className="w-full">
-            <TabsList className="mb-4">
-              <TabsTrigger value="all">Tất cả ({cars.length})</TabsTrigger>
-              <TabsTrigger value="active">Đang hoạt động ({activeCars.length})</TabsTrigger>
-              <TabsTrigger value="pending">Chờ duyệt ({pendingCars.length})</TabsTrigger>
-            </TabsList>
+      {carsQuery.isLoading ? (
+        <div className="grid gap-4 lg:grid-cols-2">{Array.from({ length: 4 }).map((_, index) => <Skeleton key={index} className="h-52 rounded-xl" />)}</div>
+      ) : visibleCars.length === 0 ? (
+        <Card className="border-dashed"><CardContent className="flex flex-col items-center py-16 text-center"><Car className="h-8 w-8 text-muted-foreground" /><h2 className="mt-4 font-semibold">No vehicles in this view</h2><p className="mt-2 max-w-md text-sm text-muted-foreground">Register a vehicle or switch the approval filter.</p></CardContent></Card>
+      ) : (
+        <div className="grid gap-4 lg:grid-cols-2">
+          {visibleCars.map((car) => (
+            <Card key={car.id} className="overflow-hidden p-0">
+              <div className="grid sm:grid-cols-[180px_1fr]">
+                <div className="relative min-h-48 bg-muted sm:min-h-full">
+                  {car.mainImageUrl ? <Image src={car.mainImageUrl} alt={car.name} fill className="object-cover" unoptimized /> : <div className="flex h-full min-h-48 items-center justify-center"><ImagePlus className="h-7 w-7 text-muted-foreground" /></div>}
+                </div>
+                <div className="p-5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><StatusBadge status={car.verificationStatus || "PENDING"} /><span className="font-mono text-xs text-muted-foreground">{car.licensePlate}</span></div><h2 className="mt-3 truncate text-lg font-semibold">{car.name}</h2><p className="mt-1 text-sm text-muted-foreground">{car.brand} {car.model} · {car.year} · {car.seatCount} seats</p></div>
+                    <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={() => setEditing(car)}><Edit3 />Edit vehicle</DropdownMenuItem><DropdownMenuItem className="text-destructive" onClick={() => remove(car)}><Trash2 />Delete vehicle</DropdownMenuItem></DropdownMenuContent></DropdownMenu>
+                  </div>
+                  <div className="mt-5 border-t pt-4"><div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Daily rate</div><div className="mt-1 text-xl font-bold">{currency.format(Number(car.pricePerDay || 0))}</div>{car.verificationStatus === "REJECTED" ? <p className="mt-3 text-xs leading-5 text-muted-foreground">Edit the requested details before contacting operations for another review.</p> : null}</div>
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
 
-            <TabsContent value="all" className="m-0">
-              <CarTable cars={cars} isLoading={isLoading} refetch={refetch} isRefetching={false} />
-            </TabsContent>
-
-            <TabsContent value="active" className="m-0">
-              <CarTable cars={activeCars} isLoading={isLoading} refetch={refetch} isRefetching={false} />
-            </TabsContent>
-
-            <TabsContent value="pending" className="m-0">
-              <CarTable cars={pendingCars} isLoading={isLoading} refetch={refetch} isRefetching={false} />
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
-
-      <footer className="text-center text-sm text-muted-foreground py-10">
-        <p>© 2026 Elite Drive System.</p>
-      </footer>
+      <Dialog open={Boolean(editing)} onOpenChange={(open) => !open && setEditing(null)}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader><DialogTitle>Edit vehicle</DialogTitle><DialogDescription>Update the listing fields stored by the current vehicle API.</DialogDescription></DialogHeader>
+          {editing ? <VehicleEditor mode="edit" initial={editing} pending={updateCar.isPending} onSubmit={(values, mainImage, gallery) => {
+            updateCar.mutate({ carId: editing.id, data: toFormData(values, mainImage, gallery) }, {
+              onSuccess: async () => { toast.success("Vehicle updated"); setEditing(null); await carsQuery.refetch(); },
+              onError: (error: any) => toast.error(error?.response?.data?.message || error?.message || "Could not update vehicle"),
+            });
+          }} /> : null}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
+
+function VehicleEditor({ mode, initial, pending, onSubmit }: { mode: "create" | "edit"; initial?: CarRecord; pending: boolean; onSubmit: (values: VehicleForm, mainImage: File | null, gallery: FileList | null) => void }) {
+  const [values, setValues] = useState<VehicleForm>(() => initial ? {
+    name: initial.name || "", brand: initial.brand || "", model: initial.model || "", year: String(initial.year || new Date().getFullYear()), licensePlate: initial.licensePlate || "", seatCount: String(initial.seatCount || 5), pricePerDay: String(initial.pricePerDay || ""),
+  } : blankVehicle);
+  const [mainImage, setMainImage] = useState<File | null>(null);
+  const [gallery, setGallery] = useState<FileList | null>(null);
+  const set = (key: keyof VehicleForm, value: string) => setValues((current) => ({ ...current, [key]: value }));
+  const valid = Boolean(values.name.trim() && values.brand.trim() && values.model.trim() && values.licensePlate.trim() && Number(values.year) >= 1900 && Number(values.seatCount) >= 2 && Number(values.pricePerDay) > 0);
+
+  return (
+    <form className="space-y-5" onSubmit={(event) => { event.preventDefault(); if (!valid) return; onSubmit(values, mainImage, gallery); }}>
+      <div className="grid gap-4 sm:grid-cols-2"><Field label="Listing name"><Input value={values.name} onChange={(e) => set("name", e.target.value)} placeholder="VinFast VF 8 Plus" required /></Field><Field label="License plate"><Input value={values.licensePlate} onChange={(e) => set("licensePlate", e.target.value)} placeholder="51H-123.45" required /></Field><Field label="Brand"><Input value={values.brand} onChange={(e) => set("brand", e.target.value)} placeholder="VinFast" required /></Field><Field label="Model"><Input value={values.model} onChange={(e) => set("model", e.target.value)} placeholder="VF 8" required /></Field></div>
+      <div className="grid gap-4 sm:grid-cols-3"><Field label="Year"><Input type="number" min="1900" max={new Date().getFullYear() + 1} value={values.year} onChange={(e) => set("year", e.target.value)} required /></Field><Field label="Seats"><Input type="number" min="2" max="50" value={values.seatCount} onChange={(e) => set("seatCount", e.target.value)} required /></Field><Field label="Daily rate (VND)"><Input type="number" min="1" step="1000" value={values.pricePerDay} onChange={(e) => set("pricePerDay", e.target.value)} required /></Field></div>
+      <div className="grid gap-4 sm:grid-cols-2"><Field label={mode === "create" ? "Main image" : "Replace main image (optional)"}><Input type="file" accept="image/*" onChange={(e) => setMainImage(e.target.files?.[0] || null)} required={mode === "create"} /></Field><Field label="Gallery images (optional, up to 3)"><Input type="file" accept="image/*" multiple onChange={(e) => setGallery(e.target.files)} /></Field></div>
+      <DialogFooter><Button type="submit" disabled={!valid || pending}>{pending ? <Loader2 className="animate-spin" /> : mode === "create" ? <Plus /> : <Edit3 />}{mode === "create" ? "Register vehicle" : "Save changes"}</Button></DialogFooter>
+    </form>
+  );
+}
+
+function toFormData(values: VehicleForm, mainImage: File | null, gallery: FileList | null) {
+  const data = new FormData();
+  Object.entries(values).forEach(([key, value]) => { if (value !== "") data.append(key, value); });
+  if (mainImage) data.append("mainImage", mainImage);
+  if (gallery) Array.from(gallery).slice(0, 3).forEach((file) => data.append("images", file));
+  return data;
+}
+
+function Metric({ label, value, icon }: { label: string; value: number; icon: React.ReactNode }) { return <Card><CardHeader className="flex-row items-center justify-between space-y-0"><CardDescription>{label}</CardDescription><div className="[&>svg]:h-4 [&>svg]:w-4 text-muted-foreground">{icon}</div></CardHeader><CardContent><div className="text-2xl font-bold">{value}</div></CardContent></Card>; }
+function StatusBadge({ status }: { status: string }) { if (status === "APPROVED") return <Badge variant="outline">Approved</Badge>; if (status === "REJECTED") return <Badge variant="destructive">Changes requested</Badge>; return <Badge variant="secondary">Under review</Badge>; }
+function Field({ label, children }: { label: string; children: React.ReactNode }) { return <div className="space-y-2"><Label>{label}</Label>{children}</div>; }
