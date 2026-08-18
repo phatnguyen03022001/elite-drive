@@ -13,13 +13,18 @@ export default function PaymentResultPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
     const paymentId = new URLSearchParams(window.location.search).get("paymentId");
+
     if (!paymentId) {
-      setError("Missing local payment reference.");
-      return;
+      queueMicrotask(() => {
+        if (!cancelled) setError("Missing local payment reference.");
+      });
+      return () => {
+        cancelled = true;
+      };
     }
 
-    let cancelled = false;
     void CustomerService.getMomoStatus(paymentId)
       .then((result) => {
         if (!cancelled) setStatus(result);
