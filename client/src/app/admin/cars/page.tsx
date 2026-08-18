@@ -1,379 +1,67 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
 import Image from "next/image";
-import { format } from "date-fns";
-import {
-  CarFront,
-  Fuel,
-  Settings2,
-  Users,
-  User as UserIcon,
-  CheckCircle,
-  XCircle,
-  Eye,
-  Search,
-  Clock,
-  ShieldCheck,
-  Car,
-  Ban,
-} from "lucide-react";
-
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
+import { useMemo, useState } from "react";
+import { CheckCircle2, Clock3, Eye, Loader2, Search, ShieldCheck, XCircle } from "lucide-react";
+import { toast } from "sonner";
+import { useAllCars, useApproveCar, usePendingCars, useRejectCar } from "@/features/admin/admin.queries";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { cn } from "@/lib/utils";
 
-import { usePendingCars, useApproveCar, useRejectCar, useAllCars } from "@/features/admin/admin.queries";
+const currency = new Intl.NumberFormat("en-US", { style: "currency", currency: "VND", maximumFractionDigits: 0 });
+const dateFormatter = new Intl.DateTimeFormat("en-US", { day: "2-digit", month: "short", year: "numeric" });
 
-export default function AdminCarManagementPage() {
-  const { data: pendingData, isLoading: isLoadingPending, refetch: refetchPending } = usePendingCars();
-  const { data: allCarsData, isLoading: isLoadingAll, refetch: refetchAll } = useAllCars();
-  const approveCar = useApproveCar();
-  const rejectCar = useRejectCar();
+export default function AdminCarsPage() {
+  const pendingQuery = usePendingCars();
+  const allQuery = useAllCars({ page: 1, limit: 200 });
+  const approve = useApproveCar();
+  const reject = useRejectCar();
+  const [tab, setTab] = useState("PENDING");
+  const [search, setSearch] = useState("");
+  const [selected, setSelected] = useState<any>(null);
+  const [rejecting, setRejecting] = useState<any>(null);
+  const [reason, setReason] = useState("");
 
-  const [selectedCar, setSelectedCar] = useState<any>(null);
-  const [isDetailOpen, setIsDetailOpen] = useState(false);
-  const [isRejectOpen, setIsRejectOpen] = useState(false);
-  const [rejectReason, setRejectReason] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
+  const allCars = Array.isArray(allQuery.data) ? allQuery.data : allQuery.data?.data ?? [];
+  const pendingCars = Array.isArray(pendingQuery.data) ? pendingQuery.data : pendingQuery.data?.data ?? [];
+  const source = tab === "PENDING" ? pendingCars : tab === "ALL" ? allCars : allCars.filter((car: any) => car.verificationStatus === tab);
+  const visible = source.filter((car: any) => `${car.name} ${car.brand} ${car.model} ${car.licensePlate} ${car.owner?.email || ""}`.toLowerCase().includes(search.toLowerCase()));
+  const counts = useMemo(() => ({ pending: pendingCars.length, approved: allCars.filter((car: any) => car.verificationStatus === "APPROVED").length, rejected: allCars.filter((car: any) => car.verificationStatus === "REJECTED").length, total: allCars.length }), [allCars, pendingCars.length]);
 
-  // Logic lọc dữ liệu từ JSON
-  const cars = allCarsData || [];
-  const pendingCars = pendingData || [];
-  const activeCars = useMemo(
-    () => cars.filter((c: any) => c.status === "APPROVED" || c.verificationStatus === "APPROVED"),
-    [cars],
-  );
-  const rejectedCars = useMemo(() => cars.filter((c: any) => c.verificationStatus === "REJECTED"), [cars]);
-
-  const stats = [
-    { label: "Tổng xe", value: cars.length, icon: Car, color: "text-blue-600" },
-    { label: "Chờ phê duyệt", value: pendingCars.length, icon: Clock, color: "text-amber-600" },
-    { label: "Đang hoạt động", value: activeCars.length, icon: ShieldCheck, color: "text-emerald-600" },
-    { label: "Đã từ chối", value: rejectedCars.length, icon: Ban, color: "text-rose-600" },
-  ];
-
-  const handleApprove = (carId: string) => {
-    if (confirm("Xác nhận xe đủ điều kiện vận hành?")) {
-      approveCar.mutate(carId, {
-        onSuccess: () => {
-          refetchPending();
-          refetchAll();
-        },
-      });
-    }
+  const refresh = async () => Promise.all([pendingQuery.refetch(), allQuery.refetch()]);
+  const approveCar = (car: any) => {
+    if (!window.confirm(`Approve ${car.name} for marketplace availability?`)) return;
+    approve.mutate(car.id, { onSuccess: async () => { toast.success("Vehicle approved"); await refresh(); }, onError: (error: any) => toast.error(error?.response?.data?.message || "Could not approve vehicle") });
   };
-
-  const handleConfirmReject = () => {
-    if (!selectedCar || !rejectReason) return;
-    rejectCar.mutate(
-      { carId: selectedCar.id, reason: rejectReason },
-      {
-        onSuccess: () => {
-          setIsRejectOpen(false);
-          refetchPending();
-          refetchAll();
-        },
-      },
-    );
+  const rejectCar = () => {
+    if (!rejecting || reason.trim().length < 5) return;
+    reject.mutate({ carId: rejecting.id, reason: reason.trim() }, { onSuccess: async () => { toast.success("Vehicle returned for changes"); setRejecting(null); setReason(""); await refresh(); }, onError: (error: any) => toast.error(error?.response?.data?.message || "Could not reject vehicle") });
   };
 
   return (
-    <div className="flex-1 space-y-6 p-8">
-      <div className="flex flex-col gap-1">
-        <h2 className="text-3xl font-bold tracking-tight">Quản lý phương tiện</h2>
-        <p className="text-muted-foreground">Phê duyệt và kiểm soát chất lượng xe EliteDrive.</p>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-4">
-        {stats.map((s) => (
-          <Card key={s.label}>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-xs font-bold uppercase text-muted-foreground tracking-wider">
-                {s.label}
-              </CardTitle>
-              <s.icon className={cn("h-4 w-4", s.color)} />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{s.value}</div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
+    <div className="mx-auto w-full max-w-7xl space-y-7 py-2">
+      <div><p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Trust & supply</p><h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">Vehicle approvals</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">Review fleet submissions before they become bookable on the marketplace.</p></div>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><Metric label="All vehicles" value={counts.total} /><Metric label="Pending review" value={counts.pending} /><Metric label="Approved" value={counts.approved} /><Metric label="Changes requested" value={counts.rejected} /></div>
       <Card>
-        <Tabs defaultValue="pending" className="w-full">
-          <div className="px-6 pt-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <TabsList>
-              <TabsTrigger value="pending">Chờ duyệt ({pendingCars.length})</TabsTrigger>
-              <TabsTrigger value="active">Đang hoạt động</TabsTrigger>
-              <TabsTrigger value="all">Tất cả xe</TabsTrigger>
-              <TabsTrigger value="rejected">Đã từ chối</TabsTrigger>
-            </TabsList>
-          </div>
-
-          <TabsContent value="pending" className="p-6">
-            <CarTableUI
-              data={pendingCars}
-              isLoading={isLoadingPending}
-              onView={(car: any) => {
-                setSelectedCar(car);
-                setIsDetailOpen(true);
-              }}
-              onApprove={handleApprove}
-              onReject={(car: any) => {
-                setSelectedCar(car);
-                setRejectReason("");
-                setIsRejectOpen(true);
-              }}
-              isPendingView
-            />
-          </TabsContent>
-
-          <TabsContent value="active" className="p-6">
-            <CarTableUI
-              data={activeCars}
-              isLoading={isLoadingAll}
-              onView={(car: any) => {
-                setSelectedCar(car);
-                setIsDetailOpen(true);
-              }}
-            />
-          </TabsContent>
-
-          <TabsContent value="all" className="p-6">
-            <CarTableUI
-              data={cars}
-              isLoading={isLoadingAll}
-              onView={(car: any) => {
-                setSelectedCar(car);
-                setIsDetailOpen(true);
-              }}
-            />
-          </TabsContent>
-
-          <TabsContent value="rejected" className="p-6">
-            <CarTableUI
-              data={rejectedCars}
-              isLoading={isLoadingAll}
-              onView={(car: any) => {
-                setSelectedCar(car);
-                setIsDetailOpen(true);
-              }}
-            />
-          </TabsContent>
-        </Tabs>
+        <CardHeader className="gap-4"><div><CardTitle className="text-lg">Review queue</CardTitle><CardDescription>Rejected vehicles can be approved later after the owner updates their stored listing details.</CardDescription></div><div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"><Tabs value={tab} onValueChange={setTab}><TabsList className="grid h-auto grid-cols-2 sm:grid-cols-4"><TabsTrigger value="PENDING">Pending</TabsTrigger><TabsTrigger value="APPROVED">Approved</TabsTrigger><TabsTrigger value="REJECTED">Changes</TabsTrigger><TabsTrigger value="ALL">All</TabsTrigger></TabsList></Tabs><div className="relative w-full lg:w-72"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search fleet..." className="pl-9" /></div></div></CardHeader>
+        <CardContent><div className="overflow-x-auto rounded-xl border"><Table><TableHeader><TableRow><TableHead>Vehicle</TableHead><TableHead>Owner</TableHead><TableHead>Daily rate</TableHead><TableHead>Submitted</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader><TableBody>
+          {pendingQuery.isLoading || allQuery.isLoading ? Array.from({ length: 4 }).map((_, index) => <TableRow key={index}><TableCell colSpan={6}><Skeleton className="h-12 w-full" /></TableCell></TableRow>) : visible.length === 0 ? <TableRow><TableCell colSpan={6} className="h-32 text-center text-muted-foreground">No vehicles match this view.</TableCell></TableRow> : visible.map((car: any) => <TableRow key={car.id}><TableCell><div className="flex items-center gap-3"><div className="relative h-12 w-16 shrink-0 overflow-hidden rounded-lg bg-muted">{car.mainImageUrl ? <Image src={car.mainImageUrl} alt={car.name} fill className="object-cover" unoptimized /> : null}</div><div><div className="font-medium">{car.name}</div><div className="mt-1 font-mono text-xs text-muted-foreground">{car.licensePlate}</div></div></div></TableCell><TableCell><div className="text-sm font-medium">{[car.owner?.firstName, car.owner?.lastName].filter(Boolean).join(" ") || "Owner"}</div><div className="text-xs text-muted-foreground">{car.owner?.email || "—"}</div></TableCell><TableCell className="font-medium">{currency.format(Number(car.pricePerDay || 0))}</TableCell><TableCell className="text-sm text-muted-foreground">{car.createdAt ? dateFormatter.format(new Date(car.createdAt)) : "—"}</TableCell><TableCell><StatusBadge status={car.verificationStatus} /></TableCell><TableCell className="text-right"><div className="flex justify-end gap-2"><Button size="sm" variant="outline" onClick={() => setSelected(car)}><Eye />Review</Button>{car.verificationStatus !== "APPROVED" ? <Button size="sm" onClick={() => approveCar(car)} disabled={approve.isPending}><CheckCircle2 />Approve</Button> : null}{car.verificationStatus === "PENDING" ? <Button size="sm" variant="outline" onClick={() => { setRejecting(car); setReason(""); }}><XCircle />Request changes</Button> : null}</div></TableCell></TableRow>)}</TableBody></Table></div></CardContent>
       </Card>
 
-      <DetailSheet open={isDetailOpen} onOpenChange={setIsDetailOpen} car={selectedCar} />
-
-      <Dialog open={isRejectOpen} onOpenChange={setIsRejectOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Từ chối duyệt xe</DialogTitle>
-          </DialogHeader>
-          <div className="py-4 space-y-3">
-            <p className="text-sm font-medium">Lý do từ chối (Gửi đến chủ xe):</p>
-            <Textarea
-              placeholder="Nhập lý do..."
-              value={rejectReason}
-              onChange={(e) => setRejectReason(e.target.value)}
-              className="min-h-[100px]"
-            />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsRejectOpen(false)}>
-              Hủy
-            </Button>
-            <Button variant="destructive" onClick={handleConfirmReject} disabled={!rejectReason || rejectCar.isPending}>
-              Xác nhận từ chối
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <Sheet open={Boolean(selected)} onOpenChange={(open) => !open && setSelected(null)}><SheetContent className="overflow-y-auto sm:max-w-xl"><SheetHeader><SheetTitle>{selected?.name}</SheetTitle><SheetDescription>{selected?.licensePlate} · marketplace review</SheetDescription></SheetHeader>{selected ? <div className="space-y-6 px-4 pb-8"><div className="relative aspect-video overflow-hidden rounded-xl border bg-muted">{selected.mainImageUrl ? <Image src={selected.mainImageUrl} alt={selected.name} fill className="object-cover" unoptimized /> : null}</div><div className="grid gap-3 sm:grid-cols-2"><Info label="Brand / model" value={`${selected.brand} ${selected.model}`} /><Info label="Year" value={String(selected.year)} /><Info label="Seats" value={String(selected.seatCount)} /><Info label="Daily rate" value={currency.format(Number(selected.pricePerDay || 0))} /></div>{selected.description ? <div className="rounded-xl border bg-muted/20 p-4"><div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Review / listing note</div><p className="mt-2 text-sm leading-6">{String(selected.description).replace(/^Lý do từ chối:\s*/i, "")}</p></div> : null}<div className="flex flex-wrap gap-2">{selected.verificationStatus !== "APPROVED" ? <Button onClick={() => approveCar(selected)}><CheckCircle2 />Approve vehicle</Button> : null}{selected.verificationStatus === "PENDING" ? <Button variant="outline" onClick={() => { setRejecting(selected); setReason(""); }}><XCircle />Request changes</Button> : null}</div></div> : null}</SheetContent></Sheet>
+      <Dialog open={Boolean(rejecting)} onOpenChange={(open) => !open && setRejecting(null)}><DialogContent><DialogHeader><DialogTitle>Request vehicle changes</DialogTitle><DialogDescription>Give the owner a specific review note before this vehicle can be approved.</DialogDescription></DialogHeader><Textarea className="min-h-28" value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Main image is unclear, registration details need correction..." /><DialogFooter><Button variant="ghost" onClick={() => setRejecting(null)}>Cancel</Button><Button variant="destructive" onClick={rejectCar} disabled={reason.trim().length < 5 || reject.isPending}>{reject.isPending ? <Loader2 className="animate-spin" /> : <XCircle />}Return for changes</Button></DialogFooter></DialogContent></Dialog>
     </div>
   );
 }
 
-function CarTableUI({ data, isLoading, onView, onApprove, onReject, isPendingView = false }: any) {
-  if (isLoading) return <div className="py-20 text-center animate-pulse text-muted-foreground">Đang tải...</div>;
-  if (!data?.length)
-    return <div className="py-20 text-center border-2 border-dashed rounded-xl m-6 text-muted-foreground">Trống</div>;
-
-  return (
-    <div className="rounded-md border">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Xe</TableHead>
-            <TableHead>Chủ xe</TableHead>
-            <TableHead>Giá thuê</TableHead>
-            <TableHead>{isPendingView ? "Ngày đăng ký" : "Trạng thái"}</TableHead>
-            <TableHead className="text-right">Thao tác</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {data.map((car: any) => (
-            <TableRow key={car.id}>
-              <TableCell className="flex items-center gap-3">
-                <div className="relative h-10 w-16 rounded overflow-hidden border">
-                  <Image src={car.mainImageUrl} alt="" fill className="object-cover" unoptimized />
-                </div>
-                <div>
-                  <div className="font-bold text-sm">{car.name}</div>
-                  <div className="text-[10px] text-muted-foreground uppercase font-mono">{car.licensePlate}</div>
-                </div>
-              </TableCell>
-              <TableCell>
-                <div className="text-xs font-medium">
-                  {car.owner?.firstName} {car.owner?.lastName}
-                </div>
-                <div className="text-[10px] text-muted-foreground">{car.owner?.email}</div>
-              </TableCell>
-              <TableCell className="text-sm font-bold">{Number(car.pricePerDay).toLocaleString("vi-VN")}₫</TableCell>
-              <TableCell>
-                {isPendingView ? (
-                  <div className="text-xs text-muted-foreground">{format(new Date(car.createdAt), "dd/MM/yyyy")}</div>
-                ) : (
-                  <Badge
-                    variant={
-                      car.verificationStatus === "APPROVED"
-                        ? "default"
-                        : car.verificationStatus === "REJECTED"
-                          ? "destructive"
-                          : "secondary"
-                    }>
-                    {car.verificationStatus}
-                  </Badge>
-                )}
-              </TableCell>
-              <TableCell className="text-right">
-                <div className="flex justify-end gap-1">
-                  <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => onView(car)}>
-                    <Eye className="h-4 w-4" />
-                  </Button>
-                  {isPendingView && (
-                    <>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-8 w-8 text-emerald-600"
-                        onClick={() => onApprove(car.id)}>
-                        <CheckCircle className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-8 w-8 text-rose-600"
-                        onClick={() => onReject(car)}>
-                        <XCircle className="h-4 w-4" />
-                      </Button>
-                    </>
-                  )}
-                </div>
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
-  );
-}
-
-function DetailSheet({ open, onOpenChange, car }: any) {
-  if (!car) return null;
-
-  return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="sm:max-w-xl">
-        <SheetHeader className="border-b pb-4">
-          <SheetTitle className="text-xl">
-            {car.brand} {car.name}
-          </SheetTitle>
-        </SheetHeader>
-        <ScrollArea className="h-[calc(100vh-80px)] pr-4 pt-4">
-          <div className="space-y-6 pb-10">
-            {/* Gallery Section */}
-            <div className="space-y-3">
-              <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Album hình ảnh</h3>
-
-              {/* Ảnh chính to nhất */}
-              <div className="relative aspect-video rounded-lg overflow-hidden border">
-                <Image src={car.mainImageUrl} alt="Main image" fill className="object-cover" unoptimized />
-                <Badge className="absolute top-2 left-2 bg-black/60 border-none hover:bg-black/60">Ảnh chính</Badge>
-              </div>
-
-              {/* Grid các ảnh chi tiết (imageUrls) */}
-              {car.imageUrls && car.imageUrls.length > 0 && (
-                <div className="grid grid-cols-3 gap-2">
-                  {car.imageUrls.map((url: string, index: number) => (
-                    <div key={index} className="relative aspect-square rounded-md overflow-hidden border">
-                      <Image
-                        src={url}
-                        alt={`Gallery ${index}`}
-                        fill
-                        className="object-cover hover:scale-110 transition-transform duration-300"
-                        unoptimized
-                      />
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Thông báo lý do từ chối (nếu có) */}
-            {car.verificationStatus === "REJECTED" && (
-              <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-md text-sm italic">
-                <span className="font-bold text-destructive">Lý do từ chối:</span> {car.description}
-              </div>
-            )}
-
-            {/* Thông số chi tiết */}
-            <div className="grid grid-cols-2 gap-4">
-              <DetailItem label="Năm sản xuất" value={car.year} />
-              <DetailItem label="Biển số" value={car.licensePlate} />
-              <DetailItem label="Số chỗ" value={`${car.seatCount} ghế`} />
-              <DetailItem label="Truyền động" value={car.transmission || "N/A"} />
-            </div>
-
-            <Separator />
-
-            {/* Thông tin chủ xe */}
-            <div className="space-y-2">
-              <h3 className="text-sm font-bold text-muted-foreground uppercase">Chủ sở hữu</h3>
-              <div className="flex items-center gap-3 p-3 border rounded-lg">
-                <div className="p-2 bg-muted rounded-full">
-                  <UserIcon className="w-5 h-5 text-muted-foreground" />
-                </div>
-                <div className="text-sm">
-                  <p className="font-bold">
-                    {car.owner?.firstName} {car.owner?.lastName}
-                  </p>
-                  <p className="text-muted-foreground">{car.owner?.email}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </ScrollArea>
-      </SheetContent>
-    </Sheet>
-  );
-}
-
-function DetailItem({ label, value }: any) {
-  return (
-    <div>
-      <p className="text-[10px] font-bold text-muted-foreground uppercase">{label}</p>
-      <p className="text-sm font-semibold">{value}</p>
-    </div>
-  );
-}
+function Metric({ label, value }: { label: string; value: number }) { return <Card><CardHeader className="flex-row items-center justify-between space-y-0"><CardDescription>{label}</CardDescription><ShieldCheck className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{value}</div></CardContent></Card>; }
+function StatusBadge({ status }: { status?: string }) { if (status === "APPROVED") return <Badge variant="outline"><CheckCircle2 />Approved</Badge>; if (status === "REJECTED") return <Badge variant="destructive"><XCircle />Changes requested</Badge>; return <Badge variant="secondary"><Clock3 />Pending</Badge>; }
+function Info({ label, value }: { label: string; value: string }) { return <div className="rounded-xl border bg-muted/20 p-4"><div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{label}</div><div className="mt-2 font-medium">{value}</div></div>; }
