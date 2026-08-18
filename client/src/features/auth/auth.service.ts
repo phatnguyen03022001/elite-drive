@@ -18,13 +18,10 @@ export const authService = {
     return LoginResponseSchema.parse(res);
   },
 
-  logout: async () => {
-    return axios.post("/api/auth/logout");
-  },
+  logout: async () => axios.post("/api/auth/logout"),
 
-  register: async (data: RegisterPasswordBody) => {
-    return axios.post("/api/auth/register", data);
-  },
+  register: async (data: RegisterPasswordBody) =>
+    axios.post("/api/auth/register", data),
 
   resetPassword: async (data: ForgotPasswordInput) => {
     ForgotPasswordSchema.parse(data);
@@ -51,9 +48,10 @@ export const authService = {
         OtpSchema.parse({ email, code });
         return axios.post("/api/auth/verify-register-otp", { email, code });
       },
-      login: (email: string, code: string) => {
+      login: async (email: string, code: string): Promise<LoginResponse> => {
         OtpSchema.parse({ email, code });
-        return axios.post("/api/auth/verify-login-otp", { email, code });
+        const res = await axios.post("/api/auth/verify-login-otp", { email, code });
+        return LoginResponseSchema.parse(res);
       },
       forgot: (email: string, code: string) => {
         OtpSchema.parse({ email, code });
@@ -62,8 +60,5 @@ export const authService = {
     },
   },
 
-  getProfile: async () => {
-    const res = await axios.get("/api/profile");
-    return res.data;
-  },
+  getProfile: async () => axios.get("/api/profile"),
 };
