@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { CheckCircle2, Clock3, Eye, Loader2, Search, ShieldCheck, XCircle } from "lucide-react";
 import { useAllCars, useApproveCar, usePendingCars, useRejectCar } from "@/features/admin/admin.queries";
 import { Badge } from "@/components/ui/badge";
@@ -19,38 +19,60 @@ import { notify, notifyError } from "@/lib/notifications";
 const currency = new Intl.NumberFormat("en-US", { style: "currency", currency: "VND", maximumFractionDigits: 0 });
 const dateFormatter = new Intl.DateTimeFormat("en-US", { day: "2-digit", month: "short", year: "numeric" });
 
+type AdminCar = {
+  id: string;
+  name: string;
+  brand?: string;
+  model?: string;
+  licensePlate?: string;
+  verificationStatus?: string;
+  mainImageUrl?: string | null;
+  pricePerDay?: number;
+  createdAt?: string | Date;
+  year?: number;
+  seatCount?: number;
+  description?: string | null;
+  owner?: { firstName?: string | null; lastName?: string | null; email?: string | null };
+};
+
 export default function AdminCarsPage() {
   const pendingQuery = usePendingCars();
-  const allQuery = useAllCars({ page: 1, limit: 200 });
+  const allQuery = useAllCars({ page: 1, limit: 50 });
   const approve = useApproveCar();
   const reject = useRejectCar();
   const [tab, setTab] = useState("PENDING");
   const [search, setSearch] = useState("");
-  const [selected, setSelected] = useState<any>(null);
-  const [rejecting, setRejecting] = useState<any>(null);
+  const [selected, setSelected] = useState<AdminCar | null>(null);
+  const [rejecting, setRejecting] = useState<AdminCar | null>(null);
   const [reason, setReason] = useState("");
 
-  const allCars = Array.isArray(allQuery.data) ? allQuery.data : allQuery.data?.data ?? [];
-  const pendingCars = Array.isArray(pendingQuery.data) ? pendingQuery.data : pendingQuery.data?.data ?? [];
-  const source = tab === "PENDING" ? pendingCars : tab === "ALL" ? allCars : allCars.filter((car: any) => car.verificationStatus === tab);
-  const visible = source.filter((car: any) =>
-    `${car.name} ${car.brand} ${car.model} ${car.licensePlate} ${car.owner?.email || ""}`
+  const allCars: AdminCar[] = Array.isArray(allQuery.data)
+    ? allQuery.data
+    : allQuery.data?.data ?? [];
+  const pendingCars: AdminCar[] = Array.isArray(pendingQuery.data)
+    ? pendingQuery.data
+    : pendingQuery.data?.data ?? [];
+  const source =
+    tab === "PENDING"
+      ? pendingCars
+      : tab === "ALL"
+        ? allCars
+        : allCars.filter((car) => car.verificationStatus === tab);
+  const visible = source.filter((car) =>
+    `${car.name} ${car.brand ?? ""} ${car.model ?? ""} ${car.licensePlate ?? ""} ${car.owner?.email ?? ""}`
       .toLowerCase()
       .includes(search.toLowerCase()),
   );
-  const counts = useMemo(
-    () => ({
-      pending: pendingCars.length,
-      approved: allCars.filter((car: any) => car.verificationStatus === "APPROVED").length,
-      rejected: allCars.filter((car: any) => car.verificationStatus === "REJECTED").length,
-      total: allCars.length,
-    }),
-    [allCars, pendingCars.length],
-  );
+  const counts = {
+    pending: pendingCars.length,
+    approved: allCars.filter((car) => car.verificationStatus === "APPROVED").length,
+    rejected: allCars.filter((car) => car.verificationStatus === "REJECTED").length,
+    total: allCars.length,
+  };
 
   const refresh = async () => Promise.all([pendingQuery.refetch(), allQuery.refetch()]);
 
-  const approveCar = (car: any) => {
+  const approveCar = (car: AdminCar) => {
     if (!window.confirm(`Approve ${car.name} for marketplace availability?`)) return;
     approve.mutate(car.id, {
       onSuccess: async () => {
@@ -162,12 +184,12 @@ export default function AdminCarsPage() {
                 ) : visible.length === 0 ? (
                   <TableRow><TableCell colSpan={6} className="h-32 text-center text-muted-foreground">No vehicles match this view.</TableCell></TableRow>
                 ) : (
-                  visible.map((car: any) => (
+                  visible.map((car) => (
                     <TableRow key={car.id}>
                       <TableCell>
                         <div className="flex items-center gap-3">
                           <div className="relative h-12 w-16 shrink-0 overflow-hidden rounded-lg bg-muted">
-                            {car.mainImageUrl ? <Image src={car.mainImageUrl} alt={car.name} fill className="object-cover" unoptimized /> : null}
+                            {car.mainImageUrl ? <Image src={car.mainImageUrl} alt={car.name} fill className="object-cover" /> : null}
                           </div>
                           <div>
                             <div className="font-medium">{car.name}</div>
@@ -211,12 +233,12 @@ export default function AdminCarsPage() {
           {selected ? (
             <div className="space-y-6 px-4 pb-8">
               <div className="relative aspect-video overflow-hidden rounded-xl border bg-muted">
-                {selected.mainImageUrl ? <Image src={selected.mainImageUrl} alt={selected.name} fill className="object-cover" unoptimized /> : null}
+                {selected.mainImageUrl ? <Image src={selected.mainImageUrl} alt={selected.name} fill className="object-cover" /> : null}
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
-                <Info label="Brand / model" value={`${selected.brand} ${selected.model}`} />
-                <Info label="Year" value={String(selected.year)} />
-                <Info label="Seats" value={String(selected.seatCount)} />
+                <Info label="Brand / model" value={`${selected.brand ?? ""} ${selected.model ?? ""}`.trim()} />
+                <Info label="Year" value={String(selected.year ?? "—")} />
+                <Info label="Seats" value={String(selected.seatCount ?? "—")} />
                 <Info label="Daily rate" value={currency.format(Number(selected.pricePerDay || 0))} />
               </div>
               {selected.description ? (
