@@ -68,7 +68,9 @@ async function bootstrap() {
     allowedHeaders: 'Content-Type, Authorization, Accept',
   });
 
-  const port = Number(process.env.APP_PORT ?? 8000);
+  // Render and most PaaS providers inject PORT at runtime. APP_PORT remains
+  // available for local/self-hosted environments, but must not override PORT.
+  const port = Number(process.env.PORT ?? process.env.APP_PORT ?? 8000);
   await app.listen(port, '0.0.0.0');
   logger.log(`Elite Drive API listening on port ${port}`);
 }
