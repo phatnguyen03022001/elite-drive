@@ -16,7 +16,7 @@ type ReconcileSummary = { scanned?: number; completed?: number; failed?: number;
 type DashboardState = {
   totalUsers: number;
   totalCars: number;
-  activeBookings: number;
+  totalBookings: number;
   platformBalance: number;
   kycPending: number;
   carsPending: number;
@@ -25,7 +25,7 @@ type DashboardState = {
   releasesPending: number;
 };
 
-const emptyState: DashboardState = { totalUsers: 0, totalCars: 0, activeBookings: 0, platformBalance: 0, kycPending: 0, carsPending: 0, withdrawalsPending: 0, disputesOpen: 0, releasesPending: 0 };
+const emptyState: DashboardState = { totalUsers: 0, totalCars: 0, totalBookings: 0, platformBalance: 0, kycPending: 0, carsPending: 0, withdrawalsPending: 0, disputesOpen: 0, releasesPending: 0 };
 const money = new Intl.NumberFormat("en-US", { style: "currency", currency: "VND", maximumFractionDigits: 0 });
 
 function collectionCount(value: unknown) {
@@ -61,7 +61,7 @@ export default function AdminOperationsDashboardPage() {
       setState({
         totalUsers: Number(overview?.totalUsers ?? 0),
         totalCars: Number(overview?.totalCars ?? 0),
-        activeBookings: Number(overview?.activeBookings ?? 0),
+        totalBookings: Number(overview?.totalBookings ?? 0),
         platformBalance: Number(wallet?.balance ?? 0),
         kycPending: collectionCount(kyc),
         carsPending: collectionCount(cars),
@@ -143,7 +143,7 @@ export default function AdminOperationsDashboardPage() {
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <Metric label="Users" value={state.totalUsers.toLocaleString("en-US")} loading={loading} />
           <Metric label="Vehicles" value={state.totalCars.toLocaleString("en-US")} loading={loading} />
-          <Metric label="Active bookings" value={state.activeBookings.toLocaleString("en-US")} loading={loading} />
+          <Metric label="Bookings" value={state.totalBookings.toLocaleString("en-US")} loading={loading} />
           <Metric label="Platform wallet" value={money.format(state.platformBalance)} loading={loading} />
         </div>
       </section>
