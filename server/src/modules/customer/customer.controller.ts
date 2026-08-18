@@ -244,7 +244,6 @@ export class CustomerController {
     return new PaginatedResponseDto(data, total, page, limit);
   }
 
-  @Public()
   @Get('cars/search')
   searchCars(@Query() query: SearchCarQueryDto) {
     return this.customerService.searchCars(query);
