@@ -3,6 +3,7 @@ import { MulterModule } from '@nestjs/platform-express';
 import { AdminController } from './admin.controller';
 import { AdminFinanceService } from './admin-finance.service';
 import { AdminPaymentReconciliationController } from './admin-payment-reconciliation.controller';
+import { AdminWalletReconciliationController } from './admin-wallet-reconciliation.controller';
 import { AdminService } from './admin.service';
 import { CustomerModule } from '../customer/customer.module';
 import { PaymentModule } from '../payment/payment.module';
@@ -17,7 +18,11 @@ import { PaymentModule } from '../payment/payment.module';
       },
     }),
   ],
-  controllers: [AdminController, AdminPaymentReconciliationController],
+  controllers: [
+    AdminController,
+    AdminPaymentReconciliationController,
+    AdminWalletReconciliationController,
+  ],
   providers: [AdminService, AdminFinanceService],
   exports: [AdminService, AdminFinanceService],
 })
