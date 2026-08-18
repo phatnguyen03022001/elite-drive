@@ -14,6 +14,7 @@ import {
   Star,
   TicketPercent,
   UserCog,
+  Users,
   Vault,
   Wallet,
 } from "lucide-react";
@@ -55,6 +56,7 @@ export const ROLE_NAV_CONFIG = {
     { label: "Trust & supply", items: [
       { title: "KYC reviews", href: "/admin/kyc", icon: ShieldCheck },
       { title: "Vehicle approvals", href: "/admin/cars", icon: ClipboardCheck },
+      { title: "Accounts", href: "/admin/users", icon: Users },
     ] },
     { label: "Finance", items: [
       { title: "Platform finance", href: "/admin/escrow", icon: Vault },
