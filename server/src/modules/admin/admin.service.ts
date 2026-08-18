@@ -1,40 +1,32 @@
 import {
+  BadRequestException,
   Injectable,
   NotFoundException,
-  BadRequestException,
 } from '@nestjs/common';
+import {
+  CarStatus,
+  DisputeStatus,
+  KYCStatus,
+  Prisma,
+  VerificationStatus,
+} from '@prisma/client';
+import { PaginationDto } from '../../common/dto/pagination.dto';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
-  Prisma,
-  KYCStatus,
-  DisputeStatus,
-  VerificationStatus,
-  CarStatus,
-  UserRole,
-  PaymentStatus,
-  BookingStatus,
-} from '@prisma/client';
-
-import {
-  CreatePromotionDto,
-  UpdatePromotionDto,
-  RunSettlementDto,
-  // SettlementHistoryQueryDto,
-  RejectKYCDto,
+  AdminKYCQueryDto,
   CreateCategoryDto,
   CreateLocationDto,
-  ReportDateRangeDto,
+  CreatePromotionDto,
   PromotionQueryDto,
+  RejectKYCDto,
+  ReportDateRangeDto,
+  ResolveDisputeDto,
+  UpdatePromotionDto,
 } from './dto/admin.dto';
-import { PaginationDto } from '../../common/dto/pagination.dto';
 
 @Injectable()
 export class AdminService {
-  private readonly PLATFORM_USER_ID = '65f1a2b3c4d5e6f7a8b9c0d1';
-
-  constructor(private prisma: PrismaService) {}
-
-  // ================= 1. REPORTS =================
+  constructor(private readonly prisma: PrismaService) {}
 
   async getOverviewReport() {
     const [users, cars, bookings, revenue] = await Promise.all([
@@ -50,18 +42,17 @@ export class AdminService {
       totalUsers: users,
       totalCars: cars,
       totalBookings: bookings,
-      totalRevenue: revenue._sum.amount || 0,
+      totalRevenue: revenue._sum.amount ?? 0,
     };
   }
 
   async getBookingsReport(query: ReportDateRangeDto) {
-    const { from, to } = query;
     return this.prisma.booking.groupBy({
       by: ['status'],
       where: {
         createdAt: {
-          gte: from ? new Date(from) : undefined,
-          lte: to ? new Date(to) : undefined,
+          gte: query.from ? new Date(query.from) : undefined,
+          lte: query.to ? new Date(query.to) : undefined,
         },
       },
       _count: { _all: true },
@@ -69,20 +60,17 @@ export class AdminService {
   }
 
   async getRevenueReport(query: ReportDateRangeDto) {
-    const { from, to } = query;
     return this.prisma.payment.groupBy({
       by: ['status'],
       where: {
         createdAt: {
-          gte: from ? new Date(from) : undefined,
-          lte: to ? new Date(to) : undefined,
+          gte: query.from ? new Date(query.from) : undefined,
+          lte: query.to ? new Date(query.to) : undefined,
         },
       },
       _sum: { amount: true },
     });
   }
-
-  // ================= 2. CAR MANAGEMENT =================
 
   async getPendingCars() {
     return this.prisma.car.findMany({
@@ -101,22 +89,34 @@ export class AdminService {
         location: true,
         documents: true,
       },
+      orderBy: { updatedAt: 'asc' },
     });
   }
 
   async approveCar(carId: string) {
-    return this.prisma.car.update({
-      where: { id: carId },
+    const result = await this.prisma.car.updateMany({
+      where: { id: carId, verificationStatus: VerificationStatus.PENDING },
       data: {
         verificationStatus: VerificationStatus.APPROVED,
         status: CarStatus.APPROVED,
       },
     });
+    if (result.count !== 1) {
+      throw new BadRequestException('Vehicle is not awaiting approval');
+    }
   }
 
   async getAllCars(status?: string) {
+    let verificationStatus: VerificationStatus | undefined;
+    if (status) {
+      if (!Object.values(VerificationStatus).includes(status as VerificationStatus)) {
+        throw new BadRequestException('Invalid vehicle verification status');
+      }
+      verificationStatus = status as VerificationStatus;
+    }
+
     return this.prisma.car.findMany({
-      where: status ? { verificationStatus: status as any } : {},
+      where: verificationStatus ? { verificationStatus } : {},
       include: {
         owner: {
           select: {
@@ -125,38 +125,62 @@ export class AdminService {
             email: true,
           },
         },
-        // Bạn có thể include thêm Category hoặc Location nếu cần hiển thị ở CarTable
       },
       orderBy: { updatedAt: 'desc' },
     });
   }
 
   async rejectCar(carId: string, reason: string) {
-    // Theo schema của bạn, chúng ta cập nhật verificationStatus
-    // Lưu ý: Nếu bạn có trường để lưu lý do (như rejectionReason), hãy thêm vào data
-    return this.prisma.car.update({
-      where: { id: carId },
+    const result = await this.prisma.car.updateMany({
+      where: { id: carId, verificationStatus: VerificationStatus.PENDING },
       data: {
-        verificationStatus: 'REJECTED',
-        // Ví dụ: ghi chú lại lý do để chủ xe xem được ở Profile của họ
-        description: `Lý do từ chối: ${reason}`,
+        verificationStatus: VerificationStatus.REJECTED,
+        status: CarStatus.REJECTED,
+        description: `Rejection reason: ${reason.trim()}`,
       },
     });
+    if (result.count !== 1) {
+      throw new BadRequestException('Vehicle is not awaiting approval');
+    }
   }
 
-  // ================= 3. KYC =================
-
-  async getKycCustomers(query: any) {
-    const { page = 1, limit = 20, status } = query;
-    const skip = (Number(page) - 1) * Number(limit);
-    const where = status ? { status: status as KYCStatus } : {};
+  async getKycCustomers(query: PaginationDto & AdminKYCQueryDto) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+    const where: Prisma.KYCWhereInput = query.status
+      ? { status: query.status }
+      : {};
 
     const [items, total] = await Promise.all([
       this.prisma.kYC.findMany({
         where,
-        include: { user: true },
-        skip,
-        take: Number(limit),
+        select: {
+          id: true,
+          userId: true,
+          status: true,
+          documentType: true,
+          documentNumber: true,
+          documentFrontUrl: true,
+          documentBackUrl: true,
+          faceImageUrl: true,
+          verifiedAt: true,
+          rejectionReason: true,
+          submittedAt: true,
+          updatedAt: true,
+          user: {
+            select: {
+              id: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+              role: true,
+              isActive: true,
+            },
+          },
+        },
+        skip: (page - 1) * limit,
+        take: limit,
+        orderBy: { submittedAt: 'asc' },
       }),
       this.prisma.kYC.count({ where }),
     ]);
@@ -165,6 +189,14 @@ export class AdminService {
 
   async approveKyc(userId: string) {
     return this.prisma.$transaction(async (tx) => {
+      const kycClaim = await tx.kYC.updateMany({
+        where: { userId, status: KYCStatus.PENDING },
+        data: { status: KYCStatus.APPROVED, verifiedAt: new Date() },
+      });
+      if (kycClaim.count !== 1) {
+        throw new BadRequestException('KYC is not awaiting review');
+      }
+
       await tx.user.update({
         where: { id: userId },
         data: {
@@ -172,314 +204,68 @@ export class AdminService {
           verificationStatus: VerificationStatus.APPROVED,
         },
       });
-      return tx.kYC.update({
-        where: { userId },
-        data: { status: KYCStatus.APPROVED, verifiedAt: new Date() },
-      });
     });
   }
 
   async rejectKyc(userId: string, dto: RejectKYCDto) {
-    return this.prisma.kYC.update({
-      where: { userId },
+    const result = await this.prisma.kYC.updateMany({
+      where: { userId, status: KYCStatus.PENDING },
       data: {
         status: KYCStatus.REJECTED,
-        rejectionReason: dto.rejectionReason,
+        rejectionReason: dto.rejectionReason.trim(),
+      },
+    });
+    if (result.count !== 1) {
+      throw new BadRequestException('KYC is not awaiting review');
+    }
+  }
+
+  async createPromotion(dto: CreatePromotionDto) {
+    return this.prisma.promotion.create({
+      data: {
+        code: dto.code.trim().toUpperCase(),
+        description: dto.description,
+        discountType: dto.discountType,
+        discountValue: dto.discountValue,
+        maxUses: dto.maxUses,
+        minBookingAmount: dto.minBookingAmount,
+        startDate: new Date(dto.startDate),
+        endDate: new Date(dto.endDate),
       },
     });
   }
 
-  // ================= 4. PROMOTIONS =================
-
-  async createPromotion(dto: CreatePromotionDto) {
-    return this.prisma.promotion.create({ data: dto });
-  }
-
   async updatePromotion(id: string, dto: UpdatePromotionDto) {
-    return this.prisma.promotion.update({ where: { id }, data: dto });
+    const { startDate, endDate, code, ...rest } = dto;
+    return this.prisma.promotion.update({
+      where: { id },
+      data: {
+        ...rest,
+        ...(code ? { code: code.trim().toUpperCase() } : {}),
+        ...(startDate ? { startDate: new Date(startDate) } : {}),
+        ...(endDate ? { endDate: new Date(endDate) } : {}),
+      },
+    });
   }
-  async getPromotions(query: PromotionQueryDto) {
-    const { isActive } = query;
 
+  async getPromotions(query: PromotionQueryDto) {
     return this.prisma.promotion.findMany({
       where: {
-        // Ép kiểu về any để tránh TS check so sánh string/boolean nếu DTO chưa chuẩn
         isActive:
-          isActive !== undefined ? String(isActive) === 'true' : undefined,
+          query.isActive !== undefined
+            ? String(query.isActive) === 'true'
+            : undefined,
       },
       orderBy: { createdAt: 'desc' },
     });
   }
 
-  // ================= 5. PAYMENTS & ESCROW =================
-
-  async getPayments(query: any) {
-    const { page = 1, limit = 20 } = query;
-    return this.prisma.payment.findMany({
-      include: { user: true, booking: true },
-      skip: (Number(page) - 1) * Number(limit),
-      take: Number(limit),
-    });
-  }
-
-  async releasePayment(dto: {
-    bookingId: string;
-    platformFeePercent?: number; // Truyền từ ngoài vào hoặc dùng mặc định
-  }) {
-    // Đổi mặc định từ 10 thành 20 theo yêu cầu mới của bạn
-    const { bookingId, platformFeePercent = 20 } = dto;
-
-    const booking = await this.prisma.booking.findUnique({
-      where: { id: bookingId },
-      include: {
-        payments: true,
-        car: true,
-        trip: true,
-      },
-    });
-
-    if (!booking) throw new NotFoundException('Booking not found');
-
-    // Kiểm tra trạng thái chuyến đi
-    if (!booking.trip || booking.trip.status !== 'COMPLETED') {
-      throw new BadRequestException(
-        'Chuyến đi chưa hoàn thành, không thể giải ngân',
-      );
-    }
-
-    // Tìm khoản thanh toán thành công của khách hàng
-    const payment = booking.payments.find(
-      (p) => p.status === PaymentStatus.COMPLETED,
-    );
-    if (!payment)
-      throw new BadRequestException(
-        'Không tìm thấy giao dịch thanh toán thành công',
-      );
-
-    // TÍNH TOÁN: 20% phí sàn, 80% chủ xe nhận
-    const platformFee = Math.round((payment.amount * platformFeePercent) / 100);
-    const ownerAmount = payment.amount - platformFee;
-
-    return this.prisma.$transaction(async (tx) => {
-      // 1. Khấu trừ tổng số tiền từ ví giữ hộ của Hệ thống (Platform Escrow Wallet)
-      await tx.wallet.update({
-        where: { userId: this.PLATFORM_USER_ID },
-        data: { balance: { decrement: payment.amount } },
-      });
-
-      // 2. Cộng tiền thực nhận (80%) vào ví của Chủ xe
-      await tx.wallet.update({
-        where: { userId: booking.car.ownerId },
-        data: { balance: { increment: ownerAmount } },
-      });
-
-      // 3. Ghi nhận lịch sử thu nhập cho Chủ xe (OwnerTransaction)
-      await tx.ownerTransaction.create({
-        data: {
-          ownerId: booking.car.ownerId,
-          bookingId: booking.id,
-          amount: ownerAmount,
-          type: 'RENTAL_INCOME',
-          status: 'completed',
-          description: `Thu nhập thuê xe (Đã trừ ${platformFeePercent}% phí sàn)`,
-          metadata: {
-            totalPaidByCustomer: payment.amount,
-            platformFeeCharged: platformFee,
-            feePercentage: platformFeePercent,
-          } as any,
-        },
-      });
-
-      // 4. Cập nhật trạng thái Booking thành COMPLETED
-      await tx.booking.update({
-        where: { id: bookingId },
-        data: { status: BookingStatus.COMPLETED },
-      });
-
-      return {
-        success: true,
-        ownerReceived: ownerAmount,
-        platformFee: platformFee,
-      };
-    });
-  }
-
-  async refundPayment(dto: {
-    bookingId: string;
-    refundPercent?: number;
-    reason: string;
-  }) {
-    const { bookingId, refundPercent = 100, reason } = dto;
-    const PLATFORM_SYSTEM_ID = '65f1a2b3c4d5e6f7a8b9c0d1'; // ID ví Escrow của sàn
-
-    const booking = await this.prisma.booking.findUnique({
-      where: { id: bookingId },
-      include: { payments: true },
-    });
-
-    if (!booking) throw new NotFoundException('Booking không tồn tại');
-
-    const payment = booking.payments.find(
-      (p) => p.status === PaymentStatus.COMPLETED,
-    );
-    if (!payment)
-      throw new BadRequestException('Đơn hàng chưa được thanh toán thành công');
-
-    const refundAmount = (payment.amount * refundPercent) / 100;
-
-    return this.prisma.$transaction(async (tx) => {
-      // 1. ✅ TRỪ tiền từ ví Hệ thống (Admin)
-      await tx.wallet.update({
-        where: { userId: PLATFORM_SYSTEM_ID },
-        data: { balance: { decrement: refundAmount } },
-      });
-
-      // 2. ✅ Cập nhật trạng thái giao dịch
-      await tx.payment.update({
-        where: { id: payment.id },
-        data: {
-          status: PaymentStatus.REFUNDED,
-          failureReason: `Refund ${refundPercent}%: ${reason}`,
-        },
-      });
-
-      // 3. ✅ Ghi log giao dịch (Transaction History)
-      await tx.walletTransaction.create({
-        data: {
-          walletId: (
-            await tx.wallet.findFirst({ where: { userId: PLATFORM_SYSTEM_ID } })
-          ).id,
-          amount: refundAmount,
-          type: 'REFUND',
-          description: `Hoàn tiền ${refundPercent}% cho khách hàng ${booking.customerId}. Lý do: ${reason}`,
-          metadata: { bookingId, percent: refundPercent } as any,
-        },
-      });
-
-      // 4. ✅ Hủy Booking (nếu cần thiết trong quy trình của bạn)
-      await tx.booking.update({
-        where: { id: bookingId },
-        data: { status: BookingStatus.CANCELLED },
-      });
-
-      return {
-        success: true,
-        refundAmount,
-        message: 'Hệ thống đã xác nhận hoàn tiền và trừ quỹ Escrow',
-      };
-    });
-  }
-
-  // ================= 6. SETTLEMENTS =================
-
-  // src/modules/admin/admin.service.ts
-
-  async runSettlement(dto: RunSettlementDto) {
-    const owners = await this.prisma.user.findMany({
-      where: { role: UserRole.OWNER },
-    });
-
-    for (const owner of owners) {
-      const total = await this.prisma.ownerTransaction.aggregate({
-        where: {
-          ownerId: owner.id,
-          type: 'RENTAL_INCOME',
-          status: 'completed',
-        },
-        _sum: { amount: true },
-      });
-
-      await this.prisma.settlement.create({
-        data: {
-          owner: { connect: { id: owner.id } },
-          period: dto.period,
-          totalEarnings: total._sum.amount || 0,
-          totalPayouts: 0, // BẮT BUỘC: Thêm field này để hết lỗi missing property
-          netAmount: total._sum.amount || 0,
-          status: 'COMPLETED', // Hoặc dùng SettlementStatus.COMPLETED từ @prisma/client
-        },
-      });
-    }
-    return { success: true };
-  }
-  // ================= 6. SETTLEMENTS =================
-
-  async getSettlementHistory(query: PaginationDto) {
-    const { page = 1, limit = 20 } = query;
-    const skip = (page - 1) * limit;
-
-    const [items, total] = await Promise.all([
-      this.prisma.settlement.findMany({
-        include: { owner: true },
-        skip,
-        take: limit,
-        orderBy: { createdAt: 'desc' },
-      }),
-      this.prisma.settlement.count(),
-    ]);
-
-    return { items, total, page, limit };
-  }
-
-  // ================= 7. WITHDRAWS =================
-
-  async getPendingWithdraws(query: PaginationDto) {
-    const { page = 1, limit = 20 } = query;
-    const skip = (page - 1) * limit;
-
-    const where = { type: 'WITHDRAW', status: 'pending' };
-
-    const [items, total] = await Promise.all([
-      this.prisma.ownerTransaction.findMany({
-        where,
-        include: { owner: true },
-        skip,
-        take: limit,
-        orderBy: { createdAt: 'desc' },
-      }),
-      this.prisma.ownerTransaction.count({ where }),
-    ]);
-
-    return { items, total, page, limit };
-  }
-
-  async approveWithdraw(id: string) {
-    return this.prisma.ownerTransaction.update({
-      where: { id },
-      data: { status: 'completed' },
-    });
-  }
-
-  async rejectWithdraw(id: string, reason: string) {
-    const txData = await this.prisma.ownerTransaction.findUnique({
-      where: { id },
-    });
-
-    if (!txData) {
-      throw new NotFoundException('Withdraw transaction not found');
-    }
-
-    return this.prisma.$transaction([
-      this.prisma.wallet.update({
-        where: { userId: txData.ownerId },
-        data: { balance: { increment: txData.amount } },
-      }),
-      this.prisma.ownerTransaction.update({
-        where: { id },
-        data: { status: 'failed', description: reason },
-      }),
-    ]);
-  }
-
-  // ================= 8. OTHERS =================
-
   async getAllDisputes(query: PaginationDto) {
-    const { page = 1, limit = 10 } = query;
-    const skip = (page - 1) * limit;
-
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 10;
     const [items, total] = await Promise.all([
       this.prisma.dispute.findMany({
-        skip,
+        skip: (page - 1) * limit,
         take: limit,
         include: {
           initiator: {
@@ -487,62 +273,82 @@ export class AdminService {
           },
           booking: true,
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: 'asc' },
       }),
       this.prisma.dispute.count(),
     ]);
-
     return { items, total, page, limit };
   }
 
   async updateToInProgress(disputeId: string) {
-    return this.prisma.dispute.update({
-      where: { id: disputeId },
+    const result = await this.prisma.dispute.updateMany({
+      where: { id: disputeId, status: DisputeStatus.OPEN },
       data: { status: DisputeStatus.IN_PROGRESS },
     });
+    if (result.count !== 1) {
+      throw new BadRequestException('Dispute is not open');
+    }
   }
 
-  // 2. Giải quyết vấn đề (Chuyển sang RESOLVED hoặc CLOSED)
-  async resolveDispute(
-    disputeId: string,
-    dto: { resolution: string; status: DisputeStatus }, // Đổi finalStatus thành status
-  ) {
+  async resolveDispute(disputeId: string, dto: ResolveDisputeDto) {
+    if (![DisputeStatus.RESOLVED, DisputeStatus.CLOSED].includes(dto.status)) {
+      throw new BadRequestException('Final dispute status must be RESOLVED or CLOSED');
+    }
+
     const dispute = await this.prisma.dispute.findUnique({
       where: { id: disputeId },
+      select: { id: true },
     });
-
     if (!dispute) throw new NotFoundException('Không tìm thấy khiếu nại');
 
     return this.prisma.dispute.update({
       where: { id: disputeId },
       data: {
-        status: dto.status, // Sử dụng dto.status
-        description: `${dispute.description}\n\n[Admin Resolution]: ${dto.resolution}`,
+        status: dto.status,
+        resolution: dto.resolution.trim(),
+        resolvedAt: new Date(),
       },
     });
   }
 
   async createCategory(dto: CreateCategoryDto) {
-    return this.prisma.category.create({ data: dto });
+    const baseSlug = this.slugify(dto.name);
+    if (!baseSlug) throw new BadRequestException('Category name is invalid');
+
+    let slug = baseSlug;
+    let suffix = 2;
+    while (await this.prisma.category.findUnique({ where: { slug } })) {
+      slug = `${baseSlug}-${suffix}`;
+      suffix += 1;
+    }
+
+    return this.prisma.category.create({
+      data: {
+        name: dto.name.trim(),
+        slug,
+        description: dto.description?.trim(),
+      },
+    });
   }
 
   async createLocation(dto: CreateLocationDto) {
-    return this.prisma.location.create({ data: dto });
-  }
-
-  async getPlatformWallet() {
-    return this.prisma.wallet.findUnique({
-      where: { userId: this.PLATFORM_USER_ID },
+    return this.prisma.location.create({
+      data: {
+        name: dto.name.trim(),
+        address: dto.address.trim(),
+        city: dto.city.trim(),
+        latitude: dto.latitude,
+        longitude: dto.longitude,
+      },
     });
   }
 
   async getAllBookings(query: PaginationDto) {
-    const { page = 1, limit = 20 } = query;
-    const skip = (page - 1) * limit;
-
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
     const [items, total] = await Promise.all([
       this.prisma.booking.findMany({
-        skip,
+        skip: (page - 1) * limit,
         take: limit,
         orderBy: { createdAt: 'desc' },
         include: {
@@ -554,17 +360,15 @@ export class AdminService {
       }),
       this.prisma.booking.count(),
     ]);
-
     return { items, total, page, limit };
   }
 
   async getAllContracts(query: PaginationDto) {
-    const { page = 1, limit = 20 } = query;
-    const skip = (page - 1) * limit;
-
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
     const [items, total] = await Promise.all([
       this.prisma.contract.findMany({
-        skip,
+        skip: (page - 1) * limit,
         take: limit,
         orderBy: { createdAt: 'desc' },
         include: {
@@ -578,17 +382,15 @@ export class AdminService {
       }),
       this.prisma.contract.count(),
     ]);
-
     return { items, total, page, limit };
   }
 
   async getUsers(query: PaginationDto) {
-    const { page = 1, limit = 20 } = query;
-    const skip = (page - 1) * limit;
-
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
     const [items, total] = await Promise.all([
       this.prisma.user.findMany({
-        skip,
+        skip: (page - 1) * limit,
         take: limit,
         orderBy: { createdAt: 'desc' },
         select: {
@@ -605,7 +407,6 @@ export class AdminService {
       }),
       this.prisma.user.count(),
     ]);
-
     return { items, total, page, limit };
   }
 
@@ -613,54 +414,18 @@ export class AdminService {
     return this.prisma.user.update({
       where: { id },
       data: { isActive },
+      select: { id: true, isActive: true },
     });
   }
 
-  async getPendingReleaseTrips(query: PaginationDto) {
-    const { page = 1, limit = 20 } = query;
-    const skip = (page - 1) * limit;
-
-    const where: Prisma.TripWhereInput = {
-      status: 'COMPLETED', // ✅ TypeScript sẽ tự infer đúng type khi có Prisma.TripWhereInput
-      booking: { status: BookingStatus.CONFIRMED },
-    };
-
-    const [items, total] = await Promise.all([
-      this.prisma.trip.findMany({
-        where,
-        skip,
-        take: limit,
-        include: {
-          booking: { include: { payments: true } },
-          car: { include: { owner: true } },
-        },
-        orderBy: { updatedAt: 'desc' },
-      }),
-      this.prisma.trip.count({ where }),
-    ]);
-
-    return { items, total, page, limit };
-  }
-
-  async autoReleaseCompletedTrips() {
-    const { items: trips } = await this.getPendingReleaseTrips({
-      page: 1,
-      limit: 100,
-    });
-
-    let count = 0;
-    for (const trip of trips) {
-      try {
-        await this.releasePayment({ bookingId: trip.bookingId });
-        count++;
-      } catch (error) {
-        console.error(
-          `Failed to release payment for booking ${trip.bookingId}:`,
-          error,
-        );
-      }
-    }
-
-    return { processed: count };
+  private slugify(value: string) {
+    return value
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 80);
   }
 }
