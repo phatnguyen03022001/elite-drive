@@ -85,16 +85,24 @@ describe('SecureAdminService finance invariants', () => {
 
   it('never exposes password from payment listing', async () => {
     const payment = {
-      findMany: jest.fn().mockResolvedValue([]),
-      count: jest.fn().mockResolvedValue(0),
+      findMany: jest.fn().mockResolvedValue([
+        {
+          id: 'payment-1',
+          user: {
+            id: 'user-1',
+            email: 'user@example.com',
+            password: 'hashed-secret',
+          },
+          booking: null,
+        },
+      ]),
     };
     const db = { payment } as unknown as PrismaService;
     const service = new SecureAdminService(db, config);
 
-    await service.getPayments({ page: 1, limit: 20 });
+    const result = await service.getPayments({ page: 1, limit: 20 });
 
-    const select = payment.findMany.mock.calls[0][0].select;
-    expect(select.user.select.password).toBeUndefined();
-    expect(select.user.select.email).toBe(true);
+    expect(result[0].user.password).toBeUndefined();
+    expect(result[0].user.email).toBe('user@example.com');
   });
 });
