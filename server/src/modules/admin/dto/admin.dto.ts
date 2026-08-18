@@ -8,7 +8,6 @@ import {
   IsBoolean,
   IsBooleanString,
   IsEnum,
-  IsUrl,
   IsIn,
   Matches,
   Max,
@@ -63,8 +62,6 @@ export class UpdatePromotionDto extends PartialType(CreatePromotionDto) {
 
 export class PromotionQueryDto {
   @ApiPropertyOptional() @IsOptional() @IsBooleanString() isActive?: string;
-  @ApiPropertyOptional() @IsOptional() @IsString() page?: string;
-  @ApiPropertyOptional() @IsOptional() @IsString() limit?: string;
 }
 
 export class RunSettlementDto {
@@ -163,7 +160,6 @@ export class DisputeQueryDto {
 export class CreateCategoryDto {
   @ApiProperty() @IsNotEmpty() @IsString() name: string;
   @ApiPropertyOptional() @IsOptional() @IsString() description?: string;
-  @ApiPropertyOptional() @IsOptional() @IsUrl() imageUrl?: string;
 }
 
 export class CreateLocationDto {
