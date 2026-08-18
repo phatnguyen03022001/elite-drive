@@ -32,14 +32,12 @@ export const adminKeys = {
   pendingCars: () => [...adminKeys.cars(), "pending"] as const,
   promotions: (params: unknown) => [...adminKeys.all, "promotions", params] as const,
   escrow: () => [...adminKeys.all, "escrow"] as const,
-  escrowSummary: () => [...adminKeys.escrow(), "summary"] as const,
   pendingRelease: (params: unknown) => [...adminKeys.escrow(), "pending-release", params] as const,
   settlements: (params: unknown) => [...adminKeys.all, "settlements", params] as const,
   disputes: (params: unknown) => [...adminKeys.all, "disputes", params] as const,
   withdraws: (params: unknown) => [...adminKeys.all, "withdraws", params] as const,
   platformWallet: () => [...adminKeys.all, "platform-wallet"] as const,
   users: (params: unknown) => [...adminKeys.all, "users", params] as const,
-  auditLogs: (params: unknown) => [...adminKeys.all, "audit-logs", params] as const,
 };
 
 export const useOverviewReport = () => useQuery({ queryKey: adminKeys.overview(), queryFn: AdminService.getOverviewReport });
@@ -82,7 +80,7 @@ export const useRejectKyc = () => {
 
 export const usePendingCars = () => useQuery({ queryKey: adminKeys.pendingCars(), queryFn: AdminService.getPendingCars });
 
-export const useAllCars = (params: { status?: string; page?: number; limit?: number } = {}) => useQuery({
+export const useAllCars = (params: { status?: string } = {}) => useQuery({
   queryKey: adminKeys.carList(params),
   queryFn: () => AdminService.getAllCars(params),
 });
@@ -123,12 +121,6 @@ export const useUpdatePromotion = () => {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: adminKeys.all }),
   });
 };
-
-export const useEscrowSummary = () => useQuery({
-  queryKey: adminKeys.escrowSummary(),
-  queryFn: AdminService.getEscrowSummary,
-  refetchInterval: 30000,
-});
 
 export const usePendingReleaseTrips = (params: { page?: number; limit?: number } = {}) => useQuery({
   queryKey: adminKeys.pendingRelease(params),
@@ -252,8 +244,3 @@ export const useUpdateUserStatus = () => {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: adminKeys.users({}) }),
   });
 };
-
-export const useAuditLogs = (params: { page?: number; limit?: number } = {}) => useQuery({
-  queryKey: adminKeys.auditLogs(params),
-  queryFn: () => AdminService.getAuditLogs(params),
-});
