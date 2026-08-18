@@ -72,7 +72,7 @@ export class OwnerTripService {
         where: { id: tripId, status: 'UPCOMING' },
         data: {
           status: 'ONGOING',
-          pickupAt: new Date(),
+          checkinTime: new Date(),
           startOdometer: dto.startOdometer,
           startFuelLevel: dto.startFuelLevel,
           pickupNotes: dto.pickupNotes,
@@ -130,7 +130,7 @@ export class OwnerTripService {
         where: { id: tripId, status: 'ONGOING' },
         data: {
           status: 'COMPLETED',
-          dropoffAt: new Date(),
+          checkoutTime: new Date(),
           endOdometer: dto.endOdometer,
           endFuelLevel: dto.endFuelLevel,
           dropoffNotes: dto.dropoffNotes,
