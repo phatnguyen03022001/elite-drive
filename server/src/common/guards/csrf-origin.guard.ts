@@ -51,7 +51,11 @@ export class CsrfOriginGuard implements CanActivate {
     }
 
     const origin = firstHeaderValue(request.headers.origin);
-    if (origin && !isTrustedFrontendOrigin(origin, this.trustedOrigins)) {
+    if (!origin) {
+      throw new ForbiddenException('Session request origin is required');
+    }
+
+    if (!isTrustedFrontendOrigin(origin, this.trustedOrigins)) {
       throw new ForbiddenException('Request origin is not allowed');
     }
 
