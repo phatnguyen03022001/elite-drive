@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { MulterModule } from '@nestjs/platform-express';
 import { AdminController } from './admin.controller';
 import { AdminFinanceService } from './admin-finance.service';
+import { AdminOperationalHealthController } from './admin-operational-health.controller';
 import { AdminPaymentReconciliationController } from './admin-payment-reconciliation.controller';
 import { AdminPromotionService } from './admin-promotion.service';
 import { AdminRefundService } from './admin-refund.service';
@@ -24,6 +25,7 @@ import { PaymentModule } from '../payment/payment.module';
   ],
   controllers: [
     AdminController,
+    AdminOperationalHealthController,
     AdminPaymentReconciliationController,
     AdminWalletReconciliationController,
   ],
