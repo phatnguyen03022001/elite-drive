@@ -16,6 +16,8 @@
     "test": "jest --runInBand",
     "test:ci": "jest --runInBand",
     "test:watch": "jest --watch",
+    "money:audit": "ts-node prisma/audit-money.ts",
+    "security:audit:prod": "npm audit --omit=dev --audit-level=high",
     "db:seed": "ts-node prisma/reset-seed.ts && ts-node prisma/seed.ts && ts-node prisma/seed-assets.ts",
     "tree": "tree -L 6 -I \"node_modules|dist|.git|test|coverage|Docs|generated|.vscode\"",
     "dump:shared": "find src/shared -type f -name \"*.ts\" -exec sh -c 'echo \"\\n===== {} =====\\n\"; cat {}' \\; > zcode/shared-code.txt",
