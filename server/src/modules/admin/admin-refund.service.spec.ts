@@ -18,7 +18,7 @@ describe('AdminRefundService invariants', () => {
     await expect(
       service.refundPayment({
         bookingId: 'booking-1',
-        refundPercent: 50,
+        refundPercent: 50 as 100,
         reason: 'partial',
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
