@@ -1,4 +1,4 @@
-import { HttpException, UnauthorizedException } from '@nestjs/common';
+import { UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { AuthService } from './auth.service';
@@ -40,7 +40,7 @@ describe('AuthService abuse protection', () => {
 
     await expect(
       service.verifyForgotOtp({ email: 'user@example.com', code: '123456' }),
-    ).rejects.toMatchObject<HttpException>({ status: 429 });
+    ).rejects.toMatchObject({ status: 429 });
     expect(attempts).toBe(5);
     expect((prisma.oTP.update as jest.Mock).mock.calls).toHaveLength(1);
   });
@@ -82,7 +82,7 @@ describe('AuthService abuse protection', () => {
 
     await expect(
       service.login({ email: 'unknown@example.com', password: 'wrong-password' }),
-    ).rejects.toMatchObject<HttpException>({ status: 429 });
+    ).rejects.toMatchObject({ status: 429 });
     expect(attempts).toBe(5);
   });
 });
