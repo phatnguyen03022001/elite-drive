@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "prebuild": "npm run security:audit:prod:report",
+    "prebuild": "npm run security:audit:prod:report && npm run lock:secure-preview",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
