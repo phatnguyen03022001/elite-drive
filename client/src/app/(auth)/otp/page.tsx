@@ -1,101 +1,138 @@
 "use client";
 
-import { useSearchParams, useRouter } from "next/navigation";
+import { useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useMutation } from "@tanstack/react-query";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { OtpForm } from "@/features/auth/components/OtpForm";
-import { useMutation } from "@tanstack/react-query"; // Đảm bảo đã import useMutation
-import axios from "axios"; // Hoặc library bạn dùng để call API
-import { toast } from "sonner"; // Hoặc thư viện thông báo của bạn
+import { authService } from "@/features/auth/auth.service";
+import { notify, notifyError } from "@/lib/notifications";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://elitedrive-demoversion.onrender.com";
+type OtpMode = "register" | "login" | "forgot";
+type OtpPayload = { email: string; code: string };
 
-const useVerifyRegisterOtp = () => {
-  const router = useRouter();
-  return useMutation({
-    mutationFn: async (payload: any) => {
-      const { data } = await axios.post(`${API_URL}/api/auth/otp/register`, payload);
-      return data;
-    },
-    onSuccess: () => {
-      toast.success("Xác thực đăng ký thành công!");
-      router.push("/auth/login");
-    },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.message || "Lỗi xác thực OTP");
-    },
-  });
-};
+function isOtpMode(value: string | null): value is OtpMode {
+  return value === "register" || value === "login" || value === "forgot";
+}
 
-const useVerifyLoginOtp = () => {
-  const router = useRouter();
-  return useMutation({
-    mutationFn: async (payload: any) => {
-      const { data } = await axios.post(`${API_URL}/api/auth/otp/login`, payload);
-      return data;
-    },
-    onSuccess: (data) => {
-      toast.success("Đăng nhập thành công!");
-      // Lưu token vào cookie/localStorage ở đây nếu cần
-      router.push("/dashboard");
-    },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.message || "OTP không chính xác");
-    },
-  });
-};
-
-const useVerifyForgotOtp = () => {
-  const router = useRouter();
-  return useMutation({
-    mutationFn: async (payload: any) => {
-      const { data } = await axios.post(`${API_URL}/api/auth/otp/forgot-password`, payload);
-      return data;
-    },
-    onSuccess: (data) => {
-      toast.success("Xác thực thành công. Hãy đặt lại mật khẩu!");
-      router.push(`/auth/reset-password?email=${data.email}&token=${data.token}`);
-    },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.message || "Lỗi xác thực");
-    },
-  });
-};
+function workspaceForRole(role?: string) {
+  if (role === "ADMIN") return "/admin";
+  if (role === "OWNER") return "/owner/dashboard";
+  return "/customer/cars";
+}
 
 export default function OtpPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const type = searchParams.get("type");
+  const email = searchParams.get("email")?.trim() ?? "";
+  const validRequest = isOtpMode(type) && email.length > 0;
 
-  // ✅ Hooks ALWAYS first
-  const verifyRegisterOtp = useVerifyRegisterOtp();
-  const verifyLoginOtp = useVerifyLoginOtp();
-  const verifyForgotOtp = useVerifyForgotOtp();
+  useEffect(() => {
+    if (!validRequest) router.replace("/login");
+  }, [router, validRequest]);
 
-  const type = searchParams.get("type") as "register" | "login" | "forgot" | null;
-  const email = searchParams.get("email");
+  const verifyRegisterOtp = useMutation({
+    mutationFn: ({ email: payloadEmail, code }: OtpPayload) =>
+      authService.otp.verify.register(payloadEmail, code),
+    onSuccess: () => {
+      notify.success("Registration verified", {
+        id: "otp-register",
+        description: "Your account is verified. You can sign in now.",
+      });
+      router.replace("/login");
+    },
+    onError: (error: unknown) =>
+      notifyError(
+        "Verification code not accepted",
+        error,
+        "The code may be invalid or expired. Request a new code and try again.",
+        { id: "otp-register" },
+      ),
+  });
 
-  if (!type || !email || !["register", "login", "forgot"].includes(type)) {
-    router.replace("/auth/login");
-    return null;
-  }
+  const verifyLoginOtp = useMutation({
+    mutationFn: ({ email: payloadEmail, code }: OtpPayload) =>
+      authService.otp.verify.login(payloadEmail, code),
+    onSuccess: async () => {
+      try {
+        const profile = await authService.getProfile();
+        notify.success("Signed in", {
+          id: "otp-login",
+          description: "Your Elite Drive workspace is ready.",
+        });
+        router.replace(workspaceForRole(profile?.role));
+        router.refresh();
+      } catch (error) {
+        notifyError(
+          "Session verification failed",
+          error,
+          "The OTP was accepted, but the session could not be verified. Sign in again.",
+          { id: "otp-login" },
+        );
+        router.replace("/login");
+      }
+    },
+    onError: (error: unknown) =>
+      notifyError(
+        "Verification code not accepted",
+        error,
+        "The code may be invalid or expired. Request a new code and try again.",
+        { id: "otp-login" },
+      ),
+  });
 
-  const verifyOtp = type === "register" ? verifyRegisterOtp : type === "login" ? verifyLoginOtp : verifyForgotOtp;
+  const verifyForgotOtp = useMutation({
+    mutationFn: ({ email: payloadEmail, code }: OtpPayload) =>
+      authService.otp.verify.forgot(payloadEmail, code),
+    onSuccess: (_response, variables) => {
+      notify.success("Verification code accepted", {
+        id: "otp-forgot",
+        description: "Continue to set a new password.",
+      });
+      const params = new URLSearchParams({
+        email: variables.email,
+        code: variables.code,
+      });
+      router.replace(`/forgot-password?${params.toString()}`);
+    },
+    onError: (error: unknown) =>
+      notifyError(
+        "Verification code not accepted",
+        error,
+        "The code may be invalid or expired. Request a new code and try again.",
+        { id: "otp-forgot" },
+      ),
+  });
 
-  const titles = {
-    register: "Xác thực đăng ký",
-    login: "Xác thực đăng nhập",
-    forgot: "Xác thực đặt lại mật khẩu",
+  if (!validRequest) return null;
+
+  const verifyOtp =
+    type === "register"
+      ? verifyRegisterOtp
+      : type === "login"
+        ? verifyLoginOtp
+        : verifyForgotOtp;
+
+  const titles: Record<OtpMode, string> = {
+    register: "Verify registration",
+    login: "Verify sign-in",
+    forgot: "Verify password reset",
   };
 
   return (
     <Card>
       <CardHeader className="space-y-1">
-        <CardTitle className="text-2xl text-center">{titles[type]}</CardTitle>
+        <CardTitle className="text-center text-2xl">{titles[type]}</CardTitle>
         <CardDescription className="text-center">
-          Mã OTP đã được gửi đến <strong>{email}</strong>
+          Enter the verification code sent to <strong>{email}</strong>.
         </CardDescription>
       </CardHeader>
-
-      <OtpForm email={email} onVerify={(payload) => verifyOtp.mutate(payload)} isLoading={verifyOtp.isPending} />
+      <OtpForm
+        email={email}
+        onVerify={(payload) => verifyOtp.mutate(payload)}
+        isLoading={verifyOtp.isPending}
+      />
     </Card>
   );
 }

@@ -93,7 +93,7 @@ export function AppSidebar({ role }: AppSidebarProps) {
         <Button asChild variant="ghost" className="h-auto w-full justify-start gap-3 rounded-xl px-2 py-2 text-left">
           <Link href={PROFILE_ROUTES[role]}>
             <Avatar className="h-9 w-9 shrink-0 border border-sidebar-border">
-              <AvatarImage src={user?.avatar} alt={displayName} />
+              <AvatarImage src={user?.avatar ?? undefined} alt={displayName} />
               <AvatarFallback className="bg-primary/10 text-xs font-bold text-primary">{initials}</AvatarFallback>
             </Avatar>
             <span className="min-w-0 flex-1">

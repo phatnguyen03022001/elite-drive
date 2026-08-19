@@ -8,7 +8,12 @@ import {
   IsBoolean,
   IsBooleanString,
   IsEnum,
-  IsUrl,
+  IsIn,
+  IsInt,
+  Matches,
+  Max,
+  MaxLength,
+  Min,
 } from 'class-validator';
 import {
   PaymentStatus,
@@ -16,8 +21,6 @@ import {
   KYCStatus,
   DisputeStatus,
 } from '@prisma/client';
-
-// --- GROUP 1: REPORTS & ANALYTICS ---
 
 export class ReportDateRangeDto {
   @ApiPropertyOptional() @IsOptional() @IsDateString() from?: string;
@@ -27,7 +30,7 @@ export class ReportDateRangeDto {
 export class AdminReportOverviewDto {
   @ApiProperty() totalUsers: number;
   @ApiProperty() totalCars: number;
-  @ApiProperty() activeBookings: number;
+  @ApiProperty() totalBookings: number;
   @ApiProperty() totalRevenue: number;
 }
 
@@ -43,23 +46,47 @@ export class AdminBookingReportDto {
   @ApiProperty() percentage: number;
 }
 
-// --- GROUP 2: PROMOTIONS ---
-
 export class CreatePromotionDto {
   @ApiProperty({ example: 'SUMMER2026' })
   @IsNotEmpty()
   @IsString()
+  @Matches(/^[A-Za-z0-9_-]{3,40}$/)
   code: string;
-  @ApiPropertyOptional() @IsOptional() @IsString() description?: string;
-  @ApiProperty({ example: 'PERCENTAGE', description: 'PERCENTAGE hoặc FIXED' })
-  @IsNotEmpty()
+
+  @ApiPropertyOptional()
+  @IsOptional()
   @IsString()
-  discountType: string;
-  @ApiProperty() @IsNotEmpty() @IsNumber() discountValue: number;
-  @ApiPropertyOptional() @IsOptional() @IsNumber() maxUses?: number;
-  @ApiPropertyOptional() @IsOptional() @IsNumber() minBookingAmount?: number;
-  @ApiProperty() @IsNotEmpty() @IsDateString() startDate: string;
-  @ApiProperty() @IsNotEmpty() @IsDateString() endDate: string;
+  @MaxLength(500)
+  description?: string;
+
+  @ApiProperty({ enum: ['PERCENTAGE', 'FIXED'] })
+  @IsIn(['PERCENTAGE', 'FIXED'])
+  discountType: 'PERCENTAGE' | 'FIXED';
+
+  @ApiProperty()
+  @IsNumber()
+  @Min(0.01)
+  discountValue: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  maxUses?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  minBookingAmount?: number;
+
+  @ApiProperty()
+  @IsDateString()
+  startDate: string;
+
+  @ApiProperty()
+  @IsDateString()
+  endDate: string;
 }
 
 export class UpdatePromotionDto extends PartialType(CreatePromotionDto) {
@@ -68,26 +95,36 @@ export class UpdatePromotionDto extends PartialType(CreatePromotionDto) {
 
 export class PromotionQueryDto {
   @ApiPropertyOptional() @IsOptional() @IsBooleanString() isActive?: string;
-  @ApiPropertyOptional() @IsOptional() @IsString() page?: string;
-  @ApiPropertyOptional() @IsOptional() @IsString() limit?: string;
 }
 
-// --- GROUP 3: PAYMENTS & SETTLEMENTS ---
-
 export class RunSettlementDto {
-  @ApiProperty({ example: '2026-01' }) @IsNotEmpty() @IsString() period: string;
+  @ApiProperty({ example: '2026-01' })
+  @IsNotEmpty()
+  @IsString()
+  @Matches(/^\d{4}-(0[1-9]|1[0-2])$/, { message: 'period phải có dạng YYYY-MM' })
+  period: string;
   @ApiPropertyOptional() @IsOptional() @IsString() ownerId?: string;
 }
 
 export class PaymentQueryDto {
-  @ApiPropertyOptional({ enum: PaymentStatus })
-  @IsOptional()
-  @IsEnum(PaymentStatus)
-  status?: PaymentStatus;
+  @ApiPropertyOptional({ enum: PaymentStatus }) @IsOptional() @IsEnum(PaymentStatus) status?: PaymentStatus;
   @ApiPropertyOptional() @IsOptional() @IsDateString() from?: string;
   @ApiPropertyOptional() @IsOptional() @IsDateString() to?: string;
-  @ApiPropertyOptional() @IsOptional() @IsString() page?: string;
-  @ApiPropertyOptional() @IsOptional() @IsString() limit?: string;
+}
+
+export class ReleasePaymentDto {
+  @ApiProperty() @IsNotEmpty() @IsString() bookingId: string;
+  @ApiPropertyOptional({ minimum: 0, maximum: 100, default: 20 }) @IsOptional() @IsNumber() @Min(0) @Max(100) platformFeePercent?: number;
+}
+
+export class RefundPaymentDto {
+  @ApiProperty() @IsNotEmpty() @IsString() bookingId: string;
+  @ApiPropertyOptional({ enum: [100], default: 100, description: 'Partial refunds require a dedicated state model and are not supported yet.' })
+  @IsOptional()
+  @IsNumber()
+  @IsIn([100])
+  refundPercent?: 100;
+  @ApiProperty() @IsNotEmpty() @IsString() @MaxLength(1000) reason: string;
 }
 
 export class SettlementResponseDto {
@@ -102,26 +139,20 @@ export class SettlementResponseDto {
 
 export class SettlementHistoryQueryDto {
   @ApiPropertyOptional() @IsOptional() @IsString() period?: string;
-  @ApiPropertyOptional({ enum: SettlementStatus })
-  @IsOptional()
-  @IsEnum(SettlementStatus)
-  status?: SettlementStatus;
+  @ApiPropertyOptional({ enum: SettlementStatus }) @IsOptional() @IsEnum(SettlementStatus) status?: SettlementStatus;
   @ApiPropertyOptional() @IsOptional() @IsString() ownerId?: string;
-  @ApiPropertyOptional() @IsOptional() @IsString() page?: string;
-  @ApiPropertyOptional() @IsOptional() @IsString() limit?: string;
 }
 
-// --- GROUP 4: KYC & CAR APPROVAL ---
-
 export class AdminKYCQueryDto {
-  @ApiPropertyOptional({ enum: KYCStatus })
-  @IsOptional()
-  @IsEnum(KYCStatus)
-  status?: KYCStatus;
+  @ApiPropertyOptional({ enum: KYCStatus }) @IsOptional() @IsEnum(KYCStatus) status?: KYCStatus;
 }
 
 export class RejectKYCDto {
-  @ApiProperty() @IsNotEmpty() @IsString() rejectionReason: string;
+  @ApiProperty() @IsNotEmpty() @IsString() @MaxLength(1000) rejectionReason: string;
+}
+
+export class RejectCarDto {
+  @ApiProperty() @IsNotEmpty() @IsString() @MaxLength(1000) reason: string;
 }
 
 export class AdminKYCResponseDto {
@@ -132,11 +163,7 @@ export class AdminKYCResponseDto {
   @ApiProperty() documentImageUrl: string | null;
   @ApiProperty() faceImageUrl: string | null;
   @ApiProperty() submittedAt: Date;
-  @ApiProperty() user: {
-    email: string;
-    firstName: string | null;
-    lastName: string | null;
-  };
+  @ApiProperty() user: { email: string; firstName: string | null; lastName: string | null };
 }
 
 export class ApproveCarDto {
@@ -149,33 +176,27 @@ export class PendingCarResponseDto {
   @ApiProperty() licensePlate: string;
   @ApiProperty() ownerId: string;
   @ApiProperty() verificationStatus: string;
-  @ApiProperty() documents: any[];
+  @ApiProperty() documents: unknown[];
   @ApiProperty() createdAt: Date;
 }
 
-// --- GROUP 5: DISPUTES & MASTER DATA ---
+export type FinalDisputeStatus = 'RESOLVED' | 'CLOSED';
 
 export class ResolveDisputeDto {
-  @ApiProperty() @IsNotEmpty() @IsString() resolution: string;
-  @ApiProperty({ enum: DisputeStatus })
+  @ApiProperty() @IsNotEmpty() @IsString() @MaxLength(2000) resolution: string;
+  @ApiProperty({ enum: [DisputeStatus.RESOLVED, DisputeStatus.CLOSED] })
   @IsNotEmpty()
-  @IsEnum(DisputeStatus)
-  status: DisputeStatus;
+  @IsIn([DisputeStatus.RESOLVED, DisputeStatus.CLOSED])
+  status: FinalDisputeStatus;
 }
 
 export class DisputeQueryDto {
-  @ApiPropertyOptional({ enum: DisputeStatus })
-  @IsOptional()
-  @IsEnum(DisputeStatus)
-  status?: DisputeStatus;
-  @ApiPropertyOptional() @IsOptional() @IsString() page?: string;
-  @ApiPropertyOptional() @IsOptional() @IsString() limit?: string;
+  @ApiPropertyOptional({ enum: DisputeStatus }) @IsOptional() @IsEnum(DisputeStatus) status?: DisputeStatus;
 }
 
 export class CreateCategoryDto {
   @ApiProperty() @IsNotEmpty() @IsString() name: string;
   @ApiPropertyOptional() @IsOptional() @IsString() description?: string;
-  @ApiPropertyOptional() @IsOptional() @IsUrl() imageUrl?: string;
 }
 
 export class CreateLocationDto {
@@ -184,4 +205,12 @@ export class CreateLocationDto {
   @ApiProperty() @IsNotEmpty() @IsString() city: string;
   @ApiPropertyOptional() @IsOptional() @IsNumber() latitude?: number;
   @ApiPropertyOptional() @IsOptional() @IsNumber() longitude?: number;
+}
+
+export class UpdateUserStatusDto {
+  @ApiProperty({ enum: ['ACTIVE', 'INACTIVE'] }) @IsIn(['ACTIVE', 'INACTIVE']) status: 'ACTIVE' | 'INACTIVE';
+}
+
+export class RejectWithdrawDto {
+  @ApiProperty() @IsNotEmpty() @IsString() @MaxLength(1000) reason: string;
 }

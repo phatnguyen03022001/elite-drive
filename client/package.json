@@ -4,10 +4,14 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "prebuild": "npm run security:audit:prod:report",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
+    "lock:secure-preview": "node scripts/generate-secure-lock-preview.mjs",
+    "security:audit:prod": "npm audit --omit=dev --audit-level=high",
+    "security:audit:prod:report": "node scripts/audit-production-deps.mjs",
     "tree": "tree -a -L 6 -I \"node_modules|.next|.git|.DOCS|.TEST|.vscode\""
   },
   "dependencies": {
@@ -28,14 +32,11 @@
     "@radix-ui/react-tabs": "^1.1.13",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@tanstack/react-query": "^5.90.17",
-    "axios": "^1.13.2",
     "chart.js": "^4.5.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "framer-motion": "^12.28.1",
-    "js-cookie": "^3.0.5",
-    "jwt-decode": "^4.0.0",
     "lucide-react": "^0.562.0",
     "next": "16.1.2",
     "next-intl": "^4.7.0",
@@ -50,7 +51,6 @@
     "zod": "^4.3.5"
   },
   "devDependencies": {
-    "@types/js-cookie": "^3.0.6",
     "@types/node": "^20.19.30",
     "@types/react": "^19",
     "@types/react-dom": "^19",

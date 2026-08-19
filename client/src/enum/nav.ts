@@ -14,17 +14,20 @@ import {
   Star,
   TicketPercent,
   UserCog,
+  Users,
   Vault,
   Wallet,
+  WalletCards,
 } from "lucide-react";
 
 export const ROLE_NAV_CONFIG = {
   CUSTOMER: [
-    { label: "Discover", items: [
-      { title: "Find a car", href: "/customer/cars", icon: Car },
+    { label: "Marketplace", items: [
+      { title: "Browse vehicles", href: "/customer/cars", icon: Car },
       { title: "Promotions", href: "/customer/promotions", icon: TicketPercent },
     ] },
     { label: "Trips", items: [{ title: "My bookings", href: "/customer/bookings", icon: History }] },
+    { label: "Money", items: [{ title: "Wallet & refunds", href: "/customer/wallet", icon: Wallet }] },
     { label: "Account", items: [
       { title: "Profile", href: "/customer/profile", icon: UserCog },
       { title: "Identity verification", href: "/customer/kyc", icon: ShieldCheck },
@@ -50,13 +53,16 @@ export const ROLE_NAV_CONFIG = {
     { label: "Support", items: [{ title: "Help center", href: "/owner/support", icon: Headphones }] },
   ],
   ADMIN: [
+    { label: "Overview", items: [{ title: "Operations dashboard", href: "/admin", icon: LayoutDashboard }] },
     { label: "Trust & supply", items: [
       { title: "KYC reviews", href: "/admin/kyc", icon: ShieldCheck },
       { title: "Vehicle approvals", href: "/admin/cars", icon: ClipboardCheck },
+      { title: "Accounts", href: "/admin/users", icon: Users },
     ] },
     { label: "Finance", items: [
       { title: "Platform finance", href: "/admin/escrow", icon: Vault },
       { title: "Payment ledger", href: "/admin/reports", icon: CreditCard },
+      { title: "Wallet reconciliation", href: "/admin/wallets", icon: WalletCards },
       { title: "Settlements", href: "/admin/settlements", icon: DollarSign },
       { title: "Withdrawals", href: "/admin/withdraws", icon: Banknote },
     ] },

@@ -1,109 +1,108 @@
 import {
+  Body,
   Controller,
   Get,
-  Post,
-  Body,
-  Query,
-  Patch,
   Param,
+  Patch,
+  Post,
   Put,
-  UseInterceptors,
+  Query,
   UploadedFile,
+  UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
-import { AdminService } from './admin.service';
-import { Roles } from '../../common/decorators/roles.decorator';
-import { DisputeStatus, UserRole } from '@prisma/client';
-import { ApiResponse } from '../../common/dto/response.dto';
-import { PaginationDto } from '../../common/dto/pagination.dto';
-import {
-  // Reports
-  ReportDateRangeDto,
-  // Promotions
-  CreatePromotionDto,
-  PromotionQueryDto,
-  UpdatePromotionDto,
-  // Payments & Settlements
-  PaymentQueryDto,
-  RunSettlementDto,
-  SettlementHistoryQueryDto,
-  // KYC
-  AdminKYCQueryDto,
-  RejectKYCDto,
-  // Master Data
-  CreateCategoryDto,
-  CreateLocationDto,
-  // Disputes
-
-  // Cars
-} from './dto/admin.dto';
-import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { UserRole } from '@prisma/client';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { PaginationDto } from '../../common/dto/pagination.dto';
+import { ApiResponse } from '../../common/dto/response.dto';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { imageUploadOptions } from '../../common/upload/image-upload-options';
 import {
   CustomerProfileResponseDto,
   UpdateCustomerProfileDto,
 } from '../customer/dto/customer.dto';
+import { CustomerProfileService } from '../customer/customer-profile.service';
+import { AdminFinanceService } from './admin-finance.service';
+import { AdminPromotionService } from './admin-promotion.service';
+import { AdminRefundService } from './admin-refund.service';
+import { AdminSettlementService } from './admin-settlement.service';
+import { AdminWithdrawalService } from './admin-withdrawal.service';
+import { AdminService } from './admin.service';
+import { ApproveWithdrawDto } from './dto/admin-withdraw.dto';
+import {
+  AdminKYCQueryDto,
+  CreateCategoryDto,
+  CreateLocationDto,
+  CreatePromotionDto,
+  DisputeQueryDto,
+  PaymentQueryDto,
+  PromotionQueryDto,
+  RefundPaymentDto,
+  RejectCarDto,
+  RejectKYCDto,
+  RejectWithdrawDto,
+  ReleasePaymentDto,
+  ReportDateRangeDto,
+  ResolveDisputeDto,
+  RunSettlementDto,
+  SettlementHistoryQueryDto,
+  UpdatePromotionDto,
+  UpdateUserStatusDto,
+} from './dto/admin.dto';
 
 @Controller('api/admin')
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserRole.ADMIN)
 export class AdminController {
-  customerService: any;
-  constructor(private readonly adminService: AdminService) {}
+  constructor(
+    private readonly adminService: AdminService,
+    private readonly financeService: AdminFinanceService,
+    private readonly promotionService: AdminPromotionService,
+    private readonly refundService: AdminRefundService,
+    private readonly settlementService: AdminSettlementService,
+    private readonly withdrawalService: AdminWithdrawalService,
+    private readonly profileService: CustomerProfileService,
+  ) {}
 
-  // Profile
   @Get('profile')
-  async getProfile(
-    @CurrentUser('id') userId: string,
-  ): Promise<ApiResponse<CustomerProfileResponseDto>> {
-    const profile = await this.customerService.getProfile(userId);
-    return ApiResponse.success(profile);
+  async getProfile(@CurrentUser('id') userId: string): Promise<ApiResponse<CustomerProfileResponseDto>> {
+    return ApiResponse.success(await this.profileService.getProfile(userId));
   }
 
   @Put('profile')
-  @UseInterceptors(FileInterceptor('avatar'))
+  @UseInterceptors(FileInterceptor('avatar', imageUploadOptions))
   async updateProfile(
     @CurrentUser('id') userId: string,
     @Body() dto: UpdateCustomerProfileDto,
-    @UploadedFile() avatarFile?: Express.Multer.File, // Đổi tên biến cho rõ ràng
+    @UploadedFile() avatarFile?: Express.Multer.File,
   ): Promise<ApiResponse<CustomerProfileResponseDto>> {
-    // Style giống KYC: Truyền userId, dto, và file vào service
-    const updated = await this.customerService.updateProfile(
-      userId,
-      dto,
-      avatarFile,
+    return ApiResponse.success(
+      await this.profileService.updateProfile(userId, dto, avatarFile),
+      'Cập nhật thành công',
     );
-    return ApiResponse.success(updated, 'Cập nhật thành công');
   }
-
-  // ===========================================================================
-  // 1. REPORTS & ANALYTICS
-  // ===========================================================================
 
   @Get('reports/overview')
   async getOverviewReport() {
-    const overview = await this.adminService.getOverviewReport();
-    return ApiResponse.success(overview);
+    return ApiResponse.success(await this.adminService.getOverviewReport());
   }
 
   @Get('reports/bookings')
   async getBookingsReport(@Query() query: ReportDateRangeDto) {
-    const report = await this.adminService.getBookingsReport(query);
-    return ApiResponse.success(report);
+    return ApiResponse.success(await this.adminService.getBookingsReport(query));
   }
 
   @Get('reports/revenue')
   async getRevenueReport(@Query() query: ReportDateRangeDto) {
-    const revenue = await this.adminService.getRevenueReport(query);
-    return ApiResponse.success(revenue);
+    return ApiResponse.success(await this.adminService.getRevenueReport(query));
   }
-
-  // ===========================================================================
-  // 2. CAR MANAGEMENT
-  // ===========================================================================
 
   @Get('cars/pending')
   async getPendingCars() {
-    const cars = await this.adminService.getPendingCars();
-    return ApiResponse.success(cars);
+    return ApiResponse.success(await this.adminService.getPendingCars());
   }
 
   @Post('cars/:car_id/approve')
@@ -114,28 +113,18 @@ export class AdminController {
 
   @Get('cars/all')
   async getAllCars(@Query('status') status?: string) {
-    // Ép kiểu hoặc validate status dựa trên Enum CarStatus nếu cần
-    const cars = await this.adminService.getAllCars(status);
-    return ApiResponse.success(cars);
+    return ApiResponse.success(await this.adminService.getAllCars(status));
   }
 
   @Post('cars/:car_id/reject')
-  async rejectCar(
-    @Param('car_id') carId: string,
-    @Body('reason') reason: string, // Nhận reason từ RejectCarDialog gửi lên
-  ) {
-    await this.adminService.rejectCar(carId, reason);
+  async rejectCar(@Param('car_id') carId: string, @Body() dto: RejectCarDto) {
+    await this.adminService.rejectCar(carId, dto.reason);
     return ApiResponse.success(null, 'Đã từ chối phê duyệt xe');
   }
 
-  // ===========================================================================
-  // 3. KYC CUSTOMERS
-  // ===========================================================================
-
   @Get('kyc/customers')
   async getKycCustomers(@Query() query: PaginationDto & AdminKYCQueryDto) {
-    const result = await this.adminService.getKycCustomers(query);
-    return ApiResponse.success(result);
+    return ApiResponse.success(await this.adminService.getKycCustomers(query));
   }
 
   @Post('kyc/customers/:user_id/approve')
@@ -150,137 +139,78 @@ export class AdminController {
     return ApiResponse.success(null, 'KYC đã bị từ chối');
   }
 
-  // ===========================================================================
-  // 4. PROMOTIONS
-  // ===========================================================================
-
   @Post('promotions')
   async createPromotion(@Body() dto: CreatePromotionDto) {
-    const promotion = await this.adminService.createPromotion(dto);
-    return ApiResponse.success(promotion, 'Khuyến mãi đã tạo');
+    return ApiResponse.success(await this.promotionService.create(dto), 'Khuyến mãi đã tạo');
   }
 
   @Patch('promotions/:id')
-  async updatePromotion(
-    @Param('id') id: string,
-    @Body() dto: UpdatePromotionDto,
-  ) {
-    const updated = await this.adminService.updatePromotion(id, dto);
-    return ApiResponse.success(updated, 'Khuyến mãi đã cập nhật');
+  async updatePromotion(@Param('id') id: string, @Body() dto: UpdatePromotionDto) {
+    return ApiResponse.success(await this.promotionService.update(id, dto), 'Khuyến mãi đã cập nhật');
   }
 
   @Get('promotions')
   async getPromotions(@Query() query: PromotionQueryDto) {
-    const promotions = await this.adminService.getPromotions(query);
-    return ApiResponse.success(promotions);
+    return ApiResponse.success(await this.promotionService.getAll(query));
   }
-
-  // ===========================================================================
-  // 5. PAYMENTS & SETTLEMENTS
-  // ===========================================================================
 
   @Get('payments')
   async getPayments(@Query() query: PaginationDto & PaymentQueryDto) {
-    const payments = await this.adminService.getPayments(query);
-    return ApiResponse.success(payments);
+    return ApiResponse.success(await this.financeService.getPayments(query));
   }
 
   @Post('settlements/run')
   async runSettlement(@Body() dto: RunSettlementDto) {
-    const settlement = await this.adminService.runSettlement(dto);
-    return ApiResponse.success(settlement, 'Settlement đã chạy');
+    return ApiResponse.success(await this.settlementService.run(dto), 'Settlement đã chạy');
   }
 
   @Get('settlements/history')
-  async getSettlementHistory(
-    @Query() query: PaginationDto & SettlementHistoryQueryDto,
-  ) {
-    const history = await this.adminService.getSettlementHistory(query);
-    return ApiResponse.success(history);
+  async getSettlementHistory(@Query() query: PaginationDto & SettlementHistoryQueryDto) {
+    return ApiResponse.success(await this.settlementService.getHistory(query));
   }
-
-  // ===========================================================================
-  // 6. DISPUTES
-  // ===========================================================================
 
   @Get('disputes')
-  @Roles(UserRole.ADMIN)
-  async getAll(@Query() query: PaginationDto) {
-    return this.adminService.getAllDisputes(query);
+  async getAllDisputes(@Query() query: PaginationDto & DisputeQueryDto) {
+    return ApiResponse.success(await this.adminService.getAllDisputes(query));
   }
 
-  // API xác nhận bắt đầu xử lý
   @Patch('disputes/:id/process')
-  @Roles(UserRole.ADMIN)
   async startProcessing(@Param('id') id: string) {
-    return this.adminService.updateToInProgress(id);
+    await this.adminService.updateToInProgress(id);
+    return ApiResponse.success(null, 'Dispute moved to in-progress');
   }
 
-  // API đóng/hoàn tất khiếu nại
   @Post('disputes/:id/resolve')
-  @Roles(UserRole.ADMIN)
-  async resolve(
-    @Param('id') id: string,
-    @Body() dto: { resolution: string; status: DisputeStatus },
-  ) {
-    return this.adminService.resolveDispute(id, dto);
+  async resolve(@Param('id') id: string, @Body() dto: ResolveDisputeDto) {
+    return ApiResponse.success(await this.adminService.resolveDispute(id, dto), 'Dispute resolved');
   }
-
-  // ===========================================================================
-  // 7. MASTER DATA
-  // ===========================================================================
 
   @Post('categories')
   async createCategory(@Body() dto: CreateCategoryDto) {
-    const category = await this.adminService.createCategory(dto);
-    return ApiResponse.success(category, 'Danh mục đã tạo');
+    return ApiResponse.success(await this.adminService.createCategory(dto), 'Danh mục đã tạo');
   }
 
   @Post('locations')
   async createLocation(@Body() dto: CreateLocationDto) {
-    const location = await this.adminService.createLocation(dto);
-    return ApiResponse.success(location, 'Địa điểm đã tạo');
+    return ApiResponse.success(await this.adminService.createLocation(dto), 'Địa điểm đã tạo');
   }
 
   @Post('payments/release')
-  async releasePayment(
-    @Body()
-    dto: {
-      bookingId: string;
-      platformFeePercent?: number;
-    },
-  ) {
-    const result = await this.adminService.releasePayment(dto);
-    return ApiResponse.success(
-      result,
-      `Đã chuyển ${result.ownerReceived} VND cho owner`,
-    );
+  async releasePayment(@Body() dto: ReleasePaymentDto) {
+    const result = await this.financeService.releasePayment(dto);
+    return ApiResponse.success(result, `Đã chuyển ${result.ownerReceived} VND cho owner`);
   }
 
   @Post('payments/refund')
-  async refundPayment(
-    @Body()
-    dto: {
-      bookingId: string;
-      refundPercent?: number;
-      reason: string;
-    },
-  ) {
-    const result = await this.adminService.refundPayment(dto);
-    return ApiResponse.success(
-      result,
-      `Đã hoàn ${result.refundAmount} VND cho khách`,
-    );
+  async refundPayment(@Body() dto: RefundPaymentDto) {
+    const result = await this.refundService.refundPayment(dto);
+    return ApiResponse.success(result, `Đã hoàn ${result.refundAmount} VND cho khách`);
   }
-
-  // ================= PLATFORM WALLET =================
 
   @Get('wallets/platform')
   async getPlatformWallet() {
-    return ApiResponse.success(await this.adminService.getPlatformWallet());
+    return ApiResponse.success(await this.financeService.getPlatformWallet());
   }
-
-  // ================= GLOBAL LIST =================
 
   @Get('bookings/all')
   async getAllBookings(@Query() query: PaginationDto) {
@@ -292,60 +222,45 @@ export class AdminController {
     return ApiResponse.success(await this.adminService.getAllContracts(query));
   }
 
-  // ================= USERS =================
-
   @Get('users')
   async getUsers(@Query() query: PaginationDto) {
     return ApiResponse.success(await this.adminService.getUsers(query));
   }
 
   @Patch('users/:id/status')
-  async updateUserStatus(
-    @Param('id') userId: string,
-    @Body('status') status: 'ACTIVE' | 'INACTIVE',
-  ) {
-    const isActive = status === 'ACTIVE';
-    await this.adminService.updateUserStatus(userId, isActive);
+  async updateUserStatus(@Param('id') userId: string, @Body() dto: UpdateUserStatusDto) {
+    await this.adminService.updateUserStatus(userId, dto.status === 'ACTIVE');
     return ApiResponse.success(null, 'Trạng thái user đã cập nhật');
   }
 
-  // ================= AUDIT =================
-
   @Get('escrow/pending-release')
   async getPendingReleaseTrips(@Query() query: PaginationDto) {
-    const result = await this.adminService.getPendingReleaseTrips(query);
-    return ApiResponse.success(result);
+    return ApiResponse.success(await this.financeService.getPendingReleaseTrips(query));
   }
 
-  // ================= WITHDRAW MANAGEMENT =================
   @Get('withdraws/pending')
   async getPendingWithdraws(@Query() query: PaginationDto) {
-    const result = await this.adminService.getPendingWithdraws(query);
-    return ApiResponse.success(result);
+    return ApiResponse.success(await this.withdrawalService.getPending(query));
   }
 
   @Post('withdraws/:id/approve')
-  async approveWithdraw(@Param('id') id: string) {
-    await this.adminService.approveWithdraw(id);
-    return ApiResponse.success(null, 'Đã duyệt rút tiền');
+  async approveWithdraw(
+    @Param('id') id: string,
+    @Body() dto: ApproveWithdrawDto,
+  ) {
+    const result = await this.withdrawalService.approve(id, dto);
+    return ApiResponse.success(result, 'Đã xác nhận payout và duyệt rút tiền');
   }
 
   @Post('withdraws/:id/reject')
-  async rejectWithdraw(
-    @Param('id') id: string,
-    @Body('reason') reason: string,
-  ) {
-    await this.adminService.rejectWithdraw(id, reason);
+  async rejectWithdraw(@Param('id') id: string, @Body() dto: RejectWithdrawDto) {
+    await this.withdrawalService.reject(id, dto.reason);
     return ApiResponse.success(null, 'Đã từ chối rút tiền');
   }
 
-  // ================= AUTO OPERATIONS =================
   @Post('settlements/auto-release')
   async autoReleasePayments() {
-    const result = await this.adminService.autoReleaseCompletedTrips();
-    return ApiResponse.success(
-      result,
-      `Đã release ${result.processed} payments`,
-    );
+    const result = await this.financeService.autoReleaseCompletedTrips();
+    return ApiResponse.success(result, `Đã release ${result.processed} payments`);
   }
 }

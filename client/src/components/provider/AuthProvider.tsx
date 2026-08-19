@@ -1,71 +1,58 @@
 "use client";
 
-import React, { createContext, useContext, useMemo, useCallback, useState, useEffect } from "react";
-import Cookies from "js-cookie";
-import { jwtDecode } from "jwt-decode";
+import React, { createContext, useCallback, useContext, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { authService } from "@/features/auth/auth.service";
 
+interface AuthUser {
+  id?: string;
+  email?: string;
+  role?: "ADMIN" | "OWNER" | "CUSTOMER";
+  firstName?: string | null;
+  lastName?: string | null;
+  avatar?: string | null;
+}
+
 interface AuthContextType {
-  user: any;
+  user: AuthUser | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  logout: () => void;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const queryClient = useQueryClient();
-  const token = Cookies.get("token");
-
-  const {
-    data: userFromApi,
-    isLoading,
-    isFetching,
-  } = useQuery({
+  const { data, isLoading, isFetching } = useQuery({
     queryKey: ["auth-profile"],
     queryFn: authService.getProfile,
-    enabled: !!token,
-    retry: 1,
+    retry: false,
     staleTime: 1000 * 60 * 5,
   });
 
-  const user = useMemo(() => {
-    if (userFromApi) return userFromApi;
+  const user = useMemo<AuthUser | null>(() => {
+    if (!data || typeof data !== "object") return null;
+    return data as AuthUser;
+  }, [data]);
 
-    if (token) {
-      try {
-        const decoded: any = jwtDecode(token);
-        return {
-          id: decoded.sub || decoded.id,
-          email: decoded.email,
-          role: decoded.role,
-          firstName: decoded.firstName || "",
-          lastName: decoded.lastName || "",
-        };
-      } catch {
-        return null;
-      }
+  const logout = useCallback(async () => {
+    try {
+      await authService.logout();
+    } finally {
+      queryClient.clear();
+      window.location.assign("/login");
     }
-
-    return null;
-  }, [userFromApi, token]);
-
-  const logout = useCallback(() => {
-    Cookies.remove("token", { path: "/" });
-    queryClient.clear();
-    window.location.href = "/login";
   }, [queryClient]);
 
   const contextValue = useMemo(
     () => ({
       user,
-      isLoading: !!token && (isLoading || isFetching),
-      isAuthenticated: !!user,
+      isLoading: isLoading || isFetching,
+      isAuthenticated: Boolean(user),
       logout,
     }),
-    [user, isLoading, isFetching, token, logout],
+    [user, isLoading, isFetching, logout],
   );
 
   return <AuthContext.Provider value={contextValue}>{children}</AuthContext.Provider>;

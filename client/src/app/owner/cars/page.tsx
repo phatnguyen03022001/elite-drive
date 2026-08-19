@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { useCreateCar, useDeleteCar, useMyCars, useUpdateCar } from "@/features/owner/owner.queries";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
@@ -50,6 +50,14 @@ const blankVehicle: VehicleForm = {
   pricePerDay: "",
 };
 
+function errorMessage(error: unknown, fallback: string) {
+  if (typeof error === "object" && error !== null && "response" in error) {
+    const response = (error as { response?: { data?: { message?: string } } }).response;
+    if (response?.data?.message) return response.data.message;
+  }
+  return error instanceof Error ? error.message : fallback;
+}
+
 export default function OwnerCarsPage() {
   const carsQuery = useMyCars({ page: 1, limit: 100 });
   const createCar = useCreateCar();
@@ -59,20 +67,29 @@ export default function OwnerCarsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<CarRecord | null>(null);
 
-  const cars: CarRecord[] = Array.isArray(carsQuery.data) ? carsQuery.data : carsQuery.data?.data ?? [];
-  const counts = useMemo(() => ({
-    ALL: cars.length,
-    APPROVED: cars.filter((car) => car.verificationStatus === "APPROVED").length,
-    PENDING: cars.filter((car) => car.verificationStatus === "PENDING").length,
-    REJECTED: cars.filter((car) => car.verificationStatus === "REJECTED").length,
-  }), [cars]);
+  const cars = useMemo<CarRecord[]>(
+    () => (Array.isArray(carsQuery.data) ? carsQuery.data : carsQuery.data?.data ?? []),
+    [carsQuery.data],
+  );
+  const counts = useMemo(
+    () => ({
+      ALL: cars.length,
+      APPROVED: cars.filter((car) => car.verificationStatus === "APPROVED").length,
+      PENDING: cars.filter((car) => car.verificationStatus === "PENDING").length,
+      REJECTED: cars.filter((car) => car.verificationStatus === "REJECTED").length,
+    }),
+    [cars],
+  );
   const visibleCars = filter === "ALL" ? cars : cars.filter((car) => car.verificationStatus === filter);
 
   const remove = (car: CarRecord) => {
     if (!window.confirm(`Delete ${car.name}? This permanently removes the vehicle from your fleet.`)) return;
     deleteCar.mutate(car.id, {
-      onSuccess: async () => { toast.success("Vehicle deleted"); await carsQuery.refetch(); },
-      onError: (error: any) => toast.error(error?.response?.data?.message || "Could not delete vehicle"),
+      onSuccess: async () => {
+        toast.success("Vehicle deleted");
+        await carsQuery.refetch();
+      },
+      onError: (error: unknown) => toast.error(errorMessage(error, "Could not delete vehicle")),
     });
   };
 
@@ -94,7 +111,7 @@ export default function OwnerCarsPage() {
                 if (!mainImage) { toast.error("Choose a main vehicle image"); return; }
                 createCar.mutate(toFormData(values, mainImage, gallery), {
                   onSuccess: async () => { toast.success("Vehicle registered for review"); setCreateOpen(false); await carsQuery.refetch(); },
-                  onError: (error: any) => toast.error(error?.response?.data?.message || error?.message || "Could not register vehicle"),
+                  onError: (error: unknown) => toast.error(errorMessage(error, "Could not register vehicle")),
                 });
               }} />
             </DialogContent>
@@ -128,7 +145,7 @@ export default function OwnerCarsPage() {
             <Card key={car.id} className="overflow-hidden p-0">
               <div className="grid sm:grid-cols-[180px_1fr]">
                 <div className="relative min-h-48 bg-muted sm:min-h-full">
-                  {car.mainImageUrl ? <Image src={car.mainImageUrl} alt={car.name} fill className="object-cover" unoptimized /> : <div className="flex h-full min-h-48 items-center justify-center"><ImagePlus className="h-7 w-7 text-muted-foreground" /></div>}
+                  {car.mainImageUrl ? <Image src={car.mainImageUrl} alt={car.name} fill className="object-cover" /> : <div className="flex h-full min-h-48 items-center justify-center"><ImagePlus className="h-7 w-7 text-muted-foreground" /></div>}
                 </div>
                 <div className="p-5">
                   <div className="flex items-start justify-between gap-3">
@@ -149,7 +166,7 @@ export default function OwnerCarsPage() {
           {editing ? <VehicleEditor mode="edit" initial={editing} pending={updateCar.isPending} onSubmit={(values, mainImage, gallery) => {
             updateCar.mutate({ carId: editing.id, data: toFormData(values, mainImage, gallery) }, {
               onSuccess: async () => { toast.success("Vehicle updated"); setEditing(null); await carsQuery.refetch(); },
-              onError: (error: any) => toast.error(error?.response?.data?.message || error?.message || "Could not update vehicle"),
+              onError: (error: unknown) => toast.error(errorMessage(error, "Could not update vehicle")),
             });
           }} /> : null}
         </DialogContent>

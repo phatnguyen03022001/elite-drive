@@ -1,62 +1,60 @@
-import { Logger, ValidationPipe } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import type { NextFunction, Request, Response } from 'express';
 import { AppModule } from './app.module';
-import { AppSwaggerConfig } from './config/swagger/swagger.module';
+import { GlobalValidationPipe } from './common/pipes/validation.pipe';
+import {
+  buildTrustedOrigins,
+  isTrustedFrontendOrigin,
+} from './common/security/trusted-origins';
 import { PrismaService } from './prisma/prisma.service';
+
+const bootstrapLogger = new Logger('Bootstrap');
+const MAX_REQUEST_TARGET_LENGTH = 4_096;
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  const logger = new Logger('Bootstrap');
+  const prismaService = app.get(PrismaService);
 
   try {
-    const prismaService = app.get(PrismaService);
     await prismaService.$connect();
-    logger.log('Database connection established');
+    bootstrapLogger.log('Database connection established');
   } catch (error) {
-    logger.error('Database connection failed', error);
+    bootstrapLogger.error(
+      'Database connection failed; refusing to start an unhealthy API process',
+      error instanceof Error ? error.stack : String(error),
+    );
+    await app.close();
+    throw error;
   }
 
-  const swaggerConfig = new DocumentBuilder()
-    .setTitle('Elite Drive API')
-    .setDescription('Elite Drive marketplace API')
-    .setVersion('1.0.0')
-    .addBearerAuth()
-    .build();
-
-  const swaggerDocument = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup('docs', app, swaggerDocument);
-
-  app.getHttpAdapter().get('/docs-json', (_req, res) => {
-    res.json(swaggerDocument);
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    const requestTarget = req.originalUrl || req.url || '';
+    if (requestTarget.length > MAX_REQUEST_TARGET_LENGTH) {
+      res.status(414).json({
+        success: false,
+        message: 'Request target quá dài',
+      });
+      return;
+    }
+    next();
   });
 
-  AppSwaggerConfig.setup(app);
+  if (process.env.NODE_ENV !== 'production') {
+    const { AppSwaggerConfig } = await import('./config/swagger/swagger.module');
+    AppSwaggerConfig.setup(app);
+  }
 
-  app.useGlobalPipes(
-    new ValidationPipe({
-      transform: true,
-      whitelist: true,
-    }),
-  );
+  app.useGlobalPipes(GlobalValidationPipe);
 
-  const configuredFrontendUrl = process.env.FRONTEND_URL;
-  const allowedOrigins = new Set(
-    [
-      'https://elite-drive-iota.vercel.app',
-      'http://localhost:3000',
-      configuredFrontendUrl,
-    ].filter((origin): origin is string => Boolean(origin)),
+  const trustedOrigins = buildTrustedOrigins(
+    process.env.FRONTEND_URL,
+    process.env.ALLOW_VERCEL_PREVIEWS === 'true',
   );
-  const allowVercelPreviews = process.env.ALLOW_VERCEL_PREVIEWS === 'true';
 
   app.enableCors({
     origin: (origin, callback) => {
-      if (
-        !origin ||
-        allowedOrigins.has(origin) ||
-        (allowVercelPreviews && origin.endsWith('.vercel.app'))
-      ) {
+      if (!origin || isTrustedFrontendOrigin(origin, trustedOrigins)) {
         callback(null, true);
         return;
       }
@@ -68,11 +66,15 @@ async function bootstrap() {
     allowedHeaders: 'Content-Type, Authorization, Accept',
   });
 
-  // Render and most PaaS providers inject PORT at runtime. APP_PORT remains
-  // available for local/self-hosted environments, but must not override PORT.
   const port = Number(process.env.PORT ?? process.env.APP_PORT ?? 8000);
   await app.listen(port, '0.0.0.0');
-  logger.log(`Elite Drive API listening on port ${port}`);
+  bootstrapLogger.log(`Elite Drive API listening on port ${port}`);
 }
 
-bootstrap();
+void bootstrap().catch((error: unknown) => {
+  bootstrapLogger.error(
+    'Application bootstrap failed',
+    error instanceof Error ? error.stack : String(error),
+  );
+  process.exitCode = 1;
+});

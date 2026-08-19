@@ -13,13 +13,18 @@ import {
 } from '@nestjs/common';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { UserRole } from '@prisma/client';
+import { OwnerBookingService } from './owner-booking.service';
+import { OwnerDisputeService } from './owner-dispute.service';
+import { OwnerFinanceService } from './owner-finance.service';
 import { OwnerService } from './owner.service';
+import { OwnerTripService } from './owner-trip.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ApiResponse, PaginatedResponseDto } from '../../common/dto/response.dto';
 import { PaginationDto } from '../../common/dto/pagination.dto';
+import { imageUploadOptions } from '../../common/upload/image-upload-options';
 import {
   BlockCalendarDto,
   CarDocumentResponseDto,
@@ -32,6 +37,7 @@ import {
   OwnerBookingQueryDto,
   OwnerProfileResponseDto,
   RejectBookingDto,
+  RespondDisputeDto,
   TripCheckinDto,
   TripCheckoutDto,
   UpdateCarDto,
@@ -43,7 +49,13 @@ import {
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserRole.OWNER)
 export class OwnerController {
-  constructor(private readonly ownerService: OwnerService) {}
+  constructor(
+    private readonly ownerService: OwnerService,
+    private readonly financeService: OwnerFinanceService,
+    private readonly bookingService: OwnerBookingService,
+    private readonly tripService: OwnerTripService,
+    private readonly disputeService: OwnerDisputeService,
+  ) {}
 
   @Get('profile')
   async getProfile(
@@ -64,11 +76,14 @@ export class OwnerController {
 
   @Post('kyc')
   @UseInterceptors(
-    FileFieldsInterceptor([
-      { name: 'documentFront', maxCount: 1 },
-      { name: 'documentBack', maxCount: 1 },
-      { name: 'faceImage', maxCount: 1 },
-    ]),
+    FileFieldsInterceptor(
+      [
+        { name: 'documentFront', maxCount: 1 },
+        { name: 'documentBack', maxCount: 1 },
+        { name: 'faceImage', maxCount: 1 },
+      ],
+      imageUploadOptions,
+    ),
   )
   async submitOwnerKyc(
     @CurrentUser('id') userId: string,
@@ -79,7 +94,7 @@ export class OwnerController {
       documentBack?: Express.Multer.File[];
       faceImage?: Express.Multer.File[];
     },
-  ): Promise<ApiResponse<any>> {
+  ): Promise<ApiResponse<unknown>> {
     const kyc = await this.ownerService.submitKyc(userId, dto, files);
     return ApiResponse.success(kyc, 'Owner identity verification submitted');
   }
@@ -94,10 +109,13 @@ export class OwnerController {
 
   @Post('cars')
   @UseInterceptors(
-    FileFieldsInterceptor([
-      { name: 'mainImage', maxCount: 1 },
-      { name: 'images', maxCount: 3 },
-    ]),
+    FileFieldsInterceptor(
+      [
+        { name: 'mainImage', maxCount: 1 },
+        { name: 'images', maxCount: 3 },
+      ],
+      imageUploadOptions,
+    ),
   )
   async createCar(
     @CurrentUser('id') userId: string,
@@ -125,10 +143,13 @@ export class OwnerController {
 
   @Put('cars/:car_id')
   @UseInterceptors(
-    FileFieldsInterceptor([
-      { name: 'mainImage', maxCount: 1 },
-      { name: 'images', maxCount: 3 },
-    ]),
+    FileFieldsInterceptor(
+      [
+        { name: 'mainImage', maxCount: 1 },
+        { name: 'images', maxCount: 3 },
+      ],
+      imageUploadOptions,
+    ),
   )
   async updateCar(
     @CurrentUser('id') userId: string,
@@ -215,7 +236,7 @@ export class OwnerController {
     @CurrentUser('id') userId: string,
     @Query() query: PaginationDto & OwnerBookingQueryDto,
   ) {
-    const { data, total, page, limit } = await this.ownerService.getBookings(
+    const { data, total, page, limit } = await this.bookingService.getBookings(
       userId,
       query,
     );
@@ -227,7 +248,7 @@ export class OwnerController {
     @CurrentUser('id') userId: string,
     @Param('booking_id') bookingId: string,
   ) {
-    const booking = await this.ownerService.approveBooking(userId, bookingId);
+    const booking = await this.bookingService.approveBooking(userId, bookingId);
     return ApiResponse.success(booking, 'Booking approved');
   }
 
@@ -237,7 +258,7 @@ export class OwnerController {
     @Param('booking_id') bookingId: string,
     @Body() dto: RejectBookingDto,
   ) {
-    const booking = await this.ownerService.rejectBooking(userId, bookingId, dto);
+    const booking = await this.bookingService.rejectBooking(userId, bookingId, dto);
     return ApiResponse.success(booking, 'Booking declined');
   }
 
@@ -246,7 +267,7 @@ export class OwnerController {
     @CurrentUser('id') userId: string,
     @Query() query?: PaginationDto,
   ) {
-    const { data, total, page, limit } = await this.ownerService.getEarnings(
+    const { data, total, page, limit } = await this.financeService.getEarnings(
       userId,
       query,
     );
@@ -259,7 +280,7 @@ export class OwnerController {
     @Query() query?: PaginationDto,
   ) {
     const { data, total, page, limit } =
-      await this.ownerService.getOwnerTransactions(userId, query);
+      await this.financeService.getTransactions(userId, query);
     return new PaginatedResponseDto(data, total, page, limit);
   }
 
@@ -268,7 +289,7 @@ export class OwnerController {
     @CurrentUser('id') userId: string,
     @Body() dto: WithdrawRequestDto,
   ) {
-    const withdraw = await this.ownerService.requestWithdraw(userId, dto);
+    const withdraw = await this.financeService.requestWithdraw(userId, dto);
     return ApiResponse.success(withdraw, 'Withdrawal request submitted');
   }
 
@@ -289,7 +310,7 @@ export class OwnerController {
 
   @Get('wallet')
   async getWallet(@CurrentUser('id') userId: string) {
-    const wallet = await this.ownerService.getWallet(userId);
+    const wallet = await this.financeService.getWallet(userId);
     return ApiResponse.success(wallet);
   }
 
@@ -297,14 +318,14 @@ export class OwnerController {
   async respondDispute(
     @CurrentUser('id') userId: string,
     @Param('dispute_id') disputeId: string,
-    @Body('message') message: string,
+    @Body() dto: RespondDisputeDto,
   ) {
-    const dispute = await this.ownerService.respondDispute(
+    const message = await this.disputeService.respond(
       userId,
       disputeId,
-      message,
+      dto.message,
     );
-    return ApiResponse.success(dispute, 'Dispute response submitted');
+    return ApiResponse.success(message, 'Dispute response submitted');
   }
 
   @Get('trips')
@@ -312,7 +333,7 @@ export class OwnerController {
     @CurrentUser('id') userId: string,
     @Query() query?: PaginationDto,
   ) {
-    const { data, total, page, limit } = await this.ownerService.getTrips(
+    const { data, total, page, limit } = await this.tripService.getTrips(
       userId,
       query,
     );
@@ -325,7 +346,7 @@ export class OwnerController {
     @Param('trip_id') tripId: string,
     @Body() dto: TripCheckinDto,
   ) {
-    const trip = await this.ownerService.checkinTrip(userId, tripId, dto);
+    const trip = await this.tripService.checkinTrip(userId, tripId, dto);
     return ApiResponse.success(trip, 'Vehicle pickup recorded');
   }
 
@@ -335,7 +356,7 @@ export class OwnerController {
     @Param('trip_id') tripId: string,
     @Body() dto: TripCheckoutDto,
   ) {
-    const trip = await this.ownerService.checkoutTrip(userId, tripId, dto);
+    const trip = await this.tripService.checkoutTrip(userId, tripId, dto);
     return ApiResponse.success(trip, 'Vehicle return recorded');
   }
 }

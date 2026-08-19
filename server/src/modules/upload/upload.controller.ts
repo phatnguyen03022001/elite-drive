@@ -1,15 +1,19 @@
 import {
   Controller,
   Post,
-  UseInterceptors,
   UploadedFile,
+  UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiBody, ApiConsumes, ApiTags } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { imageUploadOptions } from '../../common/upload/image-upload-options';
 import { UploadService } from './upload.service';
-import { ApiTags, ApiConsumes, ApiBody } from '@nestjs/swagger';
 
 @ApiTags('Upload')
 @Controller('upload')
+@UseGuards(JwtAuthGuard)
 export class UploadController {
   constructor(private readonly uploadService: UploadService) {}
 
@@ -26,9 +30,8 @@ export class UploadController {
       },
     },
   })
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', imageUploadOptions))
   async uploadImage(@UploadedFile() file: Express.Multer.File) {
-    // Gọi service để upload lên Cloudinary
     const url = await this.uploadService.uploadFile(file, 'cars');
     return { url };
   }

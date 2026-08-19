@@ -9,13 +9,22 @@ import {
   CreatePaymentInput,
   CreateReviewInput,
   CreateWalletTopupInput,
+  MomoCheckoutSchema,
+  MomoStatusSchema,
   SignContractInput,
   TripQuerySchema,
   UpdateCustomerProfileInput,
-  WalletRefundInput,
 } from "./customer.schema";
 
 const BASE_URL = "/api/customer";
+const MOMO_BASE_URL = "/api/payments/momo";
+
+type CreateDisputeInput = {
+  type: string;
+  bookingId?: string;
+  title: string;
+  description: string;
+};
 
 export const CustomerService = {
   getProfile: async () => {
@@ -55,8 +64,7 @@ export const CustomerService = {
   },
 
   getBookings: async (params: { page?: number; limit?: number } & BookingQueryInput) => {
-    const response = await axios.get(`${BASE_URL}/bookings`, { params });
-    return response.data;
+    return axios.get(`${BASE_URL}/bookings`, { params });
   },
 
   getBookingDetail: async (bookingId: string) => {
@@ -74,6 +82,16 @@ export const CustomerService = {
     return response.data;
   },
 
+  createMomoCheckout: async (paymentId: string) => {
+    const response = await axios.post(`${MOMO_BASE_URL}/${paymentId}/checkout`);
+    return MomoCheckoutSchema.parse(response.data);
+  },
+
+  getMomoStatus: async (paymentId: string) => {
+    const response = await axios.get(`${MOMO_BASE_URL}/${paymentId}/status`);
+    return MomoStatusSchema.parse(response.data);
+  },
+
   confirmPayment: async (dto: z.infer<typeof ConfirmPaymentSchema>) => {
     const response = await axios.post(`${BASE_URL}/payments/confirm`, dto);
     return response.data;
@@ -85,17 +103,11 @@ export const CustomerService = {
   },
 
   getTrips: async (params: { page?: number; limit?: number } & z.infer<typeof TripQuerySchema>) => {
-    const response = await axios.get(`${BASE_URL}/trips`, { params });
-    return response.data;
+    return axios.get(`${BASE_URL}/trips`, { params });
   },
 
   signContract: async (bookingId: string, dto: SignContractInput) => {
     const response = await axios.post(`${BASE_URL}/contracts/${bookingId}/sign`, dto);
-    return response.data;
-  },
-
-  requestRefund: async (dto: WalletRefundInput) => {
-    const response = await axios.post(`${BASE_URL}/wallet/refund`, dto);
     return response.data;
   },
 
@@ -105,8 +117,7 @@ export const CustomerService = {
   },
 
   getWalletTransactions: async (params?: { page?: number; limit?: number }) => {
-    const response = await axios.get(`${BASE_URL}/wallet/transactions`, { params });
-    return response.data;
+    return axios.get(`${BASE_URL}/wallet/transactions`, { params });
   },
 
   createWalletTopup: async (dto: CreateWalletTopupInput) => {
@@ -116,6 +127,20 @@ export const CustomerService = {
 
   createReview: async (dto: CreateReviewInput) => {
     const response = await axios.post(`${BASE_URL}/reviews`, dto);
+    return response.data;
+  },
+
+  getMyReviews: async (params?: { page?: number; limit?: number }) => {
+    return axios.get(`${BASE_URL}/reviews/my`, { params });
+  },
+
+  createDispute: async (dto: CreateDisputeInput) => {
+    const response = await axios.post(`${BASE_URL}/disputes`, dto);
+    return response.data;
+  },
+
+  getMyDisputes: async () => {
+    const response = await axios.get(`${BASE_URL}/disputes`);
     return response.data;
   },
 

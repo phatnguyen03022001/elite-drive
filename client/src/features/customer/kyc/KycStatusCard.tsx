@@ -15,25 +15,18 @@ interface KycImageUploadProps {
 }
 
 export const KycImageUpload = ({ label, initialPreview, onChange }: KycImageUploadProps) => {
-  const [file, setFile] = useState<File | null>(null);
   const [localPreview, setLocalPreview] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-
-  // Tính toán preview: Ưu tiên ảnh vừa chọn (local), sau đó đến ảnh từ server (initial)
   const displayPreview = localPreview || initialPreview || null;
 
   const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (!selectedFile) return;
 
-    // Giải phóng bộ nhớ của URL cũ nếu có
-    if (localPreview) {
-      URL.revokeObjectURL(localPreview);
-    }
+    if (localPreview) URL.revokeObjectURL(localPreview);
 
     const objectUrl = URL.createObjectURL(selectedFile);
     setLocalPreview(objectUrl);
-    setFile(selectedFile);
     onChange(selectedFile);
   };
 
@@ -41,7 +34,6 @@ export const KycImageUpload = ({ label, initialPreview, onChange }: KycImageUplo
     e.stopPropagation();
     if (localPreview) URL.revokeObjectURL(localPreview);
     setLocalPreview(null);
-    setFile(null);
     onChange(null);
     if (inputRef.current) inputRef.current.value = "";
   };
@@ -55,27 +47,17 @@ export const KycImageUpload = ({ label, initialPreview, onChange }: KycImageUplo
         className={cn(
           "relative group cursor-pointer overflow-hidden rounded-xl border-2 border-dashed transition-all hover:border-primary/50 bg-muted/30",
           displayPreview && "border-solid border-muted bg-background",
-        )}>
+        )}
+      >
         <AspectRatio ratio={16 / 10} className="flex items-center justify-center">
           {displayPreview ? (
             <>
-              <Image
-                src={displayPreview}
-                alt={label}
-                fill
-                className="object-cover transition-transform group-hover:scale-105"
-                unoptimized
-              />
+              <Image src={displayPreview} alt={label} fill className="object-cover transition-transform group-hover:scale-105" unoptimized />
               <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 text-white">
                 <Button variant="secondary" size="sm" type="button" className="h-8 shadow-sm pointer-events-none">
                   <RotateCcw className="mr-2 h-4 w-4" /> Thay đổi
                 </Button>
-                <Button
-                  variant="destructive"
-                  size="icon"
-                  type="button"
-                  className="h-8 w-8 shadow-sm"
-                  onClick={handleRemove}>
+                <Button variant="destructive" size="icon" type="button" className="h-8 w-8 shadow-sm" onClick={handleRemove}>
                   <X className="h-4 w-4" />
                 </Button>
               </div>

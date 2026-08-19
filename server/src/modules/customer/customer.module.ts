@@ -1,24 +1,46 @@
-// src/modules/customer/customer.module.ts
 import { Module } from '@nestjs/common';
+import { MulterModule } from '@nestjs/platform-express';
+import { CustomerBookingService } from './customer-booking.service';
+import { CustomerCancellationService } from './customer-cancellation.service';
+import { CustomerContractService } from './customer-contract.service';
 import { CustomerController } from './customer.controller';
+import { CustomerPaymentService } from './customer-payment.service';
+import { CustomerProfileService } from './customer-profile.service';
+import { CustomerPromotionService } from './customer-promotion.service';
+import { CustomerReviewService } from './customer-review.service';
 import { CustomerService } from './customer.service';
-import { PrismaService } from '../../prisma/prisma.service';
-import { JwtModule } from '@nestjs/jwt';
-import { ConfigModule, ConfigService } from '@nestjs/config';
+import { CustomerSupportService } from './customer-support.service';
 
 @Module({
   imports: [
-    JwtModule.registerAsync({
-      imports: [ConfigModule],
-      useFactory: async (configService: ConfigService) => ({
-        secret: configService.get('JWT_SECRET'),
-        signOptions: { expiresIn: '7d' },
-      }),
-      inject: [ConfigService],
+    MulterModule.register({
+      limits: {
+        fileSize: 5 * 1024 * 1024,
+      },
     }),
   ],
   controllers: [CustomerController],
-  providers: [CustomerService, PrismaService],
-  exports: [CustomerService],
+  providers: [
+    CustomerService,
+    CustomerPaymentService,
+    CustomerBookingService,
+    CustomerProfileService,
+    CustomerPromotionService,
+    CustomerCancellationService,
+    CustomerReviewService,
+    CustomerContractService,
+    CustomerSupportService,
+  ],
+  exports: [
+    CustomerService,
+    CustomerPaymentService,
+    CustomerBookingService,
+    CustomerProfileService,
+    CustomerPromotionService,
+    CustomerCancellationService,
+    CustomerReviewService,
+    CustomerContractService,
+    CustomerSupportService,
+  ],
 })
 export class CustomerModule {}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, Mail, ShieldCheck } from "lucide-react";
 import { OtpLoginSchema, type OtpLoginInput } from "../../auth.schema";
@@ -19,7 +19,7 @@ export function OtpLoginForm() {
     resolver: zodResolver(OtpLoginSchema),
     defaultValues: { email: "", code: "" },
   });
-  const email = form.watch("email");
+  const email = useWatch({ control: form.control, name: "email" });
 
   useEffect(() => {
     if (countdown <= 0) return;

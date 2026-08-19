@@ -1,19 +1,17 @@
 import { z } from "zod";
 
 export const UserRole = z.enum(["CUSTOMER", "OWNER", "ADMIN"]);
-export const KYCStatus = z.enum(["PENDING", "APPROVED", "REJECTED"]);
+export const KYCStatus = z.enum(["NONE", "PENDING", "APPROVED", "REJECTED"]);
 export const BookingStatus = z.enum(["PENDING", "APPROVED", "REJECTED", "CONFIRMED", "COMPLETED", "CANCELLED"]);
 export const TripStatus = z.enum(["UPCOMING", "ONGOING", "COMPLETED"]);
 export const PaymentStatus = z.enum(["PENDING", "COMPLETED", "FAILED", "REFUNDED"]);
+export const PaymentMethod = z.enum(["MOCK_QR", "MOMO"]);
 
 export const UpdateCustomerProfileSchema = z.object({
   firstName: z.string().min(2, "First name must be at least 2 characters.").optional(),
   lastName: z.string().min(2, "Last name must be at least 2 characters.").optional(),
-  phone: z
-    .string()
-    .regex(/^0\d{9}$/, "Phone number must start with 0 and contain 10 digits.")
-    .optional(),
-  avatar: z.any().optional(),
+  phone: z.string().regex(/^0\d{9}$/, "Phone number must start with 0 and contain 10 digits.").optional(),
+  avatar: z.union([z.string(), z.instanceof(File)]).optional(),
   dateOfBirth: z.string().optional().or(z.date()),
   address: z.string().min(1, "Address is required.").optional(),
   city: z.string().min(1, "City is required.").optional(),
@@ -42,7 +40,6 @@ export const CreateBookingSchema = z
 
 export const BookingQuerySchema = z.object({
   status: BookingStatus.optional(),
-  carId: z.string().optional(),
 });
 
 export const TripQuerySchema = z.object({
@@ -51,7 +48,7 @@ export const TripQuerySchema = z.object({
 
 export const CreatePaymentSchema = z.object({
   bookingId: z.string().min(1),
-  paymentMethod: z.string().min(1, "Select a payment method."),
+  paymentMethod: PaymentMethod,
 });
 
 export const ConfirmPaymentSchema = z.object({
@@ -63,18 +60,12 @@ export const SignContractSchema = z.object({
   signatureData: z.string().min(1, "Signature is required."),
 });
 
-export const WalletRefundSchema = z.object({
-  bookingId: z.string().min(1),
-  amount: z.number().min(0, "Refund amount is invalid."),
-  reason: z.string().min(1, "Refund reason is required."),
-});
-
 export const CreateReviewSchema = z.object({
   carId: z.string().min(1),
-  bookingId: z.string().optional(),
-  rating: z.number().min(1, "Rating must be at least 1 star.").max(5, "Rating cannot exceed 5 stars."),
-  title: z.string().optional(),
-  content: z.string().min(5, "Review must contain at least 5 characters.").optional(),
+  bookingId: z.string().min(1),
+  rating: z.number().int().min(1, "Rating must be at least 1 star.").max(5, "Rating cannot exceed 5 stars."),
+  title: z.string().max(120).optional(),
+  content: z.string().min(5, "Review must contain at least 5 characters.").max(2000).optional(),
 });
 
 export const WalletSchema = z.object({
@@ -95,15 +86,37 @@ export const WalletTransactionSchema = z.object({
 
 export const WalletTransactionListSchema = z.object({
   data: z.array(WalletTransactionSchema),
-  total: z.number(),
-  page: z.number(),
-  limit: z.number(),
+  meta: z.object({
+    total: z.number(),
+    page: z.number(),
+    lastPage: z.number(),
+    limit: z.number(),
+  }),
 });
 
 export const CreateWalletTopupSchema = z.object({
-  amount: z.number().min(1000, "Minimum top-up amount is 1,000 VND."),
-  paymentMethod: z.enum(["MOCK_QR", "VNPAY", "MOMO"]),
+  amount: z.number().int().min(1000, "Minimum top-up amount is 1,000 VND."),
+  paymentMethod: z.literal("MOCK_QR"),
   description: z.string().optional(),
+});
+
+export const MomoCheckoutSchema = z.object({
+  paymentId: z.string(),
+  orderId: z.string(),
+  requestId: z.string(),
+  amount: z.number(),
+  payUrl: z.string().url(),
+  shortLink: z.string().url().optional(),
+  provider: z.literal("MOMO"),
+  environment: z.literal("sandbox"),
+});
+
+export const MomoStatusSchema = z.object({
+  paymentId: z.string(),
+  localStatus: PaymentStatus,
+  providerResultCode: z.number(),
+  providerMessage: z.string(),
+  providerTransactionId: z.number().optional(),
 });
 
 export const PromotionSchema = z.object({
@@ -143,13 +156,13 @@ export const BookingDetailSchema = z.object({
       id: z.string(),
       amount: z.number(),
       status: PaymentStatus,
-      paymentMethod: z.string(),
+      paymentMethod: PaymentMethod.or(z.string()),
       paidAt: z.string().nullable(),
       createdAt: z.string(),
     }),
   ),
-  contract: z.any().nullable(),
-  trip: z.any().nullable(),
+  contract: z.unknown().nullable(),
+  trip: z.unknown().nullable(),
 });
 
 export type CreateWalletTopupInput = z.infer<typeof CreateWalletTopupSchema>;
@@ -160,7 +173,6 @@ export type BookingQueryInput = z.infer<typeof BookingQuerySchema>;
 export type BookingDetailResponse = z.infer<typeof BookingDetailSchema>;
 export type CreatePaymentInput = z.infer<typeof CreatePaymentSchema>;
 export type SignContractInput = z.infer<typeof SignContractSchema>;
-export type WalletRefundInput = z.infer<typeof WalletRefundSchema>;
 export type CreateReviewInput = z.infer<typeof CreateReviewSchema>;
 export const CancelBookingResponseSchema = BookingDetailSchema;
 export type Wallet = z.infer<typeof WalletSchema>;
@@ -168,3 +180,5 @@ export type WalletTransaction = z.infer<typeof WalletTransactionSchema>;
 export type WalletTransactionList = z.infer<typeof WalletTransactionListSchema>;
 export type Promotion = z.infer<typeof PromotionSchema>;
 export type ApplyPromotionInput = z.infer<typeof ApplyPromotionSchema>;
+export type MomoCheckout = z.infer<typeof MomoCheckoutSchema>;
+export type MomoStatus = z.infer<typeof MomoStatusSchema>;

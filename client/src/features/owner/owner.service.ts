@@ -1,23 +1,49 @@
-// src/services/owner/owner.service.ts
 import axios from "@/lib/axios";
 import {
-  CreateCarInput,
-  UpdateCarInput,
-  CreateCarDocumentInput,
-  CreatePricingInput,
   BlockCalendarInput,
+  CreateCarDocumentInput,
+  CreateKYCInput,
+  CreatePricingInput,
+  RejectBookingInput,
   TripCheckinInput,
   TripCheckoutInput,
-  RejectBookingInput,
-  WithdrawRequestInput,
+  UpdateCarInput,
   UpdateOwnerProfileInput,
-  CreateKYCInput,
+  WithdrawRequestInput,
 } from "./owner.schema";
 
 const BASE_URL = "/api/owner";
+const WITHDRAW_DEDUPE_WINDOW_MS = 10_000;
+
+let lastWithdrawFingerprint = "";
+let lastWithdrawKey = "";
+let lastWithdrawAt = 0;
+
+function getWithdrawIdempotencyKey(dto: WithdrawRequestInput) {
+  const fingerprint = JSON.stringify([
+    dto.amount,
+    dto.bankAccountNumber ?? "",
+    dto.bankAccountName ?? "",
+    dto.description ?? "",
+  ]);
+  const now = Date.now();
+
+  if (
+    fingerprint === lastWithdrawFingerprint &&
+    lastWithdrawKey &&
+    now - lastWithdrawAt < WITHDRAW_DEDUPE_WINDOW_MS
+  ) {
+    return lastWithdrawKey;
+  }
+
+  const key = globalThis.crypto.randomUUID();
+  lastWithdrawFingerprint = fingerprint;
+  lastWithdrawKey = key;
+  lastWithdrawAt = now;
+  return key;
+}
 
 export const OwnerService = {
-  // ==================== 1. PROFILE ====================
   getProfile: async () => {
     const response = await axios.get(`${BASE_URL}/profile`);
     return response.data;
@@ -28,16 +54,14 @@ export const OwnerService = {
     return response.data;
   },
 
-  submitKyc: async (dto: CreateKYCInput, files: { documentFront?: File; documentBack?: File; faceImage?: File }) => {
+  submitKyc: async (
+    dto: CreateKYCInput,
+    files: { documentFront?: File; documentBack?: File; faceImage?: File },
+  ) => {
     const formData = new FormData();
-
-    // Append các field text từ DTO
-    Object.keys(dto).forEach((key) => {
-      const value = (dto as any)[key];
-      if (value) formData.append(key, value);
+    Object.entries(dto).forEach(([key, value]) => {
+      if (value) formData.append(key, String(value));
     });
-
-    // Append các field file (Khớp với logic upload thực tế)
     if (files.documentFront) formData.append("documentFront", files.documentFront);
     if (files.documentBack) formData.append("documentBack", files.documentBack);
     if (files.faceImage) formData.append("faceImage", files.faceImage);
@@ -53,33 +77,23 @@ export const OwnerService = {
     return response.data;
   },
 
-  // ==================== 2. CAR MANAGEMENT ====================
   createCar: async (formData: FormData) => {
-    const response = await axios.post(`${BASE_URL}/cars`, formData, {
-      headers: {
-        "Content-Type": "multipart/form-data",
-      },
+    return axios.post(`${BASE_URL}/cars`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
     });
-    return response.data;
   },
 
   getMyCars: async (params?: { page?: number; limit?: number }) => {
-    const response = await axios.get(`${BASE_URL}/cars`, { params });
-    return response.data;
+    return axios.get(`${BASE_URL}/cars`, { params });
   },
 
   updateCar: async (carId: string, data: UpdateCarInput | FormData) => {
-    // Trường hợp gửi FormData (Có kèm ảnh)
     if (data instanceof FormData) {
-      const response = await axios.put(`${BASE_URL}/cars/${carId}`, data, {
+      return axios.put(`${BASE_URL}/cars/${carId}`, data, {
         headers: { "Content-Type": "multipart/form-data" },
       });
-      return response.data;
     }
-
-    // Trường hợp gửi JSON (Chỉ sửa text)
-    const response = await axios.put(`${BASE_URL}/cars/${carId}`, data);
-    return response.data;
+    return axios.put(`${BASE_URL}/cars/${carId}`, data);
   },
 
   deleteCar: async (carId: string) => {
@@ -92,7 +106,6 @@ export const OwnerService = {
     return response.data;
   },
 
-  // ==================== 3. DOCUMENTS & PRICING ====================
   addCarDocument: async (carId: string, dto: CreateCarDocumentInput) => {
     const response = await axios.post(`${BASE_URL}/cars/${carId}/documents`, dto);
     return response.data;
@@ -108,21 +121,18 @@ export const OwnerService = {
     return response.data;
   },
 
-  // ==================== 4. CALENDAR ====================
   blockCalendar: async (carId: string, dto: BlockCalendarInput) => {
     const response = await axios.post(`${BASE_URL}/cars/${carId}/calendar/block`, dto);
     return response.data;
   },
 
-  getCalendar: async (carId: string, params?: { page?: number; limit?: number }) => {
+  getCalendar: async (carId: string, params?: { start_date?: string; end_date?: string }) => {
     const response = await axios.get(`${BASE_URL}/cars/${carId}/calendar`, { params });
     return response.data;
   },
 
-  // ==================== 5. BOOKINGS ====================
   getBookings: async (params?: { page?: number; limit?: number; status?: string }) => {
-    const response = await axios.get(`${BASE_URL}/bookings`, { params });
-    return response.data;
+    return axios.get(`${BASE_URL}/bookings`, { params });
   },
 
   approveBooking: async (bookingId: string) => {
@@ -135,10 +145,8 @@ export const OwnerService = {
     return response.data;
   },
 
-  // ==================== 6. TRIPS ====================
   getTrips: async (params?: { page?: number; limit?: number }) => {
-    const response = await axios.get(`${BASE_URL}/trips`, { params });
-    return response.data;
+    return axios.get(`${BASE_URL}/trips`, { params });
   },
 
   checkinTrip: async (tripId: string, dto: TripCheckinInput) => {
@@ -151,35 +159,32 @@ export const OwnerService = {
     return response.data;
   },
 
-  // ==================== 7. FINANCE ====================
   getEarnings: async (params?: { page?: number; limit?: number }) => {
-    const response = await axios.get(`${BASE_URL}/finance/earnings`, { params });
-    return response.data;
+    return axios.get(`${BASE_URL}/finance/earnings`, { params });
   },
 
   getTransactions: async (params?: { page?: number; limit?: number }) => {
-    const response = await axios.get(`${BASE_URL}/finance/transactions`, { params });
-    return response.data;
+    return axios.get(`${BASE_URL}/finance/transactions`, { params });
   },
 
   requestWithdraw: async (dto: WithdrawRequestInput) => {
-    const response = await axios.post(`${BASE_URL}/finance/withdraw`, dto);
+    const response = await axios.post(`${BASE_URL}/finance/withdraw`, {
+      ...dto,
+      idempotencyKey: getWithdrawIdempotencyKey(dto),
+    });
     return response.data;
   },
 
-  // ==================== 8. WALLET ====================
   getWallet: async () => {
     const response = await axios.get(`${BASE_URL}/wallet`);
     return response.data;
   },
 
-  // ==================== 9. DASHBOARD ====================
   getDashboardOverview: async () => {
     const response = await axios.get(`${BASE_URL}/dashboard/overview`);
     return response.data;
   },
 
-  // ==================== 10. DISPUTE ====================
   respondDispute: async (disputeId: string, message: string) => {
     const response = await axios.post(`${BASE_URL}/disputes/${disputeId}/respond`, { message });
     return response.data;
