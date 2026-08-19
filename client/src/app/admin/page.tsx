@@ -13,6 +13,18 @@ import { notify, notifyError } from "@/lib/notifications";
 
 type CollectionLike = { data?: unknown[]; items?: unknown[]; total?: number };
 type ReconcileSummary = { checked?: number; completed?: number; failed?: number; pending?: number };
+type OperationalHealth = {
+  status?: "healthy" | "attention";
+  needsAttention?: number;
+  thresholds?: { momoPendingMinutes?: number; recentFailureHours?: number };
+  queues?: {
+    staleMomoPayments?: number;
+    failedPayments24h?: number;
+    openDisputes?: number;
+    pendingWithdrawals?: number;
+    pendingSettlements?: number;
+  };
+};
 type DashboardState = {
   totalUsers: number;
   totalCars: number;
@@ -23,9 +35,25 @@ type DashboardState = {
   withdrawalsPending: number;
   disputesOpen: number;
   releasesPending: number;
+  staleMomoPayments: number;
+  failedPayments24h: number;
+  pendingSettlements: number;
 };
 
-const emptyState: DashboardState = { totalUsers: 0, totalCars: 0, totalBookings: 0, platformBalance: 0, kycPending: 0, carsPending: 0, withdrawalsPending: 0, disputesOpen: 0, releasesPending: 0 };
+const emptyState: DashboardState = {
+  totalUsers: 0,
+  totalCars: 0,
+  totalBookings: 0,
+  platformBalance: 0,
+  kycPending: 0,
+  carsPending: 0,
+  withdrawalsPending: 0,
+  disputesOpen: 0,
+  releasesPending: 0,
+  staleMomoPayments: 0,
+  failedPayments24h: 0,
+  pendingSettlements: 0,
+};
 const money = new Intl.NumberFormat("en-US", { style: "currency", currency: "VND", maximumFractionDigits: 0 });
 
 function collectionCount(value: unknown) {
@@ -50,7 +78,7 @@ export default function AdminOperationsDashboardPage() {
     else setLoading(true);
     setError(null);
     try {
-      const [overview, kyc, cars, withdrawals, disputes, releases, wallet] = await Promise.all([
+      const [overview, kyc, cars, withdrawals, disputes, releases, wallet, operationalHealthResponse] = await Promise.all([
         AdminService.getOverviewReport(),
         AdminService.getKycCustomers({ page: 1, limit: 1, status: "PENDING" }),
         AdminService.getPendingCars(),
@@ -58,7 +86,9 @@ export default function AdminOperationsDashboardPage() {
         AdminService.getDisputes({ page: 1, limit: 1, status: "OPEN" }),
         AdminService.getPendingReleaseTrips({ page: 1, limit: 1 }),
         AdminService.getPlatformWallet(),
+        api.get("/api/admin/operations/health") as Promise<{ data?: OperationalHealth }>,
       ]);
+      const operationalHealth = operationalHealthResponse.data;
       setState({
         totalUsers: Number(overview?.totalUsers ?? 0),
         totalCars: Number(overview?.totalCars ?? 0),
@@ -69,6 +99,9 @@ export default function AdminOperationsDashboardPage() {
         withdrawalsPending: collectionCount(withdrawals),
         disputesOpen: collectionCount(disputes),
         releasesPending: collectionCount(releases),
+        staleMomoPayments: Number(operationalHealth?.queues?.staleMomoPayments ?? 0),
+        failedPayments24h: Number(operationalHealth?.queues?.failedPayments24h ?? 0),
+        pendingSettlements: Number(operationalHealth?.queues?.pendingSettlements ?? 0),
       });
     } catch (requestError: unknown) {
       setError("One or more operational queues could not be loaded. No administrative state was changed.");
@@ -81,7 +114,18 @@ export default function AdminOperationsDashboardPage() {
 
   useEffect(() => { void load(); }, [load]);
 
-  const attentionTotal = useMemo(() => state.kycPending + state.carsPending + state.withdrawalsPending + state.disputesOpen + state.releasesPending, [state]);
+  const attentionTotal = useMemo(
+    () =>
+      state.kycPending +
+      state.carsPending +
+      state.withdrawalsPending +
+      state.disputesOpen +
+      state.releasesPending +
+      state.staleMomoPayments +
+      state.failedPayments24h +
+      state.pendingSettlements,
+    [state],
+  );
 
   const runReconciliation = async () => {
     if (!window.confirm("Reconcile pending MoMo payments with the provider now?")) return;
@@ -113,7 +157,7 @@ export default function AdminOperationsDashboardPage() {
     <div className="mx-auto w-full max-w-7xl space-y-8 py-2">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <div className="flex items-center gap-2"><p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Admin operations</p>{!loading ? <Badge variant="secondary">{attentionTotal} need attention</Badge> : null}</div>
+          <div className="flex items-center gap-2"><p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Admin operations</p>{!loading ? <Badge variant={attentionTotal > 0 ? "destructive" : "secondary"}>{attentionTotal} need attention</Badge> : null}</div>
           <h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">Operations dashboard</h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">Prioritize queues that affect marketplace trust, supply and money movement instead of treating the admin area as a passive KPI dashboard.</p>
         </div>
@@ -136,6 +180,15 @@ export default function AdminOperationsDashboardPage() {
               </Card>
             </Link>
           ))}
+        </div>
+      </section>
+
+      <section className="space-y-4">
+        <div><h2 className="text-xl font-semibold">Financial signals</h2><p className="mt-1 text-sm text-muted-foreground">Server-derived signals identify payment and settlement queues that deserve investigation before they become reconciliation incidents.</p></div>
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Metric label="MoMo pending > 15 min" value={state.staleMomoPayments.toLocaleString("en-US")} loading={loading} />
+          <Metric label="Failed payments · 24h" value={state.failedPayments24h.toLocaleString("en-US")} loading={loading} />
+          <Metric label="Pending settlements" value={state.pendingSettlements.toLocaleString("en-US")} loading={loading} />
         </div>
       </section>
 
