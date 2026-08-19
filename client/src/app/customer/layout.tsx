@@ -1,6 +1,7 @@
 "use client";
 
 import { useAuthContext } from "@/components/provider/AuthProvider";
+import { CustomerCurrencyDisplay } from "@/components/customer/CustomerCurrencyDisplay";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { Loader2, Menu } from "lucide-react";
@@ -53,7 +54,9 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
     }
   }, [isClient, isLoading, isPublicMarketplace, pathname, router, user]);
 
-  if (isPublicMarketplace) return <>{children}</>;
+  if (isPublicMarketplace) {
+    return <CustomerCurrencyDisplay>{children}</CustomerCurrencyDisplay>;
+  }
 
   if (!isClient || isLoading || !user || user.role !== "CUSTOMER") {
     return (
@@ -64,37 +67,39 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
   }
 
   return (
-    <div className="flex min-h-screen bg-background">
-      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r bg-card md:flex">
-        <AppSidebar role="CUSTOMER" />
-      </aside>
+    <CustomerCurrencyDisplay>
+      <div className="flex min-h-screen bg-background">
+        <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r bg-card md:flex">
+          <AppSidebar role="CUSTOMER" />
+        </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex items-center pr-4">
-          <div className="pl-4 md:hidden">
-            <Sheet open={open} onOpenChange={setOpen}>
-              <SheetTrigger asChild>
-                <Button variant="ghost" size="icon">
-                  <Menu className="h-6 w-6" />
-                </Button>
-              </SheetTrigger>
-              <SheetContent side="left" className="w-72 p-0">
-                <SheetHeader className="sr-only">
-                  <SheetTitle>Menu</SheetTitle>
-                  <SheetDescription>Customer navigation menu</SheetDescription>
-                </SheetHeader>
-                <AppSidebar role="CUSTOMER" />
-              </SheetContent>
-            </Sheet>
+        <div className="flex min-w-0 flex-1 flex-col">
+          <div className="flex items-center pr-4">
+            <div className="pl-4 md:hidden">
+              <Sheet open={open} onOpenChange={setOpen}>
+                <SheetTrigger asChild>
+                  <Button variant="ghost" size="icon">
+                    <Menu className="h-6 w-6" />
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="left" className="w-72 p-0">
+                  <SheetHeader className="sr-only">
+                    <SheetTitle>Menu</SheetTitle>
+                    <SheetDescription>Customer navigation menu</SheetDescription>
+                  </SheetHeader>
+                  <AppSidebar role="CUSTOMER" />
+                </SheetContent>
+              </Sheet>
+            </div>
+
+            <div className="flex-1">
+              <AppHeader />
+            </div>
           </div>
 
-          <div className="flex-1">
-            <AppHeader />
-          </div>
+          <main className="flex-1 bg-background p-4 md:p-6">{children}</main>
         </div>
-
-        <main className="flex-1 bg-background p-4 md:p-6">{children}</main>
       </div>
-    </div>
+    </CustomerCurrencyDisplay>
   );
 }
