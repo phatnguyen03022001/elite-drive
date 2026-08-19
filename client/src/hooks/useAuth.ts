@@ -1,17 +1,16 @@
 import { useRouter } from "next/navigation";
-import { jwtDecode } from "jwt-decode";
 import { useAuthQueries } from "../features/auth/auth.queries";
-import { LoginRequest, LoginResponse } from "../features/auth/auth.schema";
+import { LoginRequest } from "../features/auth/auth.schema";
 import { authService } from "../features/auth/auth.service";
 import { notify, notifyError } from "@/lib/notifications";
 
-interface DecodedToken {
-  role: "ADMIN" | "OWNER" | "CUSTOMER";
-  sub: string;
-  email: string;
+type Role = "ADMIN" | "OWNER" | "CUSTOMER";
+
+function isRole(value: unknown): value is Role {
+  return value === "ADMIN" || value === "OWNER" || value === "CUSTOMER";
 }
 
-function getSafeReturnTo(role: DecodedToken["role"]) {
+function getSafeReturnTo(role: Role) {
   if (typeof window === "undefined") return null;
 
   const candidate = new URLSearchParams(window.location.search).get("returnTo");
@@ -29,13 +28,14 @@ export const useAuth = () => {
   const router = useRouter();
   const authQueries = useAuthQueries();
 
-  // The backend already persisted this token in an HttpOnly cookie. The token is
-  // decoded only from the immediate login response to choose the landing page;
-  // it is never stored in localStorage or a JavaScript-readable cookie.
-  const handleAuthSuccess = (token: string) => {
-    const decoded = jwtDecode<DecodedToken>(token);
-    const returnTo = getSafeReturnTo(decoded.role);
+  const handleAuthSuccess = async () => {
+    const session = await authService.getProfile();
+    const role = session?.role;
+    if (!isRole(role)) {
+      throw new Error("Authenticated session returned an unsupported role");
+    }
 
+    const returnTo = getSafeReturnTo(role);
     notify.success("Signed in", {
       id: "auth-session",
       description: returnTo ? "Returning you to where you left off." : "Your Elite Drive workspace is ready.",
@@ -43,10 +43,10 @@ export const useAuth = () => {
 
     if (returnTo) {
       router.push(returnTo);
-    } else if (decoded.role === "ADMIN") {
+    } else if (role === "ADMIN") {
       router.push("/admin/kyc");
-    } else if (decoded.role === "OWNER") {
-      router.push("/owner/cars");
+    } else if (role === "OWNER") {
+      router.push("/owner/dashboard");
     } else {
       router.push("/customer/cars");
     }
@@ -56,9 +56,19 @@ export const useAuth = () => {
 
   const handleLogin = (formData: LoginRequest) => {
     authQueries.login.mutate(formData, {
-      onSuccess: (res: LoginResponse) => {
-        const token = res.data?.token;
-        if (token) handleAuthSuccess(token);
+      onSuccess: async () => {
+        try {
+          await handleAuthSuccess();
+        } catch (error) {
+          notifyError(
+            "Session verification failed",
+            error,
+            "Your credentials were accepted, but the new session could not be verified. Sign in again.",
+            { id: "auth-session" },
+          );
+          router.push("/login");
+          router.refresh();
+        }
       },
       onError: (error: unknown) => {
         notifyError(
@@ -73,9 +83,19 @@ export const useAuth = () => {
 
   const handleVerifyLoginOtp = (data: { email: string; code: string }) => {
     authQueries.otp.verify.login.mutate(data, {
-      onSuccess: (res: LoginResponse) => {
-        const token = res.data?.token;
-        if (token) handleAuthSuccess(token);
+      onSuccess: async () => {
+        try {
+          await handleAuthSuccess();
+        } catch (error) {
+          notifyError(
+            "Session verification failed",
+            error,
+            "The code was accepted, but the new session could not be verified. Sign in again.",
+            { id: "auth-session" },
+          );
+          router.push("/login");
+          router.refresh();
+        }
       },
       onError: (error: unknown) => {
         notifyError(
