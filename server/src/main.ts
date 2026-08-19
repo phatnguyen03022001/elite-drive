@@ -1,7 +1,6 @@
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { AppSwaggerConfig } from './config/swagger/swagger.module';
 import { GlobalValidationPipe } from './common/pipes/validation.pipe';
 import {
   buildTrustedOrigins,
@@ -28,6 +27,7 @@ async function bootstrap() {
   }
 
   if (process.env.NODE_ENV !== 'production') {
+    const { AppSwaggerConfig } = await import('./config/swagger/swagger.module');
     AppSwaggerConfig.setup(app);
   }
 
