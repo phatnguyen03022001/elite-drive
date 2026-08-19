@@ -2,10 +2,13 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { copyFileSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
+const currentLock = resolve('package-lock.json');
 const temp = mkdtempSync(join(tmpdir(), 'elite-client-lock-'));
-copyFileSync('package-lock.json', join(temp, 'package-lock.json'));
+const generatedLock = join(temp, 'package-lock.json');
+copyFileSync(currentLock, generatedLock);
+
 const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
 pkg.dependencies.next = '16.3.1';
 pkg.devDependencies['eslint-config-next'] = '16.3.1';
@@ -39,10 +42,21 @@ try {
   process.exit(2);
 }
 
-const encoded = gzipSync(readFileSync(join(temp, 'package-lock.json'))).toString('base64');
-console.log(`SECURE_LOCK_GZIP_BYTES=${Buffer.byteLength(encoded)}`);
-console.log('SECURE_LOCK_GZIP_BASE64_BEGIN');
+const diff = spawnSync('diff', ['-u', currentLock, generatedLock], {
+  encoding: 'utf8',
+  maxBuffer: 20 * 1024 * 1024,
+});
+if (![0, 1].includes(diff.status ?? 2)) {
+  console.error(diff.stderr || 'Unable to generate package-lock diff.');
+  process.exit(2);
+}
+
+const patch = diff.stdout || '';
+const encoded = gzipSync(Buffer.from(patch, 'utf8')).toString('base64');
+console.log(`SECURE_LOCK_DIFF_LINES=${patch.split('\n').length}`);
+console.log(`SECURE_LOCK_DIFF_GZIP_BASE64_BYTES=${Buffer.byteLength(encoded)}`);
+console.log('SECURE_LOCK_DIFF_GZIP_BASE64_BEGIN');
 for (let offset = 0; offset < encoded.length; offset += 4000) {
   console.log(encoded.slice(offset, offset + 4000));
 }
-console.log('SECURE_LOCK_GZIP_BASE64_END');
+console.log('SECURE_LOCK_DIFF_GZIP_BASE64_END');
