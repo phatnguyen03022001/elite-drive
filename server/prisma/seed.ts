@@ -38,6 +38,16 @@ function money(value: number) {
   return Math.round(value / 1_000) * 1_000;
 }
 
+function slugify(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/&/g, 'and')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
 const ids = {
   admin: oid(1),
   owners: [oid(101), oid(102), oid(103), oid(104)],
@@ -49,6 +59,8 @@ const ids = {
   payments: Array.from({ length: 10 }, (_, index) => oid(701 + index)),
   disputes: [oid(801), oid(802)],
   messages: [oid(811), oid(812), oid(813), oid(814)],
+  categories: Array.from({ length: 4 }, (_, index) => oid(1601 + index)),
+  locations: Array.from({ length: 6 }, (_, index) => oid(1701 + index)),
 };
 
 const categories = [
@@ -220,21 +232,23 @@ async function main() {
   const passwordHash = await bcrypt.hash(seedPassword, 10);
 
   const categoryIds = new Map<string, string>();
-  for (const item of categories) {
+  for (let index = 0; index < categories.length; index += 1) {
+    const item = categories[index];
     const record = await prisma.category.upsert({
-      where: { name: item.name },
-      update: item,
-      create: item,
+      where: { slug: slugify(item.name) },
+      update: { ...item, slug: slugify(item.name) },
+      create: { id: ids.categories[index], ...item, slug: slugify(item.name) },
     });
     categoryIds.set(item.name, record.id);
   }
 
   const locationIds = new Map<string, string>();
-  for (const item of locations) {
+  for (let index = 0; index < locations.length; index += 1) {
+    const item = locations[index];
     const record = await prisma.location.upsert({
-      where: { name: item.name },
+      where: { id: ids.locations[index] },
       update: item,
-      create: item,
+      create: { id: ids.locations[index], ...item },
     });
     locationIds.set(item.name, record.id);
   }
@@ -358,9 +372,8 @@ async function main() {
         dropoffLocation: car.location,
         status: input.status,
         totalPrice: total,
-        insurancePrice: insurance,
-        depositAmount: car.deposit,
         discountAmount: input.discount,
+        finalPrice: total,
         notes: input.note,
         createdAt: dateFromNow(Math.min(input.start - 12, -3), 14),
       },
@@ -407,7 +420,7 @@ async function main() {
         bookingId: booking.id,
         userId: booking.customerId,
         amount: booking.total,
-        paymentMethod: 'SANDBOX',
+        paymentMethod: 'MOCK_QR',
         transactionId: `SEED-TXN-${String(paymentIndex + 1).padStart(4, '0')}`,
         status: PaymentStatus.COMPLETED,
         paidAt: dateFromNow(Math.min(bookingInputs[bookingIndex].start - 2, -1), 16),
@@ -423,7 +436,7 @@ async function main() {
       bookingId: approvedBooking.id,
       userId: approvedBooking.customerId,
       amount: approvedBooking.total,
-      paymentMethod: 'SANDBOX',
+      paymentMethod: 'MOCK_QR',
       transactionId: 'SEED-TXN-PENDING-0001',
       status: PaymentStatus.PENDING,
       createdAt: dateFromNow(-1, 12),
@@ -449,13 +462,12 @@ async function main() {
         status: completed ? TripStatus.COMPLETED : ongoing ? TripStatus.ONGOING : TripStatus.UPCOMING,
         startOdometer: completed || ongoing ? startOdometer : null,
         endOdometer: completed ? startOdometer + distance : null,
-        startFuelLevel: completed || ongoing ? 0.82 - (index % 3) * 0.08 : null,
-        endFuelLevel: completed ? 0.48 + (index % 4) * 0.07 : null,
+        startFuelLevel: completed || ongoing ? 82 - (index % 3) * 8 : null,
+        endFuelLevel: completed ? 48 + (index % 4) * 7 : null,
         checkinTime: completed || ongoing ? dateFromNow(input.start, 9) : null,
         checkoutTime: completed ? dateFromNow(input.end, 16) : null,
         pickupNotes: completed || ongoing ? 'Vehicle condition checked with renter. No pre-trip damage noted.' : null,
         dropoffNotes: completed ? (index === 1 ? 'Returned clean. Minor dust on rear floor mat; no charge applied.' : 'Returned on time with no new exterior damage.') : null,
-        damageImages: [],
         createdAt: dateFromNow(input.start - 1, 17),
       },
     });
@@ -468,12 +480,11 @@ async function main() {
       data: {
         id: ids.reviews[index],
         bookingId: booking.id,
-        customerId: booking.customerId,
+        userId: booking.customerId,
         carId: booking.carId,
         rating: item.rating,
         title: item.title,
         content: item.content,
-        images: [],
         createdAt: dateFromNow(bookingInputs[item.booking].end + 1, 20),
       },
     });
@@ -498,15 +509,14 @@ async function main() {
   for (let index = 0; index < contractBookingIndexes.length; index += 1) {
     const bookingIndex = contractBookingIndexes[index];
     const booking = bookingRecords[bookingIndex];
-    const completed = booking.status === BookingStatus.COMPLETED;
     await prisma.contract.create({
       data: {
         id: oid(1101 + index),
         bookingId: booking.id,
         content: 'Elite Drive rental agreement for seeded sample data. Terms include approved driver use, return condition, fuel or charge expectations, and incident reporting.',
         customerSignedAt: dateFromNow(bookingInputs[bookingIndex].start - 1, 12),
-        ownerSignedAt: dateFromNow(bookingInputs[bookingIndex].start - 1, 13),
-        status: completed ? 'completed' : 'signed',
+        customerSignature: `seed-signature-${booking.id}`,
+        status: 'SIGNED',
         createdAt: dateFromNow(bookingInputs[bookingIndex].start - 2, 11),
       },
     });
