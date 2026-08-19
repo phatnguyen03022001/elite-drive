@@ -201,6 +201,17 @@ export class PaymentService {
     if (MOMO_SUCCESS_CODES.has(resultCode)) {
       if (currentStatus === PaymentStatus.PENDING) {
         await this.completePayment(paymentId, providerTransactionId);
+      } else if (
+        currentStatus === PaymentStatus.COMPLETED &&
+        this.isValidProviderTransactionId(providerTransactionId)
+      ) {
+        await this.db.payment.updateMany({
+          where: {
+            id: paymentId,
+            providerTransactionId: null,
+          },
+          data: { providerTransactionId: String(providerTransactionId) },
+        });
       }
       return PaymentStatus.COMPLETED;
     }
@@ -246,6 +257,10 @@ export class PaymentService {
     }
   }
 
+  private isValidProviderTransactionId(value?: number): value is number {
+    return Number.isSafeInteger(value) && Number(value) > 0;
+  }
+
   private async completePayment(paymentId: string, providerTransactionId?: number) {
     return this.db.$transaction(async (tx) => {
       const payment = await tx.payment.findUnique({
@@ -270,7 +285,13 @@ export class PaymentService {
 
       const paymentClaim = await tx.payment.updateMany({
         where: { id: payment.id, status: PaymentStatus.PENDING },
-        data: { status: PaymentStatus.COMPLETED, paidAt: new Date() },
+        data: {
+          status: PaymentStatus.COMPLETED,
+          paidAt: new Date(),
+          ...(this.isValidProviderTransactionId(providerTransactionId)
+            ? { providerTransactionId: String(providerTransactionId) }
+            : {}),
+        },
       });
       if (paymentClaim.count !== 1) {
         throw new BadRequestException('Payment đã được xử lý');
