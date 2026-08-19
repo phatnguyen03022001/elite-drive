@@ -151,7 +151,7 @@ export class AdminRefundService {
       payment.id,
       refundOrderId,
       refundRequestId,
-      resuming,
+      input.bookingStatus === BookingStatus.CONFIRMED,
     );
 
     const originalProviderTransId = await this.resolveOriginalMomoTransId(
@@ -235,10 +235,10 @@ export class AdminRefundService {
     paymentId: string,
     refundOrderId: string,
     refundRequestId: string,
-    resuming: boolean,
+    claimBooking: boolean,
   ) {
     await this.db.$transaction(async (tx) => {
-      if (!resuming) {
+      if (claimBooking) {
         const bookingClaim = await tx.booking.updateMany({
           where: {
             id: bookingId,
@@ -253,6 +253,16 @@ export class AdminRefundService {
         if (bookingClaim.count !== 1) {
           throw new BadRequestException(
             'Booking vừa thay đổi; không thể bắt đầu refund',
+          );
+        }
+      } else {
+        const booking = await tx.booking.findUnique({
+          where: { id: bookingId },
+          select: { status: true },
+        });
+        if (booking?.status !== BookingStatus.CANCELLED) {
+          throw new BadRequestException(
+            'Refund intent không còn giữ booking ở trạng thái CANCELLED',
           );
         }
       }
