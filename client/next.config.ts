@@ -43,6 +43,9 @@ const nextConfig: NextConfig = {
   transpilePackages: ["shared", "ui"],
   poweredByHeader: false,
   compress: true,
+  turbopack: {
+    root: process.cwd(),
+  },
 
   async rewrites() {
     return [{ source: "/api/:path*", destination: `${backendUrl}/api/:path*` }];
