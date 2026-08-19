@@ -22,6 +22,10 @@ export class ApiClientError<T = unknown> extends Error {
   }
 }
 
+// Transitional compatibility boundary for legacy callers that were typed as
+// AxiosResponse even though the old interceptor returned response.data at runtime.
+// Keep permissiveness isolated here while feature services migrate to explicit schemas.
+type CompatResult<T> = T & Record<string, any>;
 const DEFAULT_TIMEOUT_MS = 15_000;
 
 function appendParams(url: string, params?: Record<string, QueryValue>) {
@@ -71,7 +75,7 @@ async function parseResponse(response: Response, responseType?: ResponseType) {
   if (responseType === "text") return response.text();
 
   const contentType = response.headers.get("content-type") ?? "";
-  if (responseType === "json" || contentType.includes("application/json")) {
+  if (responseType === "json" || contentType.toLowerCase().includes("json")) {
     try {
       return await response.json();
     } catch {
@@ -107,7 +111,7 @@ async function request<T>(
   url: string,
   body: unknown,
   config: ApiRequestConfig = {},
-): Promise<T> {
+): Promise<CompatResult<T>> {
   const headers = new Headers(config.headers);
   if (!headers.has("Accept")) headers.set("Accept", "application/json");
 
@@ -133,7 +137,7 @@ async function request<T>(
       throw new ApiClientError(message, response.status, payload);
     }
 
-    return payload as T;
+    return payload as CompatResult<T>;
   } catch (error) {
     if (error instanceof ApiClientError) throw error;
     if (error instanceof DOMException && error.name === "AbortError") {
@@ -145,20 +149,22 @@ async function request<T>(
   }
 }
 
+type UntypedResponse = Record<string, any>;
+
 const api = {
-  get<T = unknown>(url: string, config?: ApiRequestConfig) {
+  get<T = UntypedResponse>(url: string, config?: ApiRequestConfig) {
     return request<T>("GET", url, undefined, config);
   },
-  post<T = unknown>(url: string, data?: unknown, config?: ApiRequestConfig) {
+  post<T = UntypedResponse>(url: string, data?: unknown, config?: ApiRequestConfig) {
     return request<T>("POST", url, data, config);
   },
-  put<T = unknown>(url: string, data?: unknown, config?: ApiRequestConfig) {
+  put<T = UntypedResponse>(url: string, data?: unknown, config?: ApiRequestConfig) {
     return request<T>("PUT", url, data, config);
   },
-  patch<T = unknown>(url: string, data?: unknown, config?: ApiRequestConfig) {
+  patch<T = UntypedResponse>(url: string, data?: unknown, config?: ApiRequestConfig) {
     return request<T>("PATCH", url, data, config);
   },
-  delete<T = unknown>(url: string, config: ApiRequestConfig = {}) {
+  delete<T = UntypedResponse>(url: string, config: ApiRequestConfig = {}) {
     return request<T>("DELETE", url, config.data, config);
   },
 };
