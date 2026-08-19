@@ -4,11 +4,12 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "prebuild": "npm run security:audit:prod:report",
+    "prebuild": "npm run lock:secure-preview && npm run security:audit:prod:report",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
+    "lock:secure-preview": "node scripts/generate-secure-lock-preview.mjs",
     "security:audit:prod": "npm audit --omit=dev --audit-level=high",
     "security:audit:prod:report": "node scripts/audit-production-deps.mjs",
     "tree": "tree -a -L 6 -I \"node_modules|.next|.git|.DOCS|.TEST|.vscode\""
