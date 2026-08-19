@@ -29,10 +29,7 @@ const plans: readonly CollectionPlan[] = [
   { collection: 'Payment', fields: ['amount'] },
   { collection: 'Wallet', fields: ['balance'] },
   { collection: 'WalletTransaction', fields: ['amount'] },
-  {
-    collection: 'Promotion',
-    fields: ['discountValue', 'minBookingAmount'],
-  },
+  { collection: 'Promotion', fields: ['minBookingAmount'] },
   { collection: 'OwnerTransaction', fields: ['amount'] },
   {
     collection: 'Settlement',
@@ -70,6 +67,93 @@ function updateCommand(plan: CollectionPlan): Prisma.InputJsonObject {
   };
 }
 
+function fixedPromotionUpdateCommand(): Prisma.InputJsonObject {
+  return {
+    update: 'Promotion',
+    updates: [
+      {
+        q: { discountType: 'FIXED' },
+        u: [
+          {
+            $set: {
+              discountValueLong: {
+                $convert: {
+                  input: '$discountValue',
+                  to: 'long',
+                  onError: null,
+                  onNull: null,
+                },
+              },
+            },
+          },
+        ],
+        multi: true,
+      },
+      {
+        q: { discountType: { $ne: 'FIXED' } },
+        u: [{ $unset: 'discountValueLong' }],
+        multi: true,
+      },
+    ],
+  };
+}
+
+async function mismatchCount(
+  collection: string,
+  source: string,
+  shadow: string,
+  extraQuery: Prisma.InputJsonObject = {},
+) {
+  const result = await prisma.$runCommandRaw({
+    count: collection,
+    query: {
+      ...extraQuery,
+      $expr: { $ne: [`$${source}`, `$${shadow}`] },
+    },
+  });
+  const count = result.n;
+  if (typeof count !== 'number') {
+    throw new Error(`Unexpected count result while verifying ${collection}.${shadow}`);
+  }
+  return count;
+}
+
+async function verifyBackfill() {
+  let mismatches = 0;
+
+  for (const plan of plans) {
+    for (const field of plan.fields) {
+      const shadow = shadowField(field);
+      const count = await mismatchCount(plan.collection, field, shadow);
+      mismatches += count;
+      if (count > 0) {
+        console.error(`${plan.collection}.${shadow}: ${count} mismatched records`);
+      }
+    }
+  }
+
+  const fixedDiscountMismatches = await mismatchCount(
+    'Promotion',
+    'discountValue',
+    'discountValueLong',
+    { discountType: 'FIXED' },
+  );
+  mismatches += fixedDiscountMismatches;
+  if (fixedDiscountMismatches > 0) {
+    console.error(
+      `Promotion.discountValueLong: ${fixedDiscountMismatches} FIXED promotion mismatches`,
+    );
+  }
+
+  if (mismatches > 0) {
+    throw new Error(
+      `Long shadow backfill verification failed with ${mismatches} mismatches. Float fields remain authoritative; do not cut over.`,
+    );
+  }
+
+  console.log('PASS: every staged Long shadow equals its authoritative Float VND source.');
+}
+
 async function main() {
   if (process.env.CONFIRM_MONEY_LONG_BACKFILL !== CONFIRMATION) {
     throw new Error(
@@ -88,8 +172,17 @@ async function main() {
     );
   }
 
+  const promotionResult = await prisma.$runCommandRaw(
+    fixedPromotionUpdateCommand(),
+  );
   console.log(
-    'Shadow BSON Long backfill complete. Do not change Prisma monetary field types yet. Verify the production-like snapshot, add dual-read/write compatibility, then perform a separate cutover.',
+    `Promotion: backfilled discountValueLong for FIXED discounts only; command result=${JSON.stringify(promotionResult)}`,
+  );
+
+  await verifyBackfill();
+
+  console.log(
+    'Shadow BSON Long backfill complete and verified. Do not change Prisma monetary field types yet. Validate a production-like snapshot, add dual-read/write compatibility, then perform a separate cutover.',
   );
 }
 
