@@ -1,5 +1,6 @@
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import type { NextFunction, Request, Response } from 'express';
 import { AppModule } from './app.module';
 import { GlobalValidationPipe } from './common/pipes/validation.pipe';
 import {
@@ -9,6 +10,7 @@ import {
 import { PrismaService } from './prisma/prisma.service';
 
 const bootstrapLogger = new Logger('Bootstrap');
+const MAX_REQUEST_TARGET_LENGTH = 4_096;
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -25,6 +27,18 @@ async function bootstrap() {
     await app.close();
     throw error;
   }
+
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    const requestTarget = req.originalUrl || req.url || '';
+    if (requestTarget.length > MAX_REQUEST_TARGET_LENGTH) {
+      res.status(414).json({
+        success: false,
+        message: 'Request target quá dài',
+      });
+      return;
+    }
+    next();
+  });
 
   if (process.env.NODE_ENV !== 'production') {
     const { AppSwaggerConfig } = await import('./config/swagger/swagger.module');
