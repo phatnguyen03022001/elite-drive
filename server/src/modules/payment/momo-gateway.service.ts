@@ -17,6 +17,14 @@ interface CreateCheckoutInput {
   extraData?: Record<string, string>;
 }
 
+interface MomoRefundInput {
+  orderId: string;
+  requestId: string;
+  amount: number;
+  transId: number;
+  description: string;
+}
+
 interface MomoCreateResponse {
   partnerCode: string;
   requestId: string;
@@ -39,6 +47,33 @@ interface MomoQueryResponse {
   message: string;
   responseTime: number;
   payType?: string;
+}
+
+export interface MomoRefundResponse {
+  partnerCode: string;
+  requestId: string;
+  orderId: string;
+  amount: number;
+  transId?: number;
+  resultCode: number;
+  message: string;
+  responseTime: number;
+}
+
+export interface MomoRefundQueryResponse {
+  partnerCode: string;
+  requestId: string;
+  orderId: string;
+  resultCode: number;
+  message: string;
+  responseTime: number;
+  refundTrans?: Array<{
+    orderId: string;
+    amount: number;
+    resultCode: number;
+    transId?: number;
+    createdTime?: number;
+  }>;
 }
 
 @Injectable()
@@ -148,6 +183,87 @@ export class MomoGatewayService {
       response.requestId !== requestId
     ) {
       throw new BadGatewayException('MoMo trả về trạng thái không khớp giao dịch');
+    }
+    return response;
+  }
+
+  async refund(input: MomoRefundInput): Promise<MomoRefundResponse> {
+    this.assertEnabled();
+    const partnerCode = this.required('MOMO_PARTNER_CODE');
+    const accessKey = this.required('MOMO_ACCESS_KEY');
+    const amount = this.toVndInteger(input.amount);
+    if (amount > 50_000_000) {
+      throw new BadRequestException('MoMo refund tối đa 50.000.000 VND');
+    }
+    if (!Number.isSafeInteger(input.transId) || input.transId <= 0) {
+      throw new BadRequestException('MoMo transaction id không hợp lệ');
+    }
+    const description = input.description.trim().slice(0, 500);
+    const rawSignature = [
+      `accessKey=${accessKey}`,
+      `amount=${amount}`,
+      `description=${description}`,
+      `orderId=${input.orderId}`,
+      `partnerCode=${partnerCode}`,
+      `requestId=${input.requestId}`,
+      `transId=${input.transId}`,
+    ].join('&');
+
+    const response = await this.post<MomoRefundResponse>(
+      '/v2/gateway/api/refund',
+      {
+        partnerCode,
+        orderId: input.orderId,
+        requestId: input.requestId,
+        amount,
+        transId: input.transId,
+        lang: 'vi',
+        description,
+        signature: this.sign(rawSignature),
+      },
+    );
+
+    if (
+      response.partnerCode !== partnerCode ||
+      response.orderId !== input.orderId ||
+      response.requestId !== input.requestId ||
+      Number(response.amount) !== amount
+    ) {
+      throw new BadGatewayException('MoMo trả về dữ liệu refund không khớp');
+    }
+    return response;
+  }
+
+  async queryRefund(
+    orderId: string,
+    requestId: string,
+  ): Promise<MomoRefundQueryResponse> {
+    this.assertEnabled();
+    const partnerCode = this.required('MOMO_PARTNER_CODE');
+    const accessKey = this.required('MOMO_ACCESS_KEY');
+    const rawSignature = [
+      `accessKey=${accessKey}`,
+      `orderId=${orderId}`,
+      `partnerCode=${partnerCode}`,
+      `requestId=${requestId}`,
+    ].join('&');
+
+    const response = await this.post<MomoRefundQueryResponse>(
+      '/v2/gateway/api/refund/query',
+      {
+        partnerCode,
+        orderId,
+        requestId,
+        lang: 'vi',
+        signature: this.sign(rawSignature),
+      },
+    );
+    if (
+      response.partnerCode !== partnerCode ||
+      response.orderId !== orderId ||
+      response.requestId !== requestId
+    ) {
+      throw new BadGatewayException('MoMo trả về refund status không khớp');
     }
     return response;
   }
