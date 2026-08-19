@@ -42,21 +42,12 @@ try {
   process.exit(2);
 }
 
-const diff = spawnSync('diff', ['-u', currentLock, generatedLock], {
-  encoding: 'utf8',
-  maxBuffer: 20 * 1024 * 1024,
-});
-if (![0, 1].includes(diff.status ?? 2)) {
-  console.error(diff.stderr || 'Unable to generate package-lock diff.');
-  process.exit(2);
-}
-
-const patch = diff.stdout || '';
-const encoded = gzipSync(Buffer.from(patch, 'utf8')).toString('base64');
-console.log(`SECURE_LOCK_DIFF_LINES=${patch.split('\n').length}`);
-console.log(`SECURE_LOCK_DIFF_GZIP_BASE64_BYTES=${Buffer.byteLength(encoded)}`);
-console.log('SECURE_LOCK_DIFF_GZIP_BASE64_BEGIN');
+const secureLock = readFileSync(generatedLock);
+const encoded = gzipSync(secureLock).toString('base64');
+console.log(`SECURE_LOCK_JSON_BYTES=${secureLock.length}`);
+console.log(`SECURE_LOCK_GZIP_BASE64_BYTES=${Buffer.byteLength(encoded)}`);
+console.log('SECURE_LOCK_GZIP_BASE64_BEGIN');
 for (let offset = 0; offset < encoded.length; offset += 4000) {
   console.log(encoded.slice(offset, offset + 4000));
 }
-console.log('SECURE_LOCK_DIFF_GZIP_BASE64_END');
+console.log('SECURE_LOCK_GZIP_BASE64_END');
