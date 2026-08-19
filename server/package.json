@@ -17,6 +17,7 @@
     "test:ci": "jest --runInBand",
     "test:watch": "jest --watch",
     "money:audit": "ts-node prisma/audit-money.ts",
+    "money:backfill:long": "npm run money:audit && ts-node prisma/backfill-money-long.ts",
     "security:audit:prod": "npm audit --omit=dev --audit-level=high",
     "security:audit:prod:report": "node scripts/audit-production-deps.mjs",
     "db:seed": "ts-node prisma/reset-seed.ts && ts-node prisma/seed.ts && ts-node prisma/seed-assets.ts",
