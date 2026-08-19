@@ -55,6 +55,16 @@ describe('CsrfOriginGuard', () => {
     expect(() => guard.canActivate(context)).toThrow(ForbiddenException);
   });
 
+  it('rejects an unsafe cookie-authenticated request when Origin is absent', () => {
+    const guard = new CsrfOriginGuard(config);
+    const context = makeContext('POST', {
+      cookie: 'token=session-value',
+      'sec-fetch-site': 'same-origin',
+    });
+
+    expect(() => guard.canActivate(context)).toThrow(ForbiddenException);
+  });
+
   it('allows server-to-server unsafe requests without the browser session cookie', () => {
     const guard = new CsrfOriginGuard(config);
     const context = makeContext('POST', {
