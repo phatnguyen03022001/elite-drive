@@ -27,8 +27,6 @@
     "dump:config": "find src/config -type f -name \"*.ts\" -exec sh -c 'echo \"\\n===== {} =====\\n\"; cat {}' \\; > zcode/config-code.txt"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.971.0",
-    "@aws-sdk/s3-request-presigner": "^3.971.0",
     "@getbrevo/brevo": "^4.0.1",
     "@nestjs/common": "^10.0.0",
     "@nestjs/config": "^4.0.2",
