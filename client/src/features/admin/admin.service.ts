@@ -30,195 +30,42 @@ export type AdminPaymentQuery = {
 };
 
 export const AdminService = {
-  getProfile: async () => {
-    const response = await axios.get(`${BASE_URL}/profile`);
-    return response.data;
-  },
-
-  updateProfile: async (dto: FormData | Record<string, unknown>) => {
-    const response = await axios.put(`${BASE_URL}/profile`, dto);
-    return response.data;
-  },
-
-  getOverviewReport: async () => {
-    const response = await axios.get(`${BASE_URL}/reports/overview`);
-    return response.data;
-  },
-
-  getBookingsReport: async (params: ReportDateRangeInput) => {
-    const response = await axios.get(`${BASE_URL}/reports/bookings`, { params });
-    return response.data;
-  },
-
-  getRevenueReport: async (params: ReportDateRangeInput) => {
-    const response = await axios.get(`${BASE_URL}/reports/revenue`, { params });
-    return response.data;
-  },
-
-  getPayments: async (params: AdminPaymentQuery = {}) => {
-    const response = await axios.get(`${BASE_URL}/payments`, { params });
-    return response.data;
-  },
-
-  getOperationalHealth: async () => {
-    const response = await axios.get(`${BASE_URL}/operations/health`);
-    return response.data;
-  },
-
-  reconcileMomoPayments: async (limit = 100) => {
-    const response = await axios.post(`${BASE_URL}/payments/momo/reconcile`, undefined, {
-      params: { limit },
-    });
-    return response.data;
-  },
-
-  getKycCustomers: async (params: AdminKYCQueryInput) => {
-    const response = await axios.get(`${BASE_URL}/kyc/customers`, { params });
-    return response.data;
-  },
-
-  approveKyc: async (userId: string) => {
-    const response = await axios.post(`${BASE_URL}/kyc/customers/${userId}/approve`);
-    return response.data;
-  },
-
-  rejectKyc: async (userId: string, dto: RejectKYCInput) => {
-    const response = await axios.post(`${BASE_URL}/kyc/customers/${userId}/reject`, dto);
-    return response.data;
-  },
-
-  getPendingCars: async () => {
-    const response = await axios.get(`${BASE_URL}/cars/pending`);
-    return response.data;
-  },
-
-  approveCar: async (carId: string) => {
-    const response = await axios.post(`${BASE_URL}/cars/${carId}/approve`);
-    return response.data;
-  },
-
-  rejectCar: async (carId: string, reason: string) => {
-    const response = await axios.post(`${BASE_URL}/cars/${carId}/reject`, { reason });
-    return response.data;
-  },
-
-  getAllCars: async (params?: { status?: string }) => {
-    const response = await axios.get(`${BASE_URL}/cars/all`, { params });
-    return response.data;
-  },
-
-  createPromotion: async (dto: CreatePromotionInput) => {
-    const response = await axios.post(`${BASE_URL}/promotions`, dto);
-    return response.data;
-  },
-
-  updatePromotion: async (id: string, dto: UpdatePromotionInput) => {
-    const response = await axios.patch(`${BASE_URL}/promotions/${id}`, dto);
-    return response.data;
-  },
-
-  getPromotions: async (params: PromotionQueryInput) => {
-    const response = await axios.get(`${BASE_URL}/promotions`, { params });
-    return response.data;
-  },
-
-  getPendingReleaseTrips: async (params: { page?: number; limit?: number }) => {
-    const response = await axios.get(`${BASE_URL}/escrow/pending-release`, { params });
-    return response.data;
-  },
-
-  releasePayment: async (dto: ReleasePaymentInput) => {
-    const response = await axios.post(`${BASE_URL}/payments/release`, dto);
-    return response.data;
-  },
-
-  refundPayment: async (dto: RefundPaymentInput) => {
-    const response = await axios.post(`${BASE_URL}/payments/refund`, dto);
-    return response.data;
-  },
-
-  autoReleasePayments: async () => {
-    const response = await axios.post(`${BASE_URL}/settlements/auto-release`);
-    return response.data;
-  },
-
-  runSettlement: async (dto: RunSettlementInput) => {
-    const response = await axios.post(`${BASE_URL}/settlements/run`, dto);
-    return response.data;
-  },
-
-  getSettlementHistory: async (params: SettlementHistoryQueryInput) => {
-    const response = await axios.get(`${BASE_URL}/settlements/history`, { params });
-    return response.data;
-  },
-
-  getDisputes: async (params: DisputeQueryInput) => {
-    const response = await axios.get(`${BASE_URL}/disputes`, { params });
-    return response.data;
-  },
-
-  startDisputeProcessing: async (disputeId: string) => {
-    const response = await axios.patch(`${BASE_URL}/disputes/${disputeId}/process`);
-    return response.data;
-  },
-
-  resolveDispute: async (disputeId: string, dto: ResolveDisputeInput) => {
-    const response = await axios.post(`${BASE_URL}/disputes/${disputeId}/resolve`, dto);
-    return response.data;
-  },
-
-  getPendingWithdraws: async (params: WithdrawQueryInput) => {
-    const response = await axios.get(`${BASE_URL}/withdraws/pending`, { params });
-    return response.data;
-  },
-
-  approveWithdraw: async (id: string, dto: ApproveWithdrawInput) => {
-    const response = await axios.post(`${BASE_URL}/withdraws/${id}/approve`, dto);
-    return response.data;
-  },
-
-  rejectWithdraw: async (id: string, dto: RejectWithdrawInput) => {
-    const response = await axios.post(`${BASE_URL}/withdraws/${id}/reject`, dto);
-    return response.data;
-  },
-
-  createCategory: async (dto: CreateCategoryInput) => {
-    const response = await axios.post(`${BASE_URL}/categories`, dto);
-    return response.data;
-  },
-
-  createLocation: async (dto: CreateLocationInput) => {
-    const response = await axios.post(`${BASE_URL}/locations`, dto);
-    return response.data;
-  },
-
-  getPlatformWallet: async () => {
-    const response = await axios.get(`${BASE_URL}/wallets/platform`);
-    return response.data;
-  },
-
-  getWalletReconciliation: async (params: { page?: number; limit?: number } = {}) => {
-    const response = await axios.get(`${BASE_URL}/wallets/reconciliation`, { params });
-    return response.data;
-  },
-
-  getAllBookings: async (params: { page?: number; limit?: number }) => {
-    const response = await axios.get(`${BASE_URL}/bookings/all`, { params });
-    return response.data;
-  },
-
-  getAllContracts: async (params: { page?: number; limit?: number }) => {
-    const response = await axios.get(`${BASE_URL}/contracts/all`, { params });
-    return response.data;
-  },
-
-  getUsers: async (params: { page?: number; limit?: number }) => {
-    const response = await axios.get(`${BASE_URL}/users`, { params });
-    return response.data;
-  },
-
-  updateUserStatus: async (userId: string, status: "ACTIVE" | "INACTIVE") => {
-    const response = await axios.patch(`${BASE_URL}/users/${userId}/status`, { status });
-    return response.data;
-  },
+  getProfile: () => axios.get(`${BASE_URL}/profile`),
+  updateProfile: (dto: FormData | Record<string, unknown>) => axios.put(`${BASE_URL}/profile`, dto),
+  getOverviewReport: () => axios.get(`${BASE_URL}/reports/overview`),
+  getBookingsReport: (params: ReportDateRangeInput) => axios.get(`${BASE_URL}/reports/bookings`, { params }),
+  getRevenueReport: (params: ReportDateRangeInput) => axios.get(`${BASE_URL}/reports/revenue`, { params }),
+  getPayments: (params: AdminPaymentQuery = {}) => axios.get(`${BASE_URL}/payments`, { params }),
+  getOperationalHealth: () => axios.get(`${BASE_URL}/operations/health`),
+  reconcileMomoPayments: (limit = 100) => axios.post(`${BASE_URL}/payments/momo/reconcile`, undefined, { params: { limit } }),
+  getKycCustomers: (params: AdminKYCQueryInput) => axios.get(`${BASE_URL}/kyc/customers`, { params }),
+  approveKyc: (userId: string) => axios.post(`${BASE_URL}/kyc/customers/${userId}/approve`),
+  rejectKyc: (userId: string, dto: RejectKYCInput) => axios.post(`${BASE_URL}/kyc/customers/${userId}/reject`, dto),
+  getPendingCars: () => axios.get(`${BASE_URL}/cars/pending`),
+  approveCar: (carId: string) => axios.post(`${BASE_URL}/cars/${carId}/approve`),
+  rejectCar: (carId: string, reason: string) => axios.post(`${BASE_URL}/cars/${carId}/reject`, { reason }),
+  getAllCars: (params?: { status?: string }) => axios.get(`${BASE_URL}/cars/all`, { params }),
+  createPromotion: (dto: CreatePromotionInput) => axios.post(`${BASE_URL}/promotions`, dto),
+  updatePromotion: (id: string, dto: UpdatePromotionInput) => axios.patch(`${BASE_URL}/promotions/${id}`, dto),
+  getPromotions: (params: PromotionQueryInput) => axios.get(`${BASE_URL}/promotions`, { params }),
+  getPendingReleaseTrips: (params: { page?: number; limit?: number }) => axios.get(`${BASE_URL}/escrow/pending-release`, { params }),
+  releasePayment: (dto: ReleasePaymentInput) => axios.post(`${BASE_URL}/payments/release`, dto),
+  refundPayment: (dto: RefundPaymentInput) => axios.post(`${BASE_URL}/payments/refund`, dto),
+  autoReleasePayments: () => axios.post(`${BASE_URL}/settlements/auto-release`),
+  runSettlement: (dto: RunSettlementInput) => axios.post(`${BASE_URL}/settlements/run`, dto),
+  getSettlementHistory: (params: SettlementHistoryQueryInput) => axios.get(`${BASE_URL}/settlements/history`, { params }),
+  getDisputes: (params: DisputeQueryInput) => axios.get(`${BASE_URL}/disputes`, { params }),
+  startDisputeProcessing: (disputeId: string) => axios.patch(`${BASE_URL}/disputes/${disputeId}/process`),
+  resolveDispute: (disputeId: string, dto: ResolveDisputeInput) => axios.post(`${BASE_URL}/disputes/${disputeId}/resolve`, dto),
+  getPendingWithdraws: (params: WithdrawQueryInput) => axios.get(`${BASE_URL}/withdraws/pending`, { params }),
+  approveWithdraw: (id: string, dto: ApproveWithdrawInput) => axios.post(`${BASE_URL}/withdraws/${id}/approve`, dto),
+  rejectWithdraw: (id: string, dto: RejectWithdrawInput) => axios.post(`${BASE_URL}/withdraws/${id}/reject`, dto),
+  createCategory: (dto: CreateCategoryInput) => axios.post(`${BASE_URL}/categories`, dto),
+  createLocation: (dto: CreateLocationInput) => axios.post(`${BASE_URL}/locations`, dto),
+  getPlatformWallet: () => axios.get(`${BASE_URL}/wallets/platform`),
+  getWalletReconciliation: (params: { page?: number; limit?: number } = {}) => axios.get(`${BASE_URL}/wallets/reconciliation`, { params }),
+  getAllBookings: (params: { page?: number; limit?: number }) => axios.get(`${BASE_URL}/bookings/all`, { params }),
+  getAllContracts: (params: { page?: number; limit?: number }) => axios.get(`${BASE_URL}/contracts/all`, { params }),
+  getUsers: (params: { page?: number; limit?: number }) => axios.get(`${BASE_URL}/users`, { params }),
+  updateUserStatus: (userId: string, status: "ACTIVE" | "INACTIVE") => axios.patch(`${BASE_URL}/users/${userId}/status`, { status }),
 };
