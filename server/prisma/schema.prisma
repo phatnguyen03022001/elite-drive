@@ -7,182 +7,115 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum UserRole {
-  GUEST
-  CUSTOMER
-  OWNER
-  ADMIN
-}
-
-enum KYCStatus {
-  NONE
-  PENDING
-  APPROVED
-  REJECTED
-}
-
-enum BookingStatus {
-  PENDING
-  APPROVED
-  REJECTED
-  CONFIRMED
-  COMPLETED
-  CANCELLED
-}
-
-enum PaymentStatus {
-  PENDING
-  COMPLETED
-  FAILED
-  REFUNDED
-}
-
-enum TripStatus {
-  UPCOMING
-  ONGOING
-  COMPLETED
-}
-
-enum DisputeStatus {
-  OPEN
-  IN_PROGRESS
-  RESOLVED
-  CLOSED
-}
-
-enum SettlementStatus {
-  PENDING
-  PROCESSING
-  COMPLETED
-  FAILED
-}
-
-enum CarStatus {
-  DRAFT
-  PENDING
-  APPROVED
-  REJECTED
-}
-
-enum VerificationStatus {
-  PENDING
-  APPROVED
-  REJECTED
-}
+enum UserRole { GUEST CUSTOMER OWNER ADMIN }
+enum KYCStatus { NONE PENDING APPROVED REJECTED }
+enum BookingStatus { PENDING APPROVED REJECTED CONFIRMED COMPLETED CANCELLED }
+enum PaymentStatus { PENDING COMPLETED FAILED REFUNDED }
+enum TripStatus { UPCOMING ONGOING COMPLETED }
+enum DisputeStatus { OPEN IN_PROGRESS RESOLVED CLOSED }
+enum SettlementStatus { PENDING PROCESSING COMPLETED FAILED }
+enum CarStatus { DRAFT PENDING APPROVED REJECTED }
+enum VerificationStatus { PENDING APPROVED REJECTED }
 
 model User {
-  id         String   @id @default(auto()) @map("_id") @db.ObjectId
-  email      String   @unique
-  password   String
-  phone      String?
-  firstName  String?
-  lastName   String?
-  avatar     String?
-  role       UserRole @default(GUEST)
-  isVerified Boolean  @default(false)
-  isActive   Boolean  @default(true)
-
-  customerLicenseNumber   String?
-  customerLicenseExpiry   DateTime?
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  email String @unique
+  password String
+  phone String?
+  firstName String?
+  lastName String?
+  avatar String?
+  role UserRole @default(GUEST)
+  isVerified Boolean @default(false)
+  isActive Boolean @default(true)
+  customerLicenseNumber String?
+  customerLicenseExpiry DateTime?
   customerLicenseFrontUrl String?
-  customerLicenseBackUrl  String?
-  customerDateOfBirth     DateTime?
-
-  ownerCompanyName       String?
-  ownerTaxId             String?
-  ownerBankAccountName   String?
+  customerLicenseBackUrl String?
+  customerDateOfBirth DateTime?
+  ownerCompanyName String?
+  ownerTaxId String?
+  ownerBankAccountName String?
   ownerBankAccountNumber String?
-  ownerBankCode          String?
-
-  address            String?
-  city               String?
-  country            String?
-  postalCode         String?
+  ownerBankCode String?
+  address String?
+  city String?
+  country String?
+  postalCode String?
   verificationStatus VerificationStatus @default(PENDING)
-
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
-  kyc               KYC?
-  bookings          Booking[]
-  payments          Payment[]
-  reviews           Review[]
-  wallet            Wallet?
-  trips             Trip[]
-  disputes          Dispute[]
-  cars              Car[]
+  kyc KYC?
+  bookings Booking[]
+  payments Payment[]
+  reviews Review[]
+  wallet Wallet?
+  trips Trip[]
+  disputes Dispute[]
+  cars Car[]
   ownerTransactions OwnerTransaction[]
-  settlements       Settlement[]
-
+  settlements Settlement[]
   @@index([role])
   @@index([verificationStatus])
 }
 
 model KYC {
-  id               String    @id @default(auto()) @map("_id") @db.ObjectId
-  userId           String    @unique @db.ObjectId
-  status           KYCStatus @default(NONE)
-  documentType     String?
-  documentNumber   String?
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  userId String @unique @db.ObjectId
+  status KYCStatus @default(NONE)
+  documentType String?
+  documentNumber String?
   documentFrontUrl String?
-  documentBackUrl  String?
-  faceImageUrl     String?
-  verifiedAt       DateTime?
-  rejectionReason  String?
-  submittedAt      DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
-
+  documentBackUrl String?
+  faceImageUrl String?
+  verifiedAt DateTime?
+  rejectionReason String?
+  submittedAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
   @@index([status])
 }
 
 model Car {
-  id              String   @id @default(auto()) @map("_id") @db.ObjectId
-  ownerId         String   @db.ObjectId
-  name            String
-  brand           String
-  model           String
-  year            Int
-  licensePlate    String   @unique
-  color           String?
-  transmission    String?
-  fuelType        String?
-  seatCount       Int
-  description     String?
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  ownerId String @db.ObjectId
+  name String
+  brand String
+  model String
+  year Int
+  licensePlate String @unique
+  color String?
+  transmission String?
+  fuelType String?
+  seatCount Int
+  description String?
   rejectionReason String?
-  mainImageUrl    String?
-  imageUrls       String[]
-
-  pricePerDay        Float
-  pricePerHour       Float?
-  pricePerWeek       Float?
-  pricePerMonth      Float?
-  discountPercentage Float  @default(0)
-
-  categoryId         String?            @db.ObjectId
-  locationId         String?            @db.ObjectId
-  insurance          Float?
-  depositRequired    Float?
-  isAvailable        Boolean            @default(true)
-  status             CarStatus          @default(DRAFT)
+  mainImageUrl String?
+  imageUrls String[]
+  pricePerDay Float
+  pricePerHour Float?
+  pricePerWeek Float?
+  pricePerMonth Float?
+  discountPercentage Float @default(0)
+  categoryId String? @db.ObjectId
+  locationId String? @db.ObjectId
+  insurance Float?
+  depositRequired Float?
+  isAvailable Boolean @default(true)
+  status CarStatus @default(DRAFT)
   verificationStatus VerificationStatus @default(PENDING)
-
-  totalTrips    Int   @default(0)
+  totalTrips Int @default(0)
   averageRating Float @default(0)
-
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
-  owner        User           @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  category     Category?      @relation(fields: [categoryId], references: [id])
-  location     Location?      @relation(fields: [locationId], references: [id])
-  documents    CarDocument[]
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  category Category? @relation(fields: [categoryId], references: [id])
+  location Location? @relation(fields: [locationId], references: [id])
+  documents CarDocument[]
   availability Availability[]
-  bookings     Booking[]
-  reviews      Review[]
-  trips        Trip[]
-
+  bookings Booking[]
+  reviews Review[]
+  trips Trip[]
   @@index([ownerId])
   @@index([categoryId])
   @@index([locationId])
@@ -190,85 +123,79 @@ model Car {
 }
 
 model CarDocument {
-  id           String    @id @default(auto()) @map("_id") @db.ObjectId
-  carId        String    @db.ObjectId
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  carId String @db.ObjectId
   documentType String
-  documentUrl  String
-  expiryDate   DateTime?
-  uploadedAt   DateTime  @default(now())
-
+  documentUrl String
+  expiryDate DateTime?
+  uploadedAt DateTime @default(now())
   car Car @relation(fields: [carId], references: [id], onDelete: Cascade)
-
   @@index([carId])
 }
 
 model Category {
-  id          String   @id @default(auto()) @map("_id") @db.ObjectId
-  name        String
-  slug        String   @unique
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  name String
+  slug String @unique
   description String?
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  cars        Car[]
+  isActive Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  cars Car[]
 }
 
 model Location {
-  id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  name      String
-  address   String
-  city      String
-  district  String?
-  latitude  Float?
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  name String
+  address String
+  city String
+  district String?
+  latitude Float?
   longitude Float?
-  isActive  Boolean  @default(true)
+  isActive Boolean @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  cars      Car[]
+  cars Car[]
 }
 
 model Availability {
-  id            String   @id @default(auto()) @map("_id") @db.ObjectId
-  carId         String   @db.ObjectId
-  date          DateTime
-  isAvailable   Boolean  @default(true)
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  carId String @db.ObjectId
+  date DateTime
+  isAvailable Boolean @default(true)
   blockedReason String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
   car Car @relation(fields: [carId], references: [id], onDelete: Cascade)
-
   @@unique([carId, date])
   @@index([carId])
   @@index([date])
 }
 
 model Booking {
-  id              String        @id @default(auto()) @map("_id") @db.ObjectId
-  customerId      String        @db.ObjectId
-  carId           String        @db.ObjectId
-  startDate       DateTime
-  endDate         DateTime
-  pickupLocation  String
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  customerId String @db.ObjectId
+  carId String @db.ObjectId
+  startDate DateTime
+  endDate DateTime
+  pickupLocation String
   dropoffLocation String
-  notes           String?
-  decisionReason  String?
-  totalPrice      Float
-  status          BookingStatus @default(PENDING)
-  promotionId     String?       @db.ObjectId
-  discountAmount  Float?        @default(0)
-  finalPrice      Float?
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-
-  customer User       @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  car      Car        @relation(fields: [carId], references: [id], onDelete: Cascade)
+  notes String?
+  decisionReason String?
+  totalPrice Float
+  status BookingStatus @default(PENDING)
+  promotionId String? @db.ObjectId
+  discountAmount Float? @default(0)
+  finalPrice Float?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  customer User @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  car Car @relation(fields: [carId], references: [id], onDelete: Cascade)
   payments Payment[]
   contract Contract?
-  trip     Trip?
-  reviews  Review[]
+  trip Trip?
+  reviews Review[]
   disputes Dispute[]
-
   @@index([customerId])
   @@index([carId])
   @@index([status])
@@ -276,186 +203,172 @@ model Booking {
 }
 
 model Payment {
-  id                          String        @id @default(auto()) @map("_id") @db.ObjectId
-  userId                      String        @db.ObjectId
-  bookingId                   String?       @db.ObjectId
-  amount                      Float
-  paymentMethod               String
-  status                      PaymentStatus @default(PENDING)
-  transactionId               String?       @unique
-  providerTransactionId       String?
-  refundOrderId               String?       @unique
-  refundRequestId             String?
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  userId String @db.ObjectId
+  bookingId String? @db.ObjectId
+  amount Float
+  paymentMethod String
+  status PaymentStatus @default(PENDING)
+  transactionId String? @unique
+  providerTransactionId String?
+  refundOrderId String? @unique
+  refundRequestId String?
   refundProviderTransactionId String?
-  refundResultCode            Int?
-  paidAt                      DateTime?
-  refundedAt                  DateTime?
-  failureReason               String?
-  createdAt                   DateTime      @default(now())
-  updatedAt                   DateTime      @updatedAt
-
-  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refundResultCode Int?
+  paidAt DateTime?
+  releasedAt DateTime?
+  refundedAt DateTime?
+  failureReason String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   booking Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
-
   @@index([userId])
   @@index([bookingId])
   @@index([status])
+  @@index([releasedAt])
   @@index([providerTransactionId])
   @@index([refundRequestId])
 }
 
 model Wallet {
-  id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  userId    String   @unique @db.ObjectId
-  balance   Float    @default(0)
-  currency  String   @default("VND")
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  userId String @unique @db.ObjectId
+  balance Float @default(0)
+  currency String @default("VND")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
-  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   transactions WalletTransaction[]
 }
 
 model WalletTransaction {
-  id          String   @id @default(auto()) @map("_id") @db.ObjectId
-  walletId    String   @db.ObjectId
-  amount      Float
-  type        String
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  walletId String @db.ObjectId
+  amount Float
+  type String
   description String?
-  metadata    Json?
-  createdAt   DateTime @default(now())
-
+  metadata Json?
+  createdAt DateTime @default(now())
   wallet Wallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
-
   @@index([walletId])
   @@index([createdAt])
 }
 
 model Contract {
-  id                String   @id @default(auto()) @map("_id") @db.ObjectId
-  bookingId         String   @unique @db.ObjectId
-  content           String
-  status            String   @default("DRAFT")
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  bookingId String @unique @db.ObjectId
+  content String
+  status String @default("DRAFT")
   customerSignature String?
-  customerSignedAt  DateTime?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-
+  customerSignedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
   booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
 }
 
 model Trip {
-  id             String     @id @default(auto()) @map("_id") @db.ObjectId
-  bookingId      String     @unique @db.ObjectId
-  customerId     String     @db.ObjectId
-  carId          String     @db.ObjectId
-  status         TripStatus @default(UPCOMING)
-  checkinTime    DateTime?
-  checkoutTime   DateTime?
-  startOdometer  Float?
-  endOdometer    Float?
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  bookingId String @unique @db.ObjectId
+  customerId String @db.ObjectId
+  carId String @db.ObjectId
+  status TripStatus @default(UPCOMING)
+  checkinTime DateTime?
+  checkoutTime DateTime?
+  startOdometer Float?
+  endOdometer Float?
   startFuelLevel Float?
-  endFuelLevel   Float?
-  pickupNotes    String?
-  dropoffNotes   String?
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
-
-  booking  Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-  customer User    @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  car      Car     @relation(fields: [carId], references: [id], onDelete: Cascade)
+  endFuelLevel Float?
+  pickupNotes String?
+  dropoffNotes String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  customer User @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  car Car @relation(fields: [carId], references: [id], onDelete: Cascade)
 }
 
 model Review {
-  id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  userId    String   @db.ObjectId
-  carId     String   @db.ObjectId
-  bookingId String?  @db.ObjectId
-  rating    Float
-  title     String?
-  content   String?
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  userId String @db.ObjectId
+  carId String @db.ObjectId
+  bookingId String? @db.ObjectId
+  rating Float
+  title String?
+  content String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
-  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  car     Car      @relation(fields: [carId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  car Car @relation(fields: [carId], references: [id], onDelete: Cascade)
   booking Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
-
   @@index([userId])
   @@index([carId])
 }
 
 model Promotion {
-  id               String   @id @default(auto()) @map("_id") @db.ObjectId
-  code             String   @unique
-  description      String?
-  discountType     String
-  discountValue    Float
-  maxUses          Int?
-  usedCount        Int      @default(0)
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  code String @unique
+  description String?
+  discountType String
+  discountValue Float
+  maxUses Int?
+  usedCount Int @default(0)
   minBookingAmount Float?
-  startDate        DateTime
-  endDate          DateTime
-  isActive         Boolean  @default(true)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-
+  startDate DateTime
+  endDate DateTime
+  isActive Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
   @@index([isActive])
   @@index([startDate])
   @@index([endDate])
 }
 
 model Dispute {
-  id          String        @id @default(auto()) @map("_id") @db.ObjectId
-  bookingId   String?       @db.ObjectId
-  initiatedBy String        @db.ObjectId
-  title       String
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  bookingId String? @db.ObjectId
+  initiatedBy String @db.ObjectId
+  title String
   description String?
   attachments String[]
-  status      DisputeStatus @default(OPEN)
-  resolution  String?
-  resolvedAt  DateTime?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-
-  booking         Booking?         @relation(fields: [bookingId], references: [id], onDelete: SetNull)
-  initiator       User             @relation(fields: [initiatedBy], references: [id], onDelete: Cascade)
+  status DisputeStatus @default(OPEN)
+  resolution String?
+  resolvedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  booking Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  initiator User @relation(fields: [initiatedBy], references: [id], onDelete: Cascade)
   disputeMessages DisputeMessage[]
-
   @@index([initiatedBy])
   @@index([status])
   @@index([bookingId])
 }
 
 model DisputeMessage {
-  id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  disputeId String   @db.ObjectId
-  senderId  String   @db.ObjectId
-  message   String
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  disputeId String @db.ObjectId
+  senderId String @db.ObjectId
+  message String
   createdAt DateTime @default(now())
-
   dispute Dispute @relation(fields: [disputeId], references: [id], onDelete: Cascade)
-
   @@index([disputeId])
   @@index([senderId])
 }
 
 model OwnerTransaction {
-  id                String   @id @default(auto()) @map("_id") @db.ObjectId
-  ownerId           String   @db.ObjectId
-  bookingId         String?  @db.ObjectId
-  amount            Float
-  type              String
-  status            String   @default("pending")
-  description       String?
-  metadata          Json?
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  ownerId String @db.ObjectId
+  bookingId String? @db.ObjectId
+  amount Float
+  type String
+  status String @default("pending")
+  description String?
+  metadata Json?
   externalReference String?
-  processedAt       DateTime?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-
+  processedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
   owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-
   @@index([ownerId])
   @@index([type])
   @@index([status])
@@ -464,34 +377,31 @@ model OwnerTransaction {
 }
 
 model Settlement {
-  id            String           @id @default(auto()) @map("_id") @db.ObjectId
-  ownerId       String?          @db.ObjectId
-  period        String
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  ownerId String? @db.ObjectId
+  period String
   totalEarnings Float
-  totalPayouts  Float
-  netAmount     Float
-  status        SettlementStatus @default(PENDING)
-  processedAt   DateTime?
-  createdAt     DateTime         @default(now())
-  updatedAt     DateTime         @updatedAt
-
+  totalPayouts Float
+  netAmount Float
+  status SettlementStatus @default(PENDING)
+  processedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
   owner User? @relation(fields: [ownerId], references: [id], onDelete: SetNull)
-
   @@index([ownerId])
   @@index([status])
   @@index([period])
 }
 
 model OTP {
-  id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  email     String
-  code      String
-  type      String
-  attempts  Int      @default(0)
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  email String
+  code String
+  type String
+  attempts Int @default(0)
   expiresAt DateTime
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
   @@unique([email, code])
   @@index([email])
   @@index([expiresAt])
