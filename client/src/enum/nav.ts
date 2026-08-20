@@ -10,6 +10,7 @@ import {
   History,
   Key,
   LayoutDashboard,
+  Route,
   ShieldCheck,
   Star,
   TicketPercent,
@@ -26,7 +27,10 @@ export const ROLE_NAV_CONFIG = {
       { title: "Browse vehicles", href: "/customer/cars", icon: Car },
       { title: "Promotions", href: "/customer/promotions", icon: TicketPercent },
     ] },
-    { label: "Trips", items: [{ title: "My bookings", href: "/customer/bookings", icon: History }] },
+    { label: "Trips", items: [
+      { title: "My bookings", href: "/customer/bookings", icon: History },
+      { title: "Trip status & contracts", href: "/customer/trips", icon: Route },
+    ] },
     { label: "Money", items: [{ title: "Wallet & refunds", href: "/customer/wallet", icon: Wallet }] },
     { label: "Account", items: [
       { title: "Profile", href: "/customer/profile", icon: UserCog },
@@ -70,5 +74,6 @@ export const ROLE_NAV_CONFIG = {
       { title: "Disputes", href: "/admin/disputes", icon: Gavel },
       { title: "Promotions", href: "/admin/promotions", icon: TicketPercent },
     ] },
+    { label: "Account", items: [{ title: "Profile", href: "/admin/profile", icon: UserCog }] },
   ],
 } as const;

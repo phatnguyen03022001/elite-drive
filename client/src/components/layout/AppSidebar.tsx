@@ -22,7 +22,7 @@ const ROLE_LABELS = {
 } as const;
 
 const PROFILE_ROUTES = {
-  ADMIN: "/admin/reports",
+  ADMIN: "/admin/profile",
   OWNER: "/owner/profile",
   CUSTOMER: "/customer/profile",
 } as const;
@@ -40,18 +40,12 @@ export function AppSidebar({ role }: AppSidebarProps) {
     <div className="flex h-full flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
       <div className="flex h-20 shrink-0 items-center border-b border-sidebar-border px-5">
         <Link href="/" className="flex items-center gap-3 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring">
-          <div
-            className={cn(
-              "flex h-10 w-10 items-center justify-center rounded-xl shadow-sm",
-              role === "ADMIN" ? "bg-destructive" : "bg-primary",
-            )}>
+          <div className={cn("flex h-10 w-10 items-center justify-center rounded-xl shadow-sm", role === "ADMIN" ? "bg-destructive" : "bg-primary")}>
             <Car size={21} className="text-primary-foreground" strokeWidth={1.75} />
           </div>
           <div className="min-w-0">
             <div className="text-base font-bold tracking-tight">Elite Drive</div>
-            <div className="mt-0.5 truncate text-[10px] font-bold uppercase tracking-[0.18em] text-sidebar-foreground/65">
-              {ROLE_LABELS[role]}
-            </div>
+            <div className="mt-0.5 truncate text-[10px] font-bold uppercase tracking-[0.18em] text-sidebar-foreground/65">{ROLE_LABELS[role]}</div>
           </div>
         </Link>
       </div>
@@ -60,23 +54,13 @@ export function AppSidebar({ role }: AppSidebarProps) {
         <nav className="space-y-6 pt-4" aria-label={`${ROLE_LABELS[role]} navigation`}>
           {navGroups.map((group) => (
             <div key={group.label} className="space-y-2">
-              <div className="px-3 text-[10px] font-bold uppercase tracking-[0.2em] text-sidebar-foreground/65">
-                {group.label}
-              </div>
+              <div className="px-3 text-[10px] font-bold uppercase tracking-[0.2em] text-sidebar-foreground/65">{group.label}</div>
               <div className="space-y-1">
                 {group.items.map((item) => {
                   const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
                   return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      aria-current={isActive ? "page" : undefined}
-                      className={cn(
-                        "relative flex min-h-10 items-center gap-3 rounded-xl border px-3 py-2.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring",
-                        isActive
-                          ? "border-sidebar-border bg-sidebar-accent text-sidebar-accent-foreground shadow-sm"
-                          : "border-transparent text-sidebar-foreground/80 hover:border-sidebar-border hover:bg-sidebar-accent hover:text-sidebar-foreground",
-                      )}>
+                    <Link key={item.href} href={item.href} aria-current={isActive ? "page" : undefined}
+                      className={cn("relative flex min-h-10 items-center gap-3 rounded-xl border px-3 py-2.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring", isActive ? "border-sidebar-border bg-sidebar-accent text-sidebar-accent-foreground shadow-sm" : "border-transparent text-sidebar-foreground/80 hover:border-sidebar-border hover:bg-sidebar-accent hover:text-sidebar-foreground")}>
                       {isActive ? <span className="absolute inset-y-2 left-0 w-0.5 rounded-full bg-sidebar-primary" /> : null}
                       <item.icon className={cn("h-4.5 w-4.5 shrink-0", isActive ? "text-sidebar-primary" : "text-sidebar-foreground/65")} />
                       <span className="truncate">{item.title}</span>
@@ -104,18 +88,11 @@ export function AppSidebar({ role }: AppSidebarProps) {
         </Button>
 
         <div className="grid grid-cols-2 gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            className="bg-transparent"
-            onClick={() => setTheme(activeTheme === "dark" ? "light" : "dark")}
-            aria-label="Toggle color theme">
-            {activeTheme === "dark" ? <Sun /> : <Moon />}
-            {activeTheme === "dark" ? "Light" : "Dark"}
+          <Button variant="outline" size="sm" className="bg-transparent" onClick={() => setTheme(activeTheme === "dark" ? "light" : "dark")} aria-label="Toggle color theme">
+            {activeTheme === "dark" ? <Sun /> : <Moon />}{activeTheme === "dark" ? "Light" : "Dark"}
           </Button>
           <Button variant="outline" size="sm" className="bg-transparent hover:border-destructive/60 hover:bg-destructive/10 hover:text-destructive" onClick={logout}>
-            <LogOut />
-            Sign out
+            <LogOut />Sign out
           </Button>
         </div>
       </div>
