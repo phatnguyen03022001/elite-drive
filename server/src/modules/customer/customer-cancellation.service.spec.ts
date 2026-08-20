@@ -165,7 +165,7 @@ describe('CustomerCancellationService invariants', () => {
     });
   });
 
-  it('refunds only unreleased escrow, releases the promotion slot, and removes the stale upcoming trip', async () => {
+  it('refunds unreleased escrow when optional refund timestamps are null or absent', async () => {
     const tx = {
       booking: {
         findFirst: jest.fn().mockResolvedValue({
@@ -223,10 +223,19 @@ describe('CustomerCancellationService invariants', () => {
       where: {
         id: 'payment-1',
         status: PaymentStatus.COMPLETED,
-        refundedAt: null,
-        OR: [
-          { releasedAt: null },
-          { releasedAt: { isSet: false } },
+        AND: [
+          {
+            OR: [
+              { refundedAt: null },
+              { refundedAt: { isSet: false } },
+            ],
+          },
+          {
+            OR: [
+              { releasedAt: null },
+              { releasedAt: { isSet: false } },
+            ],
+          },
         ],
       },
       data: expect.objectContaining({
