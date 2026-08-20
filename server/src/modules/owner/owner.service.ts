@@ -13,12 +13,12 @@ import {
 } from '@prisma/client';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 import { PrismaService } from '../../prisma/prisma.service';
-import { CreateKYCDto } from '../customer/dto/customer.dto';
 import { UploadService } from '../upload/upload.service';
 import {
   BlockCalendarDto,
   CreateCarDocumentDto,
   CreateCarDto,
+  CreateKYCDto,
   CreatePricingDto,
   KYCStatusResponseDto,
   OwnerProfileResponseDto,
@@ -225,6 +225,9 @@ export class OwnerService {
     files?: { mainImage?: Express.Multer.File[]; images?: Express.Multer.File[] },
   ) {
     await this.assertOwnerCar(userId, carId);
+    const hasListingChanges =
+      Object.values(dto).some((value) => value !== undefined) ||
+      Boolean(files?.mainImage?.[0] || files?.images?.length);
     const data: Prisma.CarUpdateInput = {
       name: dto.name,
       brand: dto.brand,
@@ -236,6 +239,13 @@ export class OwnerService {
       pricePerHour: dto.pricePerHour,
       category: dto.categoryId ? { connect: { id: dto.categoryId } } : undefined,
       location: dto.locationId ? { connect: { id: dto.locationId } } : undefined,
+      ...(hasListingChanges
+        ? {
+            status: CarStatus.PENDING,
+            verificationStatus: VerificationStatus.PENDING,
+            rejectionReason: null,
+          }
+        : {}),
     };
     if (files?.mainImage?.[0]) data.mainImageUrl = await this.uploadService.uploadFile(files.mainImage[0], 'cars/main');
     if (files?.images?.length) data.imageUrls = await Promise.all(files.images.map((file) => this.uploadService.uploadFile(file, 'cars/gallery')));
