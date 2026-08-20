@@ -131,13 +131,48 @@ describe('CustomerCancellationService invariants', () => {
     });
   });
 
-  it('refunds only unreleased escrow and removes the stale upcoming trip', async () => {
+  it('releases the promotion slot once an unpaid cancellation is claimed', async () => {
+    const tx = {
+      booking: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'booking-1',
+          status: BookingStatus.PENDING,
+          promotionId: 'promotion-1',
+          trip: null,
+          payments: [],
+        }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        findUniqueOrThrow: jest.fn().mockResolvedValue({
+          id: 'booking-1',
+          status: BookingStatus.CANCELLED,
+        }),
+      },
+      promotion: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+    };
+    const db = {
+      $transaction: jest.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
+    } as unknown as PrismaService;
+    const service = new CustomerCancellationService(db, config);
+
+    await service.cancelBooking('customer-1', 'booking-1');
+
+    expect(tx.promotion.updateMany).toHaveBeenCalledTimes(1);
+    expect(tx.promotion.updateMany).toHaveBeenCalledWith({
+      where: { id: 'promotion-1', usedCount: { gt: 0 } },
+      data: { usedCount: { decrement: 1 } },
+    });
+  });
+
+  it('refunds only unreleased escrow, releases the promotion slot, and removes the stale upcoming trip', async () => {
     const tx = {
       booking: {
         findFirst: jest.fn().mockResolvedValue({
           id: 'booking-1',
           customerId: 'customer-1',
           status: BookingStatus.CONFIRMED,
+          promotionId: 'promotion-1',
           totalPrice: 100000,
           trip: { status: 'UPCOMING' },
           payments: [
@@ -155,6 +190,9 @@ describe('CustomerCancellationService invariants', () => {
           id: 'booking-1',
           status: BookingStatus.CANCELLED,
         }),
+      },
+      promotion: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
       payment: {
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
@@ -194,6 +232,11 @@ describe('CustomerCancellationService invariants', () => {
       data: expect.objectContaining({
         status: PaymentStatus.REFUNDED,
       }),
+    });
+    expect(tx.promotion.updateMany).toHaveBeenCalledTimes(1);
+    expect(tx.promotion.updateMany).toHaveBeenCalledWith({
+      where: { id: 'promotion-1', usedCount: { gt: 0 } },
+      data: { usedCount: { decrement: 1 } },
     });
     expect(tx.trip.deleteMany).toHaveBeenCalledWith({
       where: { bookingId: 'booking-1', status: 'UPCOMING' },

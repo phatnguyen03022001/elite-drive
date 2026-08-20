@@ -70,6 +70,13 @@ export class CustomerCancellationService {
         );
       }
 
+      if (booking.promotionId) {
+        await tx.promotion.updateMany({
+          where: { id: booking.promotionId, usedCount: { gt: 0 } },
+          data: { usedCount: { decrement: 1 } },
+        });
+      }
+
       if (!completedPayment) {
         return tx.booking.findUniqueOrThrow({ where: { id: bookingId } });
       }
