@@ -93,10 +93,19 @@ export class CustomerCancellationService {
         where: {
           id: completedPayment.id,
           status: PaymentStatus.COMPLETED,
-          refundedAt: null,
-          OR: [
-            { releasedAt: null },
-            { releasedAt: { isSet: false } },
+          AND: [
+            {
+              OR: [
+                { refundedAt: null },
+                { refundedAt: { isSet: false } },
+              ],
+            },
+            {
+              OR: [
+                { releasedAt: null },
+                { releasedAt: { isSet: false } },
+              ],
+            },
           ],
         },
         data: {
