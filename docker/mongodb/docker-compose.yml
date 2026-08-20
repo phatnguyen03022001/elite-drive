@@ -1,29 +1,30 @@
 services:
   mongo:
     image: mongo:8.0
-    container_name: mongo
-    restart: always
+    container_name: elite-drive-mongo
+    restart: unless-stopped
     volumes:
       - ./mongo-data:/data/db
     ports:
       - "27017:27017"
-    command: mongod --replSet rs0
+    command: mongod --replSet rs0 --bind_ip_all
     healthcheck:
       test: echo "db.runCommand('ping').ok" | mongosh localhost:27017/test --quiet
       interval: 10s
       timeout: 5s
-      retries: 5
-    environment:
-      - MONGO_REPLICA_SET=rs0
+      retries: 10
 
   mongo-init:
     image: mongo:8.0
     depends_on:
       mongo:
         condition: service_healthy
+    restart: "no"
     entrypoint: >
       mongosh --host mongo:27017 --eval
-      "rs.initiate({
-        _id: 'rs0',
-        members: [{ _id: 0, host: 'mongo:27017' }]
-      })"
+      "try { rs.status() } catch (e) {
+        rs.initiate({
+          _id: 'rs0',
+          members: [{ _id: 0, host: 'localhost:27017' }]
+        })
+      }"
