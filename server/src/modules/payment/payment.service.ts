@@ -86,7 +86,6 @@ export class PaymentService {
 
     const localStatus = await this.applyProviderResult(
       payment.id,
-      payment.status,
       result.resultCode,
       result.message,
       result.transId,
@@ -139,7 +138,6 @@ export class PaymentService {
         this.assertProviderAmount(payment.amount, result.amount);
         const status = await this.applyProviderResult(
           payment.id,
-          payment.status,
           result.resultCode,
           result.message,
           result.transId,
@@ -182,7 +180,6 @@ export class PaymentService {
 
     await this.applyProviderResult(
       payment.id,
-      payment.status,
       payload.resultCode,
       payload.message,
       payload.transId,
@@ -194,7 +191,6 @@ export class PaymentService {
 
   private async applyProviderResult(
     paymentId: string,
-    _observedStatus: PaymentStatus,
     resultCode: number,
     providerMessage: string,
     providerTransactionId?: number,
@@ -220,7 +216,10 @@ export class PaymentService {
             where: {
               id: paymentId,
               status: PaymentStatus.COMPLETED,
-              providerTransactionId: null,
+              OR: [
+                { providerTransactionId: null },
+                { providerTransactionId: { isSet: false } },
+              ],
             },
             data: { providerTransactionId: String(providerTransactionId) },
           });
