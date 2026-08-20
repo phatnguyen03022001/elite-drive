@@ -68,11 +68,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: npm
-          cache-dependency-path: server/package-lock.json
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install --no-fund
 
       - name: Generate Prisma client
         run: npx prisma generate
@@ -85,4 +83,3 @@ jobs:
           DATABASE_URL: mongodb://localhost:27017/elitedrive
           JWT_SECRET: ci-only-secret-ci-only-secret-ci-only-secret
           OTP_HASH_SECRET: ci-only-otp-hash-secret-ci-only-otp-hash-secret
-          MAIL_TRANSPORT: console
