@@ -34,7 +34,14 @@ describe('AdminFinanceService invariants', () => {
     const service = new AdminFinanceService(db, config);
     await expect(service.releasePayment({ bookingId: 'booking-1' })).rejects.toBeInstanceOf(BadRequestException);
     expect(tx.payment.updateMany).toHaveBeenCalledWith({
-      where: { id: 'payment-1', status: PaymentStatus.COMPLETED, releasedAt: null },
+      where: {
+        id: 'payment-1',
+        status: PaymentStatus.COMPLETED,
+        OR: [
+          { releasedAt: null },
+          { releasedAt: { isSet: false } },
+        ],
+      },
       data: { releasedAt: expect.any(Date) },
     });
     expect(tx.wallet.findUnique).not.toHaveBeenCalled();
@@ -60,7 +67,7 @@ describe('AdminFinanceService invariants', () => {
     expect(tx.wallet.updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: { balance: { decrement: 80000 } } }));
   });
 
-  it('lists only completed trips with an unreleased completed payment', async () => {
+  it('lists completed trips whose release marker is null or absent', async () => {
     const trip = { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) };
     const service = new AdminFinanceService({ trip } as unknown as PrismaService, config);
     await service.getPendingReleaseTrips({ page: 1, limit: 20 });
@@ -69,7 +76,15 @@ describe('AdminFinanceService invariants', () => {
         status: 'COMPLETED',
         booking: {
           status: BookingStatus.COMPLETED,
-          payments: { some: { status: PaymentStatus.COMPLETED, releasedAt: null } },
+          payments: {
+            some: {
+              status: PaymentStatus.COMPLETED,
+              OR: [
+                { releasedAt: null },
+                { releasedAt: { isSet: false } },
+              ],
+            },
+          },
         },
       },
     }));
