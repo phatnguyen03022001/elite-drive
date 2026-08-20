@@ -194,27 +194,44 @@ export class PaymentService {
 
   private async applyProviderResult(
     paymentId: string,
-    currentStatus: PaymentStatus,
+    _observedStatus: PaymentStatus,
     resultCode: number,
     providerMessage: string,
     providerTransactionId?: number,
   ): Promise<PaymentStatus> {
+    const latest = await this.db.payment.findUnique({
+      where: { id: paymentId },
+      select: { status: true, providerTransactionId: true },
+    });
+    if (!latest) throw new NotFoundException('Payment không tồn tại');
+
+    const currentStatus = latest.status;
     if (MOMO_SUCCESS_CODES.has(resultCode)) {
       if (currentStatus === PaymentStatus.PENDING) {
         await this.completePayment(paymentId, providerTransactionId);
-      } else if (
-        currentStatus === PaymentStatus.COMPLETED &&
-        this.isValidProviderTransactionId(providerTransactionId)
-      ) {
-        await this.db.payment.updateMany({
-          where: {
-            id: paymentId,
-            providerTransactionId: null,
-          },
-          data: { providerTransactionId: String(providerTransactionId) },
-        });
+        return PaymentStatus.COMPLETED;
       }
-      return PaymentStatus.COMPLETED;
+      if (currentStatus === PaymentStatus.COMPLETED) {
+        if (
+          !latest.providerTransactionId &&
+          this.isValidProviderTransactionId(providerTransactionId)
+        ) {
+          await this.db.payment.updateMany({
+            where: {
+              id: paymentId,
+              status: PaymentStatus.COMPLETED,
+              providerTransactionId: null,
+            },
+            data: { providerTransactionId: String(providerTransactionId) },
+          });
+        }
+        return PaymentStatus.COMPLETED;
+      }
+
+      this.logger.warn(
+        `MoMo success conflicts with local terminal status ${currentStatus} for payment ${paymentId}`,
+      );
+      return currentStatus;
     }
 
     if (
@@ -232,6 +249,11 @@ export class PaymentService {
         this.logger.warn(`MoMo payment ${paymentId} marked FAILED (${resultCode})`);
         return PaymentStatus.FAILED;
       }
+      const raced = await this.db.payment.findUnique({
+        where: { id: paymentId },
+        select: { status: true },
+      });
+      return raced?.status ?? currentStatus;
     }
 
     return currentStatus;
