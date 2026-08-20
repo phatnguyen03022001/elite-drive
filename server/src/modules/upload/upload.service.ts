@@ -1,12 +1,8 @@
-import {
-  BadRequestException,
-  Injectable,
-  InternalServerErrorException,
-  Logger,
-} from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { v2 as cloudinary, UploadApiResponse } from 'cloudinary';
-import * as streamifier from 'streamifier';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { extname, join } from 'node:path';
 
 @Injectable()
 export class UploadService {
@@ -16,15 +12,8 @@ export class UploadService {
     'image/png',
     'image/webp',
   ]);
-  private readonly logger = new Logger(UploadService.name);
 
-  constructor(private readonly configService: ConfigService) {
-    cloudinary.config({
-      cloud_name: this.configService.getOrThrow<string>('CLOUDINARY_CLOUD_NAME'),
-      api_key: this.configService.getOrThrow<string>('CLOUDINARY_API_KEY'),
-      api_secret: this.configService.getOrThrow<string>('CLOUDINARY_API_SECRET'),
-    });
-  }
+  constructor(private readonly configService: ConfigService) {}
 
   async uploadFile(
     file: Express.Multer.File,
@@ -37,36 +26,23 @@ export class UploadService {
       throw new BadRequestException('Thư mục upload không hợp lệ');
     }
 
-    return new Promise((resolve, reject) => {
-      const uploadStream = cloudinary.uploader.upload_stream(
-        {
-          folder: safeFolder,
-          resource_type: 'image',
-          allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
-          use_filename: false,
-          unique_filename: true,
-          overwrite: false,
-        },
-        (error, result: UploadApiResponse) => {
-          if (error || !result?.secure_url) {
-            this.logger.error(
-              'Cloudinary upload failed',
-              error instanceof Error ? error.stack : undefined,
-            );
-            reject(
-              new InternalServerErrorException(
-                'Không thể upload ảnh lên Cloudinary',
-              ),
-            );
-            return;
-          }
+    const uploadRoot = this.configService.get<string>('UPLOAD_DIR') || 'uploads';
+    const targetDir = join(process.cwd(), uploadRoot, safeFolder);
+    await mkdir(targetDir, { recursive: true });
 
-          resolve(result.secure_url);
-        },
-      );
+    const extension = this.extensionFor(file.mimetype, file.originalname);
+    const filename = `${randomUUID()}${extension}`;
+    await writeFile(join(targetDir, filename), file.buffer, { flag: 'wx' });
 
-      streamifier.createReadStream(file.buffer).pipe(uploadStream);
-    });
+    const publicBase = this.configService.get<string>('UPLOAD_PUBLIC_BASE_URL') || '/api/upload/files';
+    return `${publicBase}/${safeFolder}/${filename}`;
+  }
+
+  private extensionFor(mimetype: string, originalName: string): string {
+    if (mimetype === 'image/jpeg') return '.jpg';
+    if (mimetype === 'image/png') return '.png';
+    if (mimetype === 'image/webp') return '.webp';
+    return extname(originalName).toLowerCase();
   }
 
   private assertSafeImage(file?: Express.Multer.File) {
@@ -83,20 +59,9 @@ export class UploadService {
     }
 
     const bytes = file.buffer;
-    const isJpeg =
-      bytes.length >= 3 &&
-      bytes[0] === 0xff &&
-      bytes[1] === 0xd8 &&
-      bytes[2] === 0xff;
-    const isPng =
-      bytes.length >= 8 &&
-      bytes.subarray(0, 8).equals(
-        Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
-      );
-    const isWebp =
-      bytes.length >= 12 &&
-      bytes.subarray(0, 4).toString('ascii') === 'RIFF' &&
-      bytes.subarray(8, 12).toString('ascii') === 'WEBP';
+    const isJpeg = bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+    const isPng = bytes.length >= 8 && bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+    const isWebp = bytes.length >= 12 && bytes.subarray(0, 4).toString('ascii') === 'RIFF' && bytes.subarray(8, 12).toString('ascii') === 'WEBP';
 
     const signatureMatchesMime =
       (file.mimetype === 'image/jpeg' && isJpeg) ||
