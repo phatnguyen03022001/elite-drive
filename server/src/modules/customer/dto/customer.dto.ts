@@ -96,11 +96,29 @@ export class BookingQueryDto {
 
 export class BookingDetailResponseDto {
   @ApiProperty() id: string;
+  @ApiProperty() carId: string;
   @ApiProperty() startDate: Date;
   @ApiProperty() endDate: Date;
+  @ApiPropertyOptional({ nullable: true }) pickupLocation?: string | null;
+  @ApiPropertyOptional({ nullable: true }) dropoffLocation?: string | null;
+  @ApiPropertyOptional({ nullable: true }) decisionReason?: string | null;
   @ApiProperty({ enum: BookingStatus }) status: BookingStatus;
   @ApiProperty() totalPrice: number;
-  @ApiProperty() car: { name: string; brand: string };
+  @ApiPropertyOptional({ nullable: true }) discountAmount?: number | null;
+  @ApiPropertyOptional({ nullable: true }) finalPrice?: number | null;
+  @ApiProperty()
+  car: {
+    id: string;
+    name: string;
+    brand: string;
+    mainImageUrl: string | null;
+  };
+  @ApiPropertyOptional({ nullable: true })
+  contract?: {
+    status: string;
+    customerSignedAt: Date | null;
+  } | null;
+  @ApiPropertyOptional({ type: [Object] }) reviews?: Array<{ id: string }>;
 }
 
 export class TripQueryDto {
@@ -141,7 +159,7 @@ export class ContractResponseDto {
   @ApiProperty() bookingId: string;
   @ApiProperty() content: string;
   @ApiProperty() status: string;
-  @ApiPropertyOptional() customerSignedAt?: Date;
+  @ApiPropertyOptional({ nullable: true }) customerSignedAt?: Date | null;
 }
 
 export class WalletTransactionResponseDto {
