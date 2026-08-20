@@ -1,57 +1,19 @@
 # Elite Drive
 
-Elite Drive is a full-stack premium car-rental marketplace built around three real operating roles: renters, vehicle owners, and platform administrators.
+Elite Drive is a full-stack car-rental marketplace for renters, vehicle owners, and platform administrators.
 
-**Production:** https://elite-drive-iota.vercel.app
+The repository is designed so the application can be built, tested, and run locally without requiring a paid external service.
 
-The project is designed as an operational product rather than a static portfolio showcase. Public vehicle discovery, authenticated bookings, KYC, fleet management, availability, trip handover, reviews, promotions, disputes, wallet activity, settlement operations, and administrative review flows are connected to the application API.
-
-> Payment processing is intentionally exposed as a sandbox workflow until a production payment provider and webhook verification layer are connected. The UI does not present the sandbox adapter as a live payment gateway.
-
-## Product capabilities
-
-| Area | Implemented workflow |
-| --- | --- |
-| Public marketplace | Live inventory, vehicle detail, availability, reviews, promotions |
-| Authentication | Password login, email OTP login, renter/owner registration, password recovery |
-| Renter | Search, booking creation, booking history, KYC, payment sandbox, promotions, reviews, profile, disputes/support |
-| Vehicle owner | Dashboard, fleet CRUD, availability calendar, booking approval, trip pickup/return handover, wallet, profile, KYC |
-| Administration | KYC review, vehicle approval, payment ledger, platform finance, settlements, withdrawals, disputes, promotions |
-| Trust & safety | JWT authentication, role-based authorization, DTO validation, KYC review, vehicle verification, security headers |
-| Delivery | GitHub Actions CI and Vercel production deployment from `main` |
-
-## Architecture
-
-```mermaid
-flowchart LR
-    Browser[Browser] --> Next[Next.js 16 / React 19]
-    Next -->|/api rewrite| API[NestJS 10 API]
-    API --> Auth[JWT + RBAC]
-    API --> Prisma[Prisma 6]
-    Prisma --> Mongo[(MongoDB)]
-    API --> Storage[S3-compatible object storage]
-    API --> Email[Transactional email provider]
-```
-
-The browser uses relative `/api/*` requests. Next.js proxies those requests to the backend configured through `BACKEND_URL`, keeping the backend origin out of browser-side application configuration.
-
-More detail: [`docs/architecture.md`](docs/architecture.md)
-
-## Technology stack
+## Stack
 
 ### Frontend
 
-- Next.js 16.1
-- React 19
+- Next.js 16 / React 19
 - TypeScript
 - Tailwind CSS
-- Radix UI / shadcn-style components
+- Radix UI
 - TanStack Query
-- Axios
 - React Hook Form + Zod
-- Framer Motion
-- Sonner
-- Chart.js
 
 ### Backend
 
@@ -61,17 +23,38 @@ More detail: [`docs/architecture.md`](docs/architecture.md)
 - MongoDB
 - Passport + JWT
 - class-validator / class-transformer
-- Swagger / OpenAPI
-- bcrypt
-- S3-compatible storage integrations
-- Transactional email integrations
 
-### Delivery and infrastructure
+## Architecture
 
-- GitHub Actions
-- Vercel
-- Docker Compose for local infrastructure
-- Garage-compatible object storage configuration
+```mermaid
+flowchart LR
+    Browser[Browser] --> Next[Next.js]
+    Next -->|/api proxy| API[NestJS API]
+    API --> Auth[JWT + RBAC]
+    API --> Prisma[Prisma]
+    Prisma --> Mongo[(MongoDB)]
+    API --> Files[Local filesystem uploads]
+    API --> Mail[Local OTP log]
+```
+
+The browser uses relative `/api/*` requests. Next.js proxies them to the backend configured by `BACKEND_URL`.
+
+Uploaded images are stored by the backend under `UPLOAD_DIR` and are served through `/api/upload/files/*`. OTP email delivery is represented locally through application logs, so development and CI do not depend on an email provider.
+
+See [`docs/architecture.md`](docs/architecture.md) for more detail.
+
+## Product capabilities
+
+- Public vehicle discovery and availability
+- Password and OTP authentication
+- Renter booking and trip workflows
+- Owner fleet and availability management
+- KYC review flows
+- Reviews and promotions
+- Payment sandbox and finance state transitions
+- Admin review, settlement, withdrawal, and dispute operations
+
+The payment provider integration is disabled by default. Local development uses the sandbox flow only when explicitly enabled.
 
 ## Repository structure
 
@@ -79,114 +62,45 @@ More detail: [`docs/architecture.md`](docs/architecture.md)
 .
 ├── .github/workflows/       # CI
 ├── client/                  # Next.js application
-│   └── src/
-│       ├── app/             # Public, renter, owner, and admin routes
-│       ├── components/      # Shared UI
-│       ├── features/        # Feature modules and API hooks
-│       ├── hooks/           # Shared React hooks
-│       ├── lib/             # Axios, auth, utilities
-│       └── styles/          # Global styles
 ├── server/                  # NestJS API
-│   ├── prisma/              # Prisma schema
-│   └── src/
-│       ├── common/          # Guards, decorators, response DTOs
-│       ├── config/          # Runtime and Swagger configuration
-│       ├── modules/         # Auth, customer, owner, admin, public, upload, mail
-│       └── prisma/          # Prisma service
-├── docker/                  # Local MongoDB / object-storage infrastructure
+│   ├── prisma/              # Prisma schema and data tooling
+│   └── src/                 # Application source
+├── docker/mongodb/          # Optional local MongoDB container
 └── docs/                    # Architecture and release documentation
 ```
 
-## Core user journeys
-
-### Renter
-
-1. Browse or filter the live fleet.
-2. Review vehicle details and availability.
-3. Sign in or register.
-4. Complete identity verification when required.
-5. Create a booking with pickup and return dates.
-6. Track booking and trip status in the renter workspace.
-7. Use the payment sandbox, promotions, reviews, and dispute workflows where applicable.
-
-### Vehicle owner
-
-1. Register or sign in as an owner.
-2. Complete owner KYC and profile details.
-3. Add vehicles to the fleet.
-4. Maintain availability through the calendar.
-5. Review and approve booking requests.
-6. Execute pickup and return handover states.
-7. Track wallet, income, and withdrawal activity.
-
-### Administrator
-
-1. Review renter/owner identity submissions.
-2. Approve or reject vehicle listings.
-3. Inspect payment and platform-wallet activity.
-4. Release or refund eligible payments through settlement operations.
-5. Review withdrawal requests.
-6. Process and resolve disputes.
-7. Create and manage marketplace promotions.
-
-## Public API surface
-
-The public module exposes product discovery endpoints such as:
-
-```http
-GET /api/cars
-GET /api/cars/:car_id
-GET /api/cars/:car_id/availability
-GET /api/cars/:car_id/reviews
-GET /api/reviews/summary
-GET /api/promotions
-```
-
-Authenticated workflows are grouped under role-specific namespaces:
-
-```text
-/api/customer/*
-/api/owner/*
-/api/admin/*
-```
-
-Swagger documentation is served by the backend at `/docs` and the generated OpenAPI document is available at `/docs-json`.
-
 ## Local development
 
-### Prerequisites
+### Requirements
 
-- Node.js 24 recommended
+- Node.js 24
 - npm
-- MongoDB
-- Docker / Docker Compose optional for local infrastructure
+- MongoDB, either installed locally or started with Docker
 
-### 1. Clone
+### Clone
 
 ```bash
-git clone https://github.com/phatnguyen03022001/elite-drive-demo-version.git
-cd elite-drive-demo-version
+git clone https://github.com/phatnguyen03022001/elite-drive.git
+cd elite-drive
 ```
 
-### 2. Start the API
+### Backend
 
 ```bash
 cd server
 cp .env.example .env
-npm ci
+npm install
 npx prisma generate
 npm run start:dev
 ```
 
-The API defaults to:
+Default API URL:
 
 ```text
 http://localhost:8000
 ```
 
-### 3. Start the web application
-
-In another terminal:
+### Frontend
 
 ```bash
 cd client
@@ -195,7 +109,7 @@ npm ci
 npm run dev
 ```
 
-The web application defaults to:
+Default web URL:
 
 ```text
 http://localhost:3000
@@ -205,9 +119,9 @@ http://localhost:3000
 
 ### Frontend
 
-| Variable | Purpose | Local example |
+| Variable | Purpose | Default/local value |
 | --- | --- | --- |
-| `BACKEND_URL` | Server-side destination for the Next.js `/api/*` proxy | `http://localhost:8000` |
+| `BACKEND_URL` | Server-side API destination | `http://localhost:8000` |
 | `NEXT_PUBLIC_APP_URL` | Canonical frontend origin | `http://localhost:3000` |
 
 ### Backend
@@ -215,17 +129,18 @@ http://localhost:3000
 | Variable | Purpose |
 | --- | --- |
 | `NODE_ENV` | Runtime environment |
-| `APP_PORT` | API listening port; defaults to `8000` |
-| `FRONTEND_URL` | Additional allowed browser origin |
-| `ALLOW_VERCEL_PREVIEWS` | Opt-in support for `*.vercel.app` preview origins |
-| `DATABASE_URL` | MongoDB connection string used by Prisma |
+| `APP_PORT` | API port |
+| `FRONTEND_URL` | Allowed browser origin |
+| `DATABASE_URL` | MongoDB connection string |
 | `JWT_SECRET` | JWT signing secret |
+| `OTP_HASH_SECRET` | OTP hashing secret |
 | `BCRYPT_ROUNDS` | Password hashing work factor |
-| `BREVO_API_KEY` | Transactional email provider credential |
-| `EMAIL_FROM` | Sender email |
-| `EMAIL_FROM_NAME` | Sender display name |
+| `UPLOAD_DIR` | Local upload directory |
+| `UPLOAD_PUBLIC_BASE_URL` | Public upload route prefix |
+| `MOCK_PAYMENTS_ENABLED` | Enables local payment sandbox outside production |
+| `MOMO_ENABLED` | Optional payment adapter; disabled by default |
 
-Storage integrations require their own provider-specific variables. Never commit real credentials.
+No Cloudinary, Brevo, Resend, AWS storage, or similar account is required to run the repository.
 
 ## Quality gates
 
@@ -242,58 +157,40 @@ Backend:
 
 ```bash
 cd server
+npm install
 npx prisma generate
 npm run build
 ```
 
-The repository CI runs frontend lint, type-check and build checks plus Prisma generation and backend compilation on changes targeting `main`.
+The backend build gate runs type checking, tests, dependency audit reporting, and compilation.
 
-## Production release flow
+## CI
 
-1. Update `main` with an atomic product or infrastructure change.
-2. Let GitHub Actions validate frontend and backend builds.
-3. Let Vercel create the production deployment from the same Git commit.
-4. Verify the production deployment reaches `READY`.
-5. Smoke-test the public marketplace, authentication entry points, and role-specific routes.
-6. Inspect runtime errors before considering the release complete.
+GitHub Actions runs on standard `ubuntu-latest` runners. The repository is public, so the standard runner path does not require private-repository Actions minutes. Documentation-only changes are ignored by CI.
 
-See [`docs/release-checklist.md`](docs/release-checklist.md).
+Frontend uses the committed lockfile and `npm ci`. The backend currently installs from `server/package.json`; the previous backend lockfile was removed because it had drifted substantially from the manifest and contained obsolete dependencies.
 
 ## Security posture
 
-- Private API routes use JWT authentication.
-- Role guards separate renter, owner, and admin operations.
-- NestJS validation pipes whitelist accepted DTO properties.
-- Frontend responses include content-type, framing, referrer and permissions-policy headers.
-- CORS is restricted to explicit origins; Vercel preview origins are opt-in.
-- Runtime database and object-storage state are excluded from the repository.
-- Garage credentials are injected through environment variables rather than committed configuration.
-- Secrets that were ever committed must be rotated even after removal from the current Git tree.
+- JWT authentication and role-based guards protect private routes.
+- DTO validation whitelists accepted input properties.
+- Cookie-authenticated mutations validate trusted origins.
+- Uploaded images are size-, MIME-, and signature-validated.
+- Upload paths are normalized before files are served.
+- Secrets stay in runtime environment variables.
+- External payment integration is disabled unless explicitly configured.
 
-See [`SECURITY.md`](SECURITY.md) for vulnerability reporting guidance.
+See [`SECURITY.md`](SECURITY.md).
 
-## Engineering decisions
+## Engineering constraints
 
-### API-backed public experience
+The default architecture follows these rules:
 
-The landing and fleet experiences use the same backend inventory exposed to authenticated workflows. This avoids a common portfolio failure mode where the marketing UI looks complete but is disconnected from the product data model.
-
-### Explicit role boundaries
-
-Renter, owner, and admin workflows are separated both in routing and authorization. Each workspace exposes only the controls relevant to that role.
-
-### Honest payment boundary
-
-The current payment workflow is a sandbox adapter used to exercise booking/payment/escrow state transitions. A production payment provider, signed webhook verification, idempotency strategy, and reconciliation process are intentionally treated as a separate integration milestone rather than represented as already complete.
-
-### Environment-driven infrastructure
-
-Backend URLs, database credentials, JWT secrets, email credentials, and object-storage credentials are runtime configuration. This keeps application source portable between local development, CI, preview, and production environments.
-
-## Current product status
-
-Elite Drive is a portfolio-grade full-stack marketplace with working product workflows across renter, owner, and admin roles. Remaining production-system work is primarily integration depth rather than placeholder UI: a real payment gateway, broader automated end-to-end coverage, production observability, and external service hardening.
+1. Build and test must not require a paid SaaS account.
+2. Local development must work with MongoDB plus local filesystem storage.
+3. External integrations must be explicitly enabled rather than silently required.
+4. Documentation and environment examples must describe the current runtime, not historical infrastructure.
 
 ## License
 
-The repository is currently marked `UNLICENSED`. No reuse or redistribution rights are granted unless an explicit license is added.
+The repository is currently `UNLICENSED`.
