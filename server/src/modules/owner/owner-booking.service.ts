@@ -23,7 +23,9 @@ export class OwnerBookingService {
         orderBy: { createdAt: 'desc' },
         include: {
           car: { select: { name: true, licensePlate: true } },
-          customer: { select: { id: true, firstName: true, lastName: true, phone: true } },
+          customer: {
+            select: { id: true, firstName: true, lastName: true, phone: true },
+          },
           payments: { select: { id: true, status: true, amount: true } },
         },
       }),
@@ -37,8 +39,14 @@ export class OwnerBookingService {
   }
 
   rejectBooking(ownerId: string, bookingId: string, dto: RejectBookingDto) {
-    const reason = dto.reason?.trim() || 'Vehicle unavailable for the requested dates';
-    return this.claimDecision(ownerId, bookingId, BookingStatus.REJECTED, reason);
+    const reason =
+      dto.reason?.trim() || 'Vehicle unavailable for the requested dates';
+    return this.claimDecision(
+      ownerId,
+      bookingId,
+      BookingStatus.REJECTED,
+      reason,
+    );
   }
 
   private async claimDecision(
@@ -47,31 +55,61 @@ export class OwnerBookingService {
     targetStatus: 'APPROVED' | 'REJECTED',
     decisionReason?: string,
   ) {
-    const booking = await this.db.booking.findFirst({
-      where: { id: bookingId, car: { ownerId } },
-      select: { id: true, status: true },
-    });
-    if (!booking) throw new NotFoundException('Booking không tồn tại hoặc bạn không có quyền');
-    if (booking.status !== BookingStatus.PENDING) {
-      throw new BadRequestException(`Không thể xử lý đơn đang ở trạng thái ${booking.status}`);
-    }
+    return this.db.$transaction(async (tx) => {
+      const booking = await tx.booking.findFirst({
+        where: { id: bookingId, car: { ownerId } },
+        select: { id: true, status: true, promotionId: true },
+      });
+      if (!booking) {
+        throw new NotFoundException(
+          'Booking không tồn tại hoặc bạn không có quyền',
+        );
+      }
+      if (booking.status !== BookingStatus.PENDING) {
+        throw new BadRequestException(
+          `Không thể xử lý đơn đang ở trạng thái ${booking.status}`,
+        );
+      }
 
-    const claim = await this.db.booking.updateMany({
-      where: { id: bookingId, status: BookingStatus.PENDING, car: { ownerId } },
-      data: {
-        status: targetStatus,
-        ...(targetStatus === BookingStatus.REJECTED ? { decisionReason } : {}),
-      },
-    });
-    if (claim.count !== 1) throw new BadRequestException('Booking đã được xử lý bởi một yêu cầu khác');
+      const claim = await tx.booking.updateMany({
+        where: {
+          id: bookingId,
+          status: BookingStatus.PENDING,
+          car: { ownerId },
+        },
+        data: {
+          status: targetStatus,
+          ...(targetStatus === BookingStatus.REJECTED
+            ? { decisionReason }
+            : {}),
+        },
+      });
+      if (claim.count !== 1) {
+        throw new BadRequestException(
+          'Booking đã được xử lý bởi một yêu cầu khác',
+        );
+      }
 
-    return this.db.booking.findUniqueOrThrow({
-      where: { id: bookingId },
-      include: {
-        car: { select: { name: true, licensePlate: true } },
-        customer: { select: { id: true, firstName: true, lastName: true, phone: true } },
-        payments: { select: { id: true, status: true, amount: true } },
-      },
+      if (
+        targetStatus === BookingStatus.REJECTED &&
+        booking.promotionId
+      ) {
+        await tx.promotion.updateMany({
+          where: { id: booking.promotionId, usedCount: { gt: 0 } },
+          data: { usedCount: { decrement: 1 } },
+        });
+      }
+
+      return tx.booking.findUniqueOrThrow({
+        where: { id: bookingId },
+        include: {
+          car: { select: { name: true, licensePlate: true } },
+          customer: {
+            select: { id: true, firstName: true, lastName: true, phone: true },
+          },
+          payments: { select: { id: true, status: true, amount: true } },
+        },
+      });
     });
   }
 }
