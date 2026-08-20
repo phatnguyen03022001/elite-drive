@@ -11,8 +11,9 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
+import { Prisma } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
-import { createHmac, randomInt, timingSafeEqual } from 'crypto';
+import { createHash, createHmac, randomInt, timingSafeEqual } from 'crypto';
 
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -33,6 +34,7 @@ export class AuthService {
   private static readonly LOGIN_MAX_ATTEMPTS = 5;
   private static readonly LOGIN_LOCK_MS = 15 * 60 * 1000;
   private static readonly LOGIN_GUARD_TYPE = 'LOGIN_PASSWORD_GUARD';
+  private static readonly STATE_CLAIM_RETRIES = 5;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -54,7 +56,21 @@ export class AuthService {
       if (!user) return this.otpSentResponse(type);
     }
 
-    await this.createOtp(dto.email, type);
+    try {
+      await this.createOtp(dto.email, type);
+    } catch (error) {
+      // Do not turn resend cooldown into an account-existence oracle for login
+      // or forgot-password flows. The request is still rate-limited; only the
+      // externally visible response remains generic.
+      if (
+        type !== 'REGISTER' &&
+        error instanceof HttpException &&
+        error.getStatus() === HttpStatus.TOO_MANY_REQUESTS
+      ) {
+        return this.otpSentResponse(type);
+      }
+      throw error;
+    }
     return this.otpSentResponse(type);
   }
 
@@ -134,8 +150,6 @@ export class AuthService {
       throw new UnauthorizedException('Email hoặc mật khẩu không đúng');
     }
 
-    await this.clearLoginGuard(dto.email);
-
     if (!user.isActive) {
       throw new ForbiddenException('Tài khoản đã bị vô hiệu hóa');
     }
@@ -146,6 +160,7 @@ export class AuthService {
       );
     }
 
+    await this.clearLoginGuard(dto.email);
     return this.generateTokens(user);
   }
 
@@ -199,39 +214,76 @@ export class AuthService {
   }
 
   private async createOtp(email: string, type: string) {
-    const previousOtp = await this.prisma.oTP.findFirst({
-      where: { email, type },
-      orderBy: { createdAt: 'desc' },
-      select: { createdAt: true },
-    });
-
-    if (
-      previousOtp &&
-      Date.now() - previousOtp.createdAt.getTime() <
-        AuthService.OTP_RESEND_COOLDOWN_MS
+    for (
+      let attempt = 1;
+      attempt <= AuthService.STATE_CLAIM_RETRIES;
+      attempt += 1
     ) {
-      throw new HttpException(
-        'Vui lòng chờ trước khi yêu cầu OTP mới',
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
+      const previousOtp = await this.prisma.oTP.findFirst({
+        where: { email, type },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true, createdAt: true },
+      });
+      const now = new Date();
+
+      if (
+        previousOtp &&
+        now.getTime() - previousOtp.createdAt.getTime() <
+          AuthService.OTP_RESEND_COOLDOWN_MS
+      ) {
+        throw this.otpCooldownError();
+      }
+
+      const code = randomInt(100000, 1000000).toString();
+      const codeDigest = this.hashOtp(email, type, code);
+      const expiresAt = new Date(now.getTime() + AuthService.OTP_TTL_MS);
+
+      if (previousOtp) {
+        const claim = await this.prisma.oTP.updateMany({
+          where: {
+            id: previousOtp.id,
+            createdAt: previousOtp.createdAt,
+          },
+          data: {
+            code: codeDigest,
+            attempts: 0,
+            expiresAt,
+            createdAt: now,
+          },
+        });
+        if (claim.count !== 1) {
+          if (attempt < AuthService.STATE_CLAIM_RETRIES) continue;
+          throw this.otpCooldownError();
+        }
+      } else {
+        try {
+          await this.prisma.oTP.create({
+            data: {
+              id: this.authStateId(email, type),
+              email,
+              code: codeDigest,
+              type,
+              attempts: 0,
+              expiresAt,
+              createdAt: now,
+            },
+          });
+        } catch (error) {
+          if (this.isUniqueConflict(error)) {
+            if (attempt < AuthService.STATE_CLAIM_RETRIES) continue;
+            throw this.otpCooldownError();
+          }
+          throw error;
+        }
+      }
+
+      // Only the request that successfully claimed/created the OTP record sends
+      // the code, so concurrent resend requests cannot emit multiple valid codes.
+      await this.mailService.sendOtp(email, code, type);
+      return;
     }
 
-    const code = randomInt(100000, 1000000).toString();
-    const codeDigest = this.hashOtp(email, type, code);
-
-    await this.prisma.oTP.deleteMany({ where: { email, type } });
-
-    await this.prisma.oTP.create({
-      data: {
-        email,
-        code: codeDigest,
-        type,
-        attempts: 0,
-        expiresAt: new Date(Date.now() + AuthService.OTP_TTL_MS),
-      },
-    });
-
-    await this.mailService.sendOtp(email, code, type);
+    throw this.otpCooldownError();
   }
 
   private async assertOtpValid(email: string, code: string, type: string) {
@@ -241,25 +293,46 @@ export class AuthService {
     }
 
     if (otp.attempts >= AuthService.OTP_MAX_ATTEMPTS) {
-      throw new HttpException(
-        'OTP đã bị khóa do nhập sai quá nhiều lần',
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
+      throw this.otpLockedError();
     }
 
     const codeDigest = this.hashOtp(email, type, code);
     if (!this.secureDigestEquals(otp.code, codeDigest)) {
-      const nextAttempts = otp.attempts + 1;
-      await this.prisma.oTP.update({
-        where: { id: otp.id },
-        data: { attempts: nextAttempts },
+      const now = new Date();
+      const claim = await this.prisma.oTP.updateMany({
+        where: {
+          id: otp.id,
+          expiresAt: { gt: now },
+          attempts: { lt: AuthService.OTP_MAX_ATTEMPTS },
+        },
+        data: { attempts: { increment: 1 } },
       });
 
-      if (nextAttempts >= AuthService.OTP_MAX_ATTEMPTS) {
-        throw new HttpException(
-          'OTP đã bị khóa do nhập sai quá nhiều lần',
-          HttpStatus.TOO_MANY_REQUESTS,
-        );
+      if (claim.count !== 1) {
+        const current = await this.prisma.oTP.findUnique({
+          where: { id: otp.id },
+          select: { attempts: true, expiresAt: true },
+        });
+        if (
+          current &&
+          current.expiresAt > now &&
+          current.attempts >= AuthService.OTP_MAX_ATTEMPTS
+        ) {
+          throw this.otpLockedError();
+        }
+        throw new BadRequestException('OTP không hợp lệ hoặc đã hết hạn');
+      }
+
+      const current = await this.prisma.oTP.findUnique({
+        where: { id: otp.id },
+        select: { attempts: true, expiresAt: true },
+      });
+      if (
+        current &&
+        current.expiresAt > now &&
+        current.attempts >= AuthService.OTP_MAX_ATTEMPTS
+      ) {
+        throw this.otpLockedError();
       }
 
       throw new BadRequestException('OTP không hợp lệ hoặc đã hết hạn');
@@ -273,6 +346,7 @@ export class AuthService {
     const result = await this.prisma.oTP.deleteMany({
       where: {
         id: otp.id,
+        code: otp.code,
         attempts: { lt: AuthService.OTP_MAX_ATTEMPTS },
         expiresAt: { gt: new Date() },
       },
@@ -298,43 +372,92 @@ export class AuthService {
   private async assertLoginNotLocked(email: string) {
     const guard = await this.findLoginGuard(email);
     if (guard && guard.attempts >= AuthService.LOGIN_MAX_ATTEMPTS) {
-      throw new HttpException(
-        'Đăng nhập tạm thời bị khóa do nhập sai quá nhiều lần',
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
+      throw this.loginLockedError();
     }
   }
 
   private async recordFailedLogin(email: string) {
-    const guard = await this.findLoginGuard(email);
-    if (!guard) {
-      await this.prisma.oTP.deleteMany({
-        where: { email, type: AuthService.LOGIN_GUARD_TYPE },
-      });
-      await this.prisma.oTP.create({
+    for (
+      let attempt = 1;
+      attempt <= AuthService.STATE_CLAIM_RETRIES;
+      attempt += 1
+    ) {
+      const now = new Date();
+      const guard = await this.findLoginGuard(email);
+      if (guard) {
+        const claim = await this.prisma.oTP.updateMany({
+          where: {
+            id: guard.id,
+            expiresAt: { gt: now },
+            attempts: { lt: AuthService.LOGIN_MAX_ATTEMPTS },
+          },
+          data: { attempts: { increment: 1 } },
+        });
+        if (claim.count === 1) {
+          const current = await this.prisma.oTP.findUnique({
+            where: { id: guard.id },
+            select: { attempts: true },
+          });
+          if (current && current.attempts >= AuthService.LOGIN_MAX_ATTEMPTS) {
+            throw this.loginLockedError();
+          }
+          return;
+        }
+
+        const current = await this.prisma.oTP.findUnique({
+          where: { id: guard.id },
+          select: { attempts: true, expiresAt: true },
+        });
+        if (
+          current &&
+          current.expiresAt > now &&
+          current.attempts >= AuthService.LOGIN_MAX_ATTEMPTS
+        ) {
+          throw this.loginLockedError();
+        }
+        if (attempt < AuthService.STATE_CLAIM_RETRIES) continue;
+        throw this.loginLockedError();
+      }
+
+      const stableId = this.authStateId(
+        email,
+        AuthService.LOGIN_GUARD_TYPE,
+      );
+      const reset = await this.prisma.oTP.updateMany({
+        where: {
+          id: stableId,
+          expiresAt: { lte: now },
+        },
         data: {
-          email,
-          type: AuthService.LOGIN_GUARD_TYPE,
-          code: this.hashOtp(email, AuthService.LOGIN_GUARD_TYPE, 'guard'),
           attempts: 1,
-          expiresAt: new Date(Date.now() + AuthService.LOGIN_LOCK_MS),
+          expiresAt: new Date(now.getTime() + AuthService.LOGIN_LOCK_MS),
+          createdAt: now,
         },
       });
-      return;
+      if (reset.count === 1) return;
+
+      try {
+        await this.prisma.oTP.create({
+          data: {
+            id: stableId,
+            email,
+            type: AuthService.LOGIN_GUARD_TYPE,
+            code: this.hashOtp(email, AuthService.LOGIN_GUARD_TYPE, 'guard'),
+            attempts: 1,
+            expiresAt: new Date(now.getTime() + AuthService.LOGIN_LOCK_MS),
+            createdAt: now,
+          },
+        });
+        return;
+      } catch (error) {
+        if (this.isUniqueConflict(error) && attempt < AuthService.STATE_CLAIM_RETRIES) {
+          continue;
+        }
+        throw error;
+      }
     }
 
-    const updated = await this.prisma.oTP.update({
-      where: { id: guard.id },
-      data: { attempts: { increment: 1 } },
-      select: { attempts: true },
-    });
-
-    if (updated.attempts >= AuthService.LOGIN_MAX_ATTEMPTS) {
-      throw new HttpException(
-        'Đăng nhập tạm thời bị khóa do nhập sai quá nhiều lần',
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
-    }
+    throw this.loginLockedError();
   }
 
   private findLoginGuard(email: string) {
@@ -366,6 +489,41 @@ export class AuthService {
     return createHmac('sha256', secret)
       .update(`${email.toLowerCase()}:${type}:${code}`)
       .digest('hex');
+  }
+
+  private authStateId(email: string, type: string) {
+    return createHash('sha256')
+      .update(`auth-state:${email.toLowerCase()}:${type}`)
+      .digest('hex')
+      .slice(0, 24);
+  }
+
+  private isUniqueConflict(error: unknown) {
+    return (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2002'
+    );
+  }
+
+  private otpCooldownError() {
+    return new HttpException(
+      'Vui lòng chờ trước khi yêu cầu OTP mới',
+      HttpStatus.TOO_MANY_REQUESTS,
+    );
+  }
+
+  private otpLockedError() {
+    return new HttpException(
+      'OTP đã bị khóa do nhập sai quá nhiều lần',
+      HttpStatus.TOO_MANY_REQUESTS,
+    );
+  }
+
+  private loginLockedError() {
+    return new HttpException(
+      'Đăng nhập tạm thời bị khóa do nhập sai quá nhiều lần',
+      HttpStatus.TOO_MANY_REQUESTS,
+    );
   }
 
   private generateTokens(user: { id: string; email: string; role: string }) {
