@@ -4,6 +4,23 @@ import { PaginationDto } from '../../common/dto/pagination.dto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TripCheckinDto, TripCheckoutDto } from './dto/owner.dto';
 
+const RENTAL_TIME_ZONE = process.env.RENTAL_TIME_ZONE?.trim() || 'Asia/Ho_Chi_Minh';
+
+function rentalDateKey(date: Date) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: RENTAL_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+function storedBookingDateKey(date: Date) {
+  return date.toISOString().slice(0, 10);
+}
+
 @Injectable()
 export class OwnerTripService {
   constructor(private readonly db: PrismaService) {}
@@ -69,9 +86,9 @@ export class OwnerTripService {
           'Khách hàng phải ký hợp đồng trước khi bàn giao xe',
         );
       }
-      if (Date.now() < trip.booking.startDate.getTime()) {
+      if (rentalDateKey(new Date()) < storedBookingDateKey(trip.booking.startDate)) {
         throw new BadRequestException(
-          'Chưa đến thời điểm bắt đầu booking; không thể bàn giao xe sớm',
+          'Chưa đến ngày bắt đầu booking; không thể bàn giao xe sớm',
         );
       }
 
@@ -114,7 +131,7 @@ export class OwnerTripService {
           bookingId: true,
           status: true,
           startOdometer: true,
-          booking: { select: { status: true } },
+          booking: { select: { status: true, endDate: true } },
         },
       });
       if (!trip) throw new NotFoundException('Trip không tồn tại');
@@ -123,6 +140,11 @@ export class OwnerTripService {
       }
       if (trip.booking.status !== BookingStatus.CONFIRMED) {
         throw new BadRequestException('Booking không còn ở trạng thái CONFIRMED');
+      }
+      if (rentalDateKey(new Date()) < storedBookingDateKey(trip.booking.endDate)) {
+        throw new BadRequestException(
+          'Chưa đến ngày trả xe của booking; không thể hoàn tất chuyến sớm',
+        );
       }
       if (
         trip.startOdometer !== null &&
