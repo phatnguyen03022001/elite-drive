@@ -45,6 +45,39 @@ describe('CustomerCancellationService invariants', () => {
               status: PaymentStatus.COMPLETED,
               paymentMethod: 'MOMO',
               amount: 100000,
+              releasedAt: null,
+            },
+          ],
+        }),
+        updateMany: jest.fn(),
+      },
+    };
+    const db = {
+      $transaction: jest.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
+    } as unknown as PrismaService;
+    const service = new CustomerCancellationService(db, config);
+
+    await expect(
+      service.cancelBooking('customer-1', 'booking-1'),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(tx.booking.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('rejects refund when escrow has already been released', async () => {
+    const tx = {
+      booking: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'booking-1',
+          status: BookingStatus.CONFIRMED,
+          totalPrice: 100000,
+          trip: { status: 'UPCOMING' },
+          payments: [
+            {
+              id: 'payment-1',
+              status: PaymentStatus.COMPLETED,
+              paymentMethod: 'MOCK_QR',
+              amount: 100000,
+              releasedAt: new Date(),
             },
           ],
         }),
@@ -95,6 +128,75 @@ describe('CustomerCancellationService invariants', () => {
         ],
       }),
       data: { status: BookingStatus.CANCELLED },
+    });
+  });
+
+  it('refunds only unreleased escrow and removes the stale upcoming trip', async () => {
+    const tx = {
+      booking: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'booking-1',
+          customerId: 'customer-1',
+          status: BookingStatus.CONFIRMED,
+          totalPrice: 100000,
+          trip: { status: 'UPCOMING' },
+          payments: [
+            {
+              id: 'payment-1',
+              status: PaymentStatus.COMPLETED,
+              paymentMethod: 'MOCK_QR',
+              amount: 100000,
+              releasedAt: null,
+            },
+          ],
+        }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        findUniqueOrThrow: jest.fn().mockResolvedValue({
+          id: 'booking-1',
+          status: BookingStatus.CANCELLED,
+        }),
+      },
+      payment: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      wallet: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'platform-wallet',
+          balance: 100000,
+        }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        upsert: jest.fn().mockResolvedValue({ id: 'customer-wallet' }),
+      },
+      walletTransaction: {
+        createMany: jest.fn().mockResolvedValue({ count: 2 }),
+      },
+      trip: {
+        deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+    };
+    const db = {
+      $transaction: jest.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
+    } as unknown as PrismaService;
+    const service = new CustomerCancellationService(db, config);
+
+    await service.cancelBooking('customer-1', 'booking-1');
+
+    expect(tx.payment.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'payment-1',
+        status: PaymentStatus.COMPLETED,
+        refundedAt: null,
+        OR: [
+          { releasedAt: null },
+          { releasedAt: { isSet: false } },
+        ],
+      },
+      data: expect.objectContaining({
+        status: PaymentStatus.REFUNDED,
+      }),
+    });
+    expect(tx.trip.deleteMany).toHaveBeenCalledWith({
+      where: { bookingId: 'booking-1', status: 'UPCOMING' },
     });
   });
 });

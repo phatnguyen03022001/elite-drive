@@ -40,6 +40,11 @@ export class CustomerCancellationService {
           'Booking đã thanh toán MoMo cần provider refund/reversal; vui lòng liên hệ hỗ trợ',
         );
       }
+      if (completedPayment?.releasedAt) {
+        throw new BadRequestException(
+          'Payment đã được giải ngân; cần reversal/adjustment flow riêng',
+        );
+      }
 
       const bookingClaim = await tx.booking.updateMany({
         where: {
@@ -82,6 +87,10 @@ export class CustomerCancellationService {
           id: completedPayment.id,
           status: PaymentStatus.COMPLETED,
           refundedAt: null,
+          OR: [
+            { releasedAt: null },
+            { releasedAt: { isSet: false } },
+          ],
         },
         data: {
           status: PaymentStatus.REFUNDED,
@@ -90,7 +99,9 @@ export class CustomerCancellationService {
         },
       });
       if (refundClaim.count !== 1) {
-        throw new BadRequestException('Payment đã được xử lý bởi yêu cầu khác');
+        throw new BadRequestException(
+          'Payment đã được xử lý hoặc không còn nằm trong escrow',
+        );
       }
 
       const platformWallet = await tx.wallet.findUnique({
@@ -149,6 +160,10 @@ export class CustomerCancellationService {
             },
           },
         ],
+      });
+
+      await tx.trip.deleteMany({
+        where: { bookingId, status: 'UPCOMING' },
       });
 
       return tx.booking.findUniqueOrThrow({ where: { id: bookingId } });

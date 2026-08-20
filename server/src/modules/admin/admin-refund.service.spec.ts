@@ -45,6 +45,7 @@ describe('AdminRefundService invariants', () => {
               providerTransactionId: '12345',
               refundOrderId: null,
               refundRequestId: null,
+              releasedAt: null,
             },
           ],
         }),
@@ -58,6 +59,44 @@ describe('AdminRefundService invariants', () => {
         bookingId: 'booking-1',
         refundPercent: 100,
         reason: 'late refund',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect((momo as unknown as { refund: jest.Mock }).refund).not.toHaveBeenCalled();
+  });
+
+  it('rejects a payment that has already been released from escrow', async () => {
+    const db = {
+      booking: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'booking-1',
+          customerId: 'customer-1',
+          status: BookingStatus.CONFIRMED,
+          totalPrice: 100000,
+          trip: { status: 'UPCOMING' },
+          payments: [
+            {
+              id: 'payment-1',
+              status: PaymentStatus.COMPLETED,
+              paymentMethod: 'MOMO',
+              amount: 100000,
+              transactionId: 'ORDER-1',
+              providerTransactionId: '12345',
+              refundOrderId: null,
+              refundRequestId: null,
+              releasedAt: new Date(),
+            },
+          ],
+        }),
+      },
+    } as unknown as PrismaService;
+    const momo = { refund: jest.fn() } as unknown as MomoGatewayService;
+    const service = new AdminRefundService(db, momo, config);
+
+    await expect(
+      service.refundPayment({
+        bookingId: 'booking-1',
+        refundPercent: 100,
+        reason: 'released payment',
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect((momo as unknown as { refund: jest.Mock }).refund).not.toHaveBeenCalled();
@@ -81,6 +120,7 @@ describe('AdminRefundService invariants', () => {
             providerTransactionId: '12345',
             refundOrderId: null,
             refundRequestId: null,
+            releasedAt: null,
           },
         ],
       }),
@@ -153,6 +193,7 @@ describe('AdminRefundService invariants', () => {
               providerTransactionId: '12345',
               refundOrderId: 'RF-payment-1',
               refundRequestId: 'RFR-payment-1',
+              releasedAt: null,
             },
           ],
         }),
@@ -217,6 +258,7 @@ function createRefundTx() {
       findUnique: jest.fn().mockResolvedValue({
         id: 'payment-1',
         status: PaymentStatus.COMPLETED,
+        releasedAt: null,
       }),
     },
     wallet: {

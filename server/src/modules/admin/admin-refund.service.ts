@@ -67,6 +67,11 @@ export class AdminRefundService {
         message: 'Payment đã được hoàn trước đó',
       };
     }
+    if (payment.releasedAt) {
+      throw new BadRequestException(
+        'Payment đã được giải ngân; cần reversal/adjustment flow riêng',
+      );
+    }
 
     if (
       booking.trip?.status === 'ONGOING' ||
@@ -196,7 +201,14 @@ export class AdminRefundService {
     });
 
     await this.db.payment.updateMany({
-      where: { id: payment.id, status: PaymentStatus.COMPLETED },
+      where: {
+        id: payment.id,
+        status: PaymentStatus.COMPLETED,
+        OR: [
+          { releasedAt: null },
+          { releasedAt: { isSet: false } },
+        ],
+      },
       data: {
         refundResultCode: providerResult.resultCode,
         ...(providerResult.transId
@@ -268,11 +280,20 @@ export class AdminRefundService {
       }
 
       const paymentClaim = await tx.payment.updateMany({
-        where: { id: paymentId, status: PaymentStatus.COMPLETED },
+        where: {
+          id: paymentId,
+          status: PaymentStatus.COMPLETED,
+          OR: [
+            { releasedAt: null },
+            { releasedAt: { isSet: false } },
+          ],
+        },
         data: { refundOrderId, refundRequestId },
       });
       if (paymentClaim.count !== 1) {
-        throw new BadRequestException('Payment vừa được xử lý');
+        throw new BadRequestException(
+          'Payment vừa được xử lý hoặc không còn nằm trong escrow',
+        );
       }
     });
   }
@@ -306,7 +327,14 @@ export class AdminRefundService {
     }
 
     await this.db.payment.updateMany({
-      where: { id: paymentId, status: PaymentStatus.COMPLETED },
+      where: {
+        id: paymentId,
+        status: PaymentStatus.COMPLETED,
+        OR: [
+          { releasedAt: null },
+          { releasedAt: { isSet: false } },
+        ],
+      },
       data: { providerTransactionId: String(transId) },
     });
     return transId;
@@ -325,9 +353,14 @@ export class AdminRefundService {
     await this.db.$transaction(async (tx) => {
       const payment = await tx.payment.findUnique({
         where: { id: paymentId },
-        select: { status: true },
+        select: { status: true, releasedAt: true },
       });
-      if (payment?.status !== PaymentStatus.COMPLETED) return;
+      if (
+        payment?.status !== PaymentStatus.COMPLETED ||
+        payment.releasedAt
+      ) {
+        return;
+      }
       await tx.booking.updateMany({
         where: { id: bookingId, status: BookingStatus.CANCELLED },
         data: { status: BookingStatus.CONFIRMED },
@@ -361,6 +394,11 @@ export class AdminRefundService {
       if (payment.status !== PaymentStatus.COMPLETED) {
         throw new BadRequestException('Payment không còn có thể hoàn tiền');
       }
+      if (payment.releasedAt) {
+        throw new BadRequestException(
+          'Payment đã được giải ngân; không thể debit escrow để refund',
+        );
+      }
 
       if (!input.bookingAlreadyCancelled) {
         const bookingClaim = await tx.booking.updateMany({
@@ -392,7 +430,14 @@ export class AdminRefundService {
       }
 
       const paymentClaim = await tx.payment.updateMany({
-        where: { id: input.paymentId, status: PaymentStatus.COMPLETED },
+        where: {
+          id: input.paymentId,
+          status: PaymentStatus.COMPLETED,
+          OR: [
+            { releasedAt: null },
+            { releasedAt: { isSet: false } },
+          ],
+        },
         data: {
           status: PaymentStatus.REFUNDED,
           refundedAt: new Date(),
@@ -410,7 +455,9 @@ export class AdminRefundService {
         },
       });
       if (paymentClaim.count !== 1) {
-        throw new BadRequestException('Giao dịch đã được xử lý');
+        throw new BadRequestException(
+          'Giao dịch đã được xử lý hoặc không còn nằm trong escrow',
+        );
       }
 
       const platformWallet = await tx.wallet.findUnique({
