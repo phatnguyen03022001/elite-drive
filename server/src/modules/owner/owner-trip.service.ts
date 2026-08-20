@@ -51,6 +51,7 @@ export class OwnerTripService {
           booking: {
             select: {
               status: true,
+              startDate: true,
               contract: { select: { customerSignedAt: true } },
             },
           },
@@ -66,6 +67,11 @@ export class OwnerTripService {
       if (!trip.booking.contract?.customerSignedAt) {
         throw new BadRequestException(
           'Khách hàng phải ký hợp đồng trước khi bàn giao xe',
+        );
+      }
+      if (Date.now() < trip.booking.startDate.getTime()) {
+        throw new BadRequestException(
+          'Chưa đến thời điểm bắt đầu booking; không thể bàn giao xe sớm',
         );
       }
 
