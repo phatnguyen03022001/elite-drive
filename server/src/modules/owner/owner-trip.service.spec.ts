@@ -6,7 +6,8 @@ import { OwnerTripService } from './owner-trip.service';
 describe('OwnerTripService invariants', () => {
   const signedBooking = {
     status: BookingStatus.CONFIRMED,
-    contract: { customerSignedAt: new Date('2026-08-20T00:00:00.000Z') },
+    startDate: new Date('2020-08-20T00:00:00.000Z'),
+    contract: { customerSignedAt: new Date('2020-08-19T00:00:00.000Z') },
   };
 
   it('requires a signed contract before changing an upcoming trip', async () => {
@@ -14,7 +15,31 @@ describe('OwnerTripService invariants', () => {
       trip: {
         findFirst: jest.fn().mockResolvedValue({
           id: 'trip-1', bookingId: 'booking-1', status: 'UPCOMING',
-          booking: { status: BookingStatus.CONFIRMED, contract: null },
+          booking: { status: BookingStatus.CONFIRMED, startDate: new Date('2020-08-20T00:00:00.000Z'), contract: null },
+        }),
+        updateMany: jest.fn(),
+      },
+      booking: { updateMany: jest.fn() },
+    };
+    const db = { $transaction: jest.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)) } as unknown as PrismaService;
+    const service = new OwnerTripService(db);
+
+    await expect(service.checkinTrip('owner-1', 'trip-1', { startOdometer: 1000, startFuelLevel: 90 }))
+      .rejects.toBeInstanceOf(BadRequestException);
+    expect(tx.booking.updateMany).not.toHaveBeenCalled();
+    expect(tx.trip.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('rejects vehicle handover before the booking start time', async () => {
+    const tx = {
+      trip: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'trip-1', bookingId: 'booking-1', status: 'UPCOMING',
+          booking: {
+            status: BookingStatus.CONFIRMED,
+            startDate: new Date('2999-01-01T00:00:00.000Z'),
+            contract: { customerSignedAt: new Date('2020-01-01T00:00:00.000Z') },
+          },
         }),
         updateMany: jest.fn(),
       },
