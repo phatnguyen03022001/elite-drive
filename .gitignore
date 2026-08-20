@@ -8,10 +8,10 @@ dist/
 !**/.env.example
 *.tsbuildinfo
 
-# Runtime database and object-storage state
+# Runtime state
 docker/mongodb/mongo-data/
-docker/garage/data/
-docker/garage/meta/
+server/uploads/
+uploads/
 
 # Logs
 *.log
