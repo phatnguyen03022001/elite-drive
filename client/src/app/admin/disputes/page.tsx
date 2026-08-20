@@ -1,9 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { CheckCircle2, Clock3, Loader2, MessageSquareWarning, PlayCircle, RefreshCw, Search } from "lucide-react";
-import { toast } from "sonner";
-import api from "@/lib/axios";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,65 +10,33 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { useDisputes, useResolveDispute, useStartDisputeProcessing } from "@/features/admin/admin.queries";
+import { notify, notifyError } from "@/lib/notifications";
 
 const dateTime = new Intl.DateTimeFormat("en-US", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
-
-type Dispute = {
-  id: string; bookingId?: string | null; title: string; description?: string | null; attachments?: string[]; status: string; createdAt: string;
-  initiator?: { firstName?: string | null; lastName?: string | null; email?: string };
-  booking?: { id: string; status?: string; totalPrice?: number } | null;
-};
+type Dispute = { id: string; bookingId?: string | null; title: string; description?: string | null; attachments?: string[]; status: "OPEN" | "IN_PROGRESS" | "RESOLVED" | "CLOSED"; createdAt: string; initiator?: { firstName?: string | null; lastName?: string | null; email?: string }; };
+type DisputePage = { items?: Dispute[]; total?: number };
 
 export default function AdminDisputesPage() {
-  const [items, setItems] = useState<Dispute[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [processing, setProcessing] = useState<string | null>(null);
   const [status, setStatus] = useState("ALL");
   const [search, setSearch] = useState("");
   const [resolving, setResolving] = useState<Dispute | null>(null);
   const [resolution, setResolution] = useState("");
+  const query = useDisputes({ page: 1, limit: 100 });
+  const startMutation = useStartDisputeProcessing();
+  const resolveMutation = useResolveDispute();
+  const items = useMemo(() => ((query.data as DisputePage | undefined)?.items ?? []), [query.data]);
+  const visible = useMemo(() => items.filter((item) => { if (status !== "ALL" && item.status !== status) return false; const haystack = `${item.title} ${item.description || ""} ${item.initiator?.email || ""} ${item.bookingId || ""}`.toLowerCase(); return haystack.includes(search.trim().toLowerCase()); }), [items, search, status]);
 
-  const load = async () => {
-    setLoading(true);
-    try {
-      const response: any = await api.get("/api/admin/disputes", { params: { page: 1, limit: 100 } });
-      setItems(Array.isArray(response?.items) ? response.items : []);
-    } catch (error: any) { toast.error(error?.response?.data?.message || error?.message || "Could not load disputes"); }
-    finally { setLoading(false); }
-  };
-  useEffect(() => { void load(); }, []);
+  const start = async (dispute: Dispute) => { try { await startMutation.mutateAsync(dispute.id); notify.success("Dispute moved to in-progress review", { id: `dispute-${dispute.id}` }); } catch (error: unknown) { notifyError("Could not start dispute review", error, "The case state was not changed.", { id: `dispute-${dispute.id}` }); } };
+  const resolve = async () => { if (!resolving || resolution.trim().length < 10) return; try { await resolveMutation.mutateAsync({ disputeId: resolving.id, dto: { resolution: resolution.trim(), status: "RESOLVED" } }); notify.success("Dispute resolved", { id: `dispute-${resolving.id}` }); setResolving(null); setResolution(""); } catch (error: unknown) { notifyError("Could not resolve dispute", error, "The case remains unresolved.", { id: `dispute-${resolving.id}` }); } };
+  const processing = startMutation.isPending || resolveMutation.isPending;
 
-  const visible = useMemo(() => items.filter((item) => {
-    if (status !== "ALL" && item.status !== status) return false;
-    const haystack = `${item.title} ${item.description || ""} ${item.initiator?.email || ""} ${item.bookingId || ""}`.toLowerCase();
-    return haystack.includes(search.toLowerCase());
-  }), [items, search, status]);
-
-  const start = async (dispute: Dispute) => {
-    setProcessing(dispute.id);
-    try { await api.patch(`/api/admin/disputes/${dispute.id}/process`); toast.success("Dispute moved to in-progress review"); await load(); }
-    catch (error: any) { toast.error(error?.response?.data?.message || error?.message || "Could not start dispute review"); }
-    finally { setProcessing(null); }
-  };
-  const resolve = async () => {
-    if (!resolving || resolution.trim().length < 10) return;
-    setProcessing(resolving.id);
-    try { await api.post(`/api/admin/disputes/${resolving.id}/resolve`, { resolution: resolution.trim(), status: "RESOLVED" }); toast.success("Dispute resolved"); setResolving(null); setResolution(""); await load(); }
-    catch (error: any) { toast.error(error?.response?.data?.message || error?.message || "Could not resolve dispute"); }
-    finally { setProcessing(null); }
-  };
-
-  return (
-    <div className="mx-auto w-full max-w-7xl space-y-7 py-2">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Operations</p><h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">Disputes</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">Triage marketplace disputes, move them into active review, and persist an operations resolution.</p></div><Button variant="outline" onClick={load} disabled={loading}><RefreshCw className={loading ? "animate-spin" : ""} />Refresh</Button></div>
-      <div className="grid gap-4 sm:grid-cols-3"><Metric label="Open" value={items.filter((item) => item.status === "OPEN").length} /><Metric label="In progress" value={items.filter((item) => item.status === "IN_PROGRESS").length} /><Metric label="Resolved / closed" value={items.filter((item) => ["RESOLVED", "CLOSED"].includes(item.status)).length} /></div>
-      <Card><CardHeader className="gap-4"><div><CardTitle className="text-lg">Case queue</CardTitle><CardDescription>Case descriptions and booking references come directly from persisted dispute records.</CardDescription></div><div className="flex flex-col gap-3 sm:flex-row"><Select value={status} onValueChange={setStatus}><SelectTrigger className="w-full sm:w-44"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="ALL">All statuses</SelectItem><SelectItem value="OPEN">Open</SelectItem><SelectItem value="IN_PROGRESS">In progress</SelectItem><SelectItem value="RESOLVED">Resolved</SelectItem><SelectItem value="CLOSED">Closed</SelectItem></SelectContent></Select><div className="relative flex-1"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input className="pl-9" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search cases..." /></div></div></CardHeader><CardContent>
-        {loading ? <div className="space-y-3">{Array.from({ length: 4 }).map((_, index) => <Skeleton key={index} className="h-32 rounded-xl" />)}</div> : visible.length === 0 ? <div className="py-16 text-center text-sm text-muted-foreground">No disputes match this view.</div> : <div className="grid gap-4">{visible.map((item) => <div key={item.id} className="rounded-xl border p-5"><div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><Status status={item.status} /><span className="font-mono text-xs text-muted-foreground">#{item.id.slice(-8).toUpperCase()}</span>{item.bookingId ? <span className="font-mono text-xs text-muted-foreground">Booking #{item.bookingId.slice(-8).toUpperCase()}</span> : null}</div><h2 className="mt-3 text-lg font-semibold">{item.title}</h2><p className="mt-2 max-w-3xl whitespace-pre-wrap text-sm leading-6 text-muted-foreground">{item.description || "No description supplied."}</p><div className="mt-4 flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground"><span>Opened by {[item.initiator?.firstName, item.initiator?.lastName].filter(Boolean).join(" ") || item.initiator?.email || "User"}</span><span>{dateTime.format(new Date(item.createdAt))}</span><span>{item.attachments?.length || 0} attachment(s)</span></div></div><div className="flex shrink-0 gap-2">{item.status === "OPEN" ? <Button variant="outline" onClick={() => start(item)} disabled={Boolean(processing)}>{processing === item.id ? <Loader2 className="animate-spin" /> : <PlayCircle />}Start review</Button> : null}{["OPEN", "IN_PROGRESS"].includes(item.status) ? <Button onClick={() => { setResolving(item); setResolution(""); }}><CheckCircle2 />Resolve</Button> : null}</div></div></div>)}</div>}
-      </CardContent></Card>
-      <Dialog open={Boolean(resolving)} onOpenChange={(open) => !open && setResolving(null)}><DialogContent><DialogHeader><DialogTitle>Resolve dispute</DialogTitle><DialogDescription>Write a clear operations resolution. It will be appended to the persisted case record.</DialogDescription></DialogHeader><Textarea className="min-h-36" value={resolution} onChange={(event) => setResolution(event.target.value)} placeholder="Summary of evidence reviewed, decision, and any follow-up action..." /><DialogFooter><Button variant="ghost" onClick={() => setResolving(null)}>Cancel</Button><Button onClick={resolve} disabled={resolution.trim().length < 10 || Boolean(processing)}>{processing === resolving?.id ? <Loader2 className="animate-spin" /> : <CheckCircle2 />}Resolve case</Button></DialogFooter></DialogContent></Dialog>
-    </div>
-  );
+  return <div className="mx-auto w-full max-w-7xl space-y-7 py-2"><div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Operations</p><h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">Disputes</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">Triage marketplace disputes, move them into active review, and persist an operations resolution.</p></div><Button variant="outline" onClick={() => query.refetch()} disabled={query.isFetching}><RefreshCw className={query.isFetching ? "animate-spin" : ""} />Refresh</Button></div>
+    <div className="grid gap-4 sm:grid-cols-3"><Metric label="Open" value={items.filter((item) => item.status === "OPEN").length} /><Metric label="In progress" value={items.filter((item) => item.status === "IN_PROGRESS").length} /><Metric label="Resolved / closed" value={items.filter((item) => ["RESOLVED", "CLOSED"].includes(item.status)).length} /></div>
+    <Card><CardHeader className="gap-4"><div><CardTitle className="text-lg">Case queue</CardTitle><CardDescription>State changes use the shared admin service boundary and invalidate the complete dispute queue.</CardDescription></div><div className="flex flex-col gap-3 sm:flex-row"><Select value={status} onValueChange={setStatus}><SelectTrigger className="w-full sm:w-44"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="ALL">All statuses</SelectItem><SelectItem value="OPEN">Open</SelectItem><SelectItem value="IN_PROGRESS">In progress</SelectItem><SelectItem value="RESOLVED">Resolved</SelectItem><SelectItem value="CLOSED">Closed</SelectItem></SelectContent></Select><div className="relative flex-1"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input className="pl-9" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search cases..." /></div></div></CardHeader><CardContent>{query.isLoading ? <div className="space-y-3">{Array.from({ length: 4 }).map((_, index) => <Skeleton key={index} className="h-32 rounded-xl" />)}</div> : query.isError ? <div className="py-12 text-center"><p className="text-sm text-muted-foreground">The dispute queue could not be loaded.</p><Button className="mt-4" onClick={() => query.refetch()}>Try again</Button></div> : visible.length === 0 ? <div className="py-16 text-center text-sm text-muted-foreground">No disputes match this view.</div> : <div className="grid gap-4">{visible.map((item) => <div key={item.id} className="rounded-xl border p-5"><div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><Status status={item.status} /><span className="font-mono text-xs text-muted-foreground">#{item.id.slice(-8).toUpperCase()}</span>{item.bookingId ? <span className="font-mono text-xs text-muted-foreground">Booking #{item.bookingId.slice(-8).toUpperCase()}</span> : null}</div><h2 className="mt-3 text-lg font-semibold">{item.title}</h2><p className="mt-2 max-w-3xl whitespace-pre-wrap text-sm leading-6 text-muted-foreground">{item.description || "No description supplied."}</p><div className="mt-4 flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground"><span>Opened by {[item.initiator?.firstName, item.initiator?.lastName].filter(Boolean).join(" ") || item.initiator?.email || "User"}</span><span>{dateTime.format(new Date(item.createdAt))}</span><span>{item.attachments?.length || 0} attachment(s)</span></div></div><div className="flex shrink-0 gap-2">{item.status === "OPEN" ? <Button variant="outline" onClick={() => void start(item)} disabled={processing}>{startMutation.isPending ? <Loader2 className="animate-spin" /> : <PlayCircle />}Start review</Button> : null}{["OPEN", "IN_PROGRESS"].includes(item.status) ? <Button onClick={() => { setResolving(item); setResolution(""); }} disabled={processing}><CheckCircle2 />Resolve</Button> : null}</div></div></div>)}</div>}</CardContent></Card>
+    <Dialog open={Boolean(resolving)} onOpenChange={(open) => !open && setResolving(null)}><DialogContent><DialogHeader><DialogTitle>Resolve dispute</DialogTitle><DialogDescription>Write a clear operations resolution. It will be persisted on the case.</DialogDescription></DialogHeader><Textarea className="min-h-36" value={resolution} onChange={(event) => setResolution(event.target.value)} placeholder="Summary of evidence reviewed, decision, and any follow-up action..." maxLength={4000} /><DialogFooter><Button variant="ghost" onClick={() => setResolving(null)}>Cancel</Button><Button onClick={() => void resolve()} disabled={resolution.trim().length < 10 || processing}>{resolveMutation.isPending ? <Loader2 className="animate-spin" /> : <CheckCircle2 />}Resolve case</Button></DialogFooter></DialogContent></Dialog>
+  </div>;
 }
-
 function Metric({ label, value }: { label: string; value: number }) { return <Card><CardHeader className="flex-row items-center justify-between space-y-0"><CardDescription>{label}</CardDescription><MessageSquareWarning className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{value}</div></CardContent></Card>; }
 function Status({ status }: { status: string }) { if (status === "RESOLVED" || status === "CLOSED") return <Badge variant="outline"><CheckCircle2 />{status === "RESOLVED" ? "Resolved" : "Closed"}</Badge>; if (status === "IN_PROGRESS") return <Badge variant="secondary"><Clock3 />In progress</Badge>; return <Badge variant="destructive"><MessageSquareWarning />Open</Badge>; }

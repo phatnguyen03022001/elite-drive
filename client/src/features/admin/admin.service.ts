@@ -21,7 +21,25 @@ import {
 
 const BASE_URL = "/api/admin";
 
+export type AdminPaymentQuery = {
+  page?: number;
+  limit?: number;
+  status?: "PENDING" | "COMPLETED" | "FAILED" | "REFUNDED";
+  from?: string;
+  to?: string;
+};
+
 export const AdminService = {
+  getProfile: async () => {
+    const response = await axios.get(`${BASE_URL}/profile`);
+    return response.data;
+  },
+
+  updateProfile: async (dto: FormData | Record<string, unknown>) => {
+    const response = await axios.put(`${BASE_URL}/profile`, dto);
+    return response.data;
+  },
+
   getOverviewReport: async () => {
     const response = await axios.get(`${BASE_URL}/reports/overview`);
     return response.data;
@@ -34,6 +52,23 @@ export const AdminService = {
 
   getRevenueReport: async (params: ReportDateRangeInput) => {
     const response = await axios.get(`${BASE_URL}/reports/revenue`, { params });
+    return response.data;
+  },
+
+  getPayments: async (params: AdminPaymentQuery = {}) => {
+    const response = await axios.get(`${BASE_URL}/payments`, { params });
+    return response.data;
+  },
+
+  getOperationalHealth: async () => {
+    const response = await axios.get(`${BASE_URL}/operations/health`);
+    return response.data;
+  },
+
+  reconcileMomoPayments: async (limit = 100) => {
+    const response = await axios.post(`${BASE_URL}/payments/momo/reconcile`, undefined, {
+      params: { limit },
+    });
     return response.data;
   },
 
@@ -119,6 +154,11 @@ export const AdminService = {
 
   getDisputes: async (params: DisputeQueryInput) => {
     const response = await axios.get(`${BASE_URL}/disputes`, { params });
+    return response.data;
+  },
+
+  startDisputeProcessing: async (disputeId: string) => {
+    const response = await axios.patch(`${BASE_URL}/disputes/${disputeId}/process`);
     return response.data;
   },
 
