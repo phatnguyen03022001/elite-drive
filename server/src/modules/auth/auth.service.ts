@@ -59,9 +59,6 @@ export class AuthService {
     try {
       await this.createOtp(dto.email, type);
     } catch (error) {
-      // Do not turn resend cooldown into an account-existence oracle for login
-      // or forgot-password flows. The request is still rate-limited; only the
-      // externally visible response remains generic.
       if (
         type !== 'REGISTER' &&
         error instanceof HttpException &&
@@ -277,8 +274,6 @@ export class AuthService {
         }
       }
 
-      // Only the request that successfully claimed/created the OTP record sends
-      // the code, so concurrent resend requests cannot emit multiple valid codes.
       await this.mailService.sendOtp(email, code, type);
       return;
     }
@@ -302,6 +297,7 @@ export class AuthService {
       const claim = await this.prisma.oTP.updateMany({
         where: {
           id: otp.id,
+          code: otp.code,
           expiresAt: { gt: now },
           attempts: { lt: AuthService.OTP_MAX_ATTEMPTS },
         },
@@ -435,6 +431,17 @@ export class AuthService {
         },
       });
       if (reset.count === 1) return;
+
+      // Legacy guards used random ObjectIds. Remove only expired rows before
+      // creating the deterministic fallback, otherwise the old @@unique
+      // (email, code) index can reject the new guard indefinitely.
+      await this.prisma.oTP.deleteMany({
+        where: {
+          email,
+          type: AuthService.LOGIN_GUARD_TYPE,
+          expiresAt: { lte: now },
+        },
+      });
 
       try {
         await this.prisma.oTP.create({
