@@ -17,7 +17,7 @@ import { imageUploadOptions } from '../../common/upload/image-upload-options';
 import { UploadService } from './upload.service';
 
 @ApiTags('Upload')
-@Controller('upload')
+@Controller('api/upload')
 @UseGuards(JwtAuthGuard)
 export class UploadController {
   constructor(private readonly uploadService: UploadService) {}
