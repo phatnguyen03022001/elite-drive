@@ -2,33 +2,32 @@
 
 ## System context
 
-Elite Drive is a role-based car-rental marketplace with a Next.js web application and a NestJS API. The product separates renter, vehicle-owner, and administrator workflows while sharing one backend domain model.
+Elite Drive is a role-based car-rental marketplace with a Next.js frontend and a NestJS API.
+
+The default architecture is local-first: build, test, and development do not require a paid SaaS account.
 
 ```mermaid
 flowchart TB
-    U1[Renter]
-    U2[Vehicle owner]
-    U3[Administrator]
+    R[Renter]
+    O[Vehicle owner]
+    A[Administrator]
 
-    U1 --> WEB[Next.js web application]
-    U2 --> WEB
-    U3 --> WEB
+    R --> WEB[Next.js]
+    O --> WEB
+    A --> WEB
 
-    WEB -->|relative /api requests| PROXY[Next.js rewrite layer]
-    PROXY --> API[NestJS API]
-
+    WEB -->|relative /api requests| API[NestJS API]
     API --> AUTH[JWT authentication + role guards]
     API --> VALIDATION[DTO validation]
-    API --> PRISMA[Prisma client]
+    API --> PRISMA[Prisma]
     PRISMA --> DB[(MongoDB)]
-
-    API --> STORAGE[S3-compatible object storage]
-    API --> EMAIL[Transactional email provider]
+    API --> FILES[Local filesystem uploads]
+    API --> MAIL[Local OTP log]
 ```
 
 ## Frontend
 
-The frontend uses the Next.js App Router. Public routes provide marketplace discovery and authentication entry points; authenticated workspaces are separated by role.
+The frontend uses the Next.js App Router. Browser requests use relative `/api/*` paths. `client/next.config.ts` proxies them to `${BACKEND_URL}/api/*`.
 
 Primary route groups:
 
@@ -41,116 +40,128 @@ Primary route groups:
 /admin/*                platform operations
 ```
 
-Feature logic is organized under `client/src/features`, with TanStack Query used for server-state management and Axios for HTTP requests.
-
-### API proxy
-
-Browser code uses relative `/api/*` requests. `client/next.config.ts` rewrites those requests to:
-
-```text
-${BACKEND_URL}/api/*
-```
-
-This keeps the backend destination in server-side deployment configuration rather than requiring the application to expose an absolute backend origin to browser code.
+Server state is managed through TanStack Query. Forms use React Hook Form and Zod where appropriate.
 
 ## Backend
 
-The NestJS application exposes public and role-protected REST modules.
-
-Key domain modules include:
+The NestJS API is organized around domain modules:
 
 - authentication;
-- public marketplace discovery;
+- public marketplace;
 - customer/renter operations;
-- owner operations;
+- vehicle-owner operations;
 - administration;
-- file uploads;
-- transactional email.
+- payments;
+- uploads;
+- local OTP delivery.
 
-Global `ValidationPipe` configuration enables transformation and property whitelisting at the API boundary.
+`ValidationPipe` provides transformation and property whitelisting at the API boundary.
 
-### Authorization model
+### Authorization
 
-Private operations are protected with JWT authentication and role-aware guards. The application treats renter, owner, and administrator privileges as separate authorization boundaries rather than relying on UI visibility alone.
+Authorization is enforced by backend guards and ownership checks. UI visibility is not treated as a security boundary.
 
-## Persistence
+### Persistence
 
-Prisma is the primary persistence access layer and targets MongoDB.
+Prisma targets MongoDB. Core persistence areas include users, KYC, cars, availability, bookings, reviews, promotions, payments, wallets, settlements, withdrawals, and disputes.
 
-Important domain groups include:
+## Upload storage
 
-- users and role-specific profile data;
-- KYC submissions;
-- cars, categories, locations, and availability;
-- bookings and trips;
-- reviews and promotions;
-- payments, wallets, owner transactions, settlements, and withdrawals;
-- disputes.
+Uploads use the backend local filesystem adapter.
 
-## Product workflows
+Configuration:
 
-### Vehicle discovery
+```text
+UPLOAD_DIR=uploads
+UPLOAD_PUBLIC_BASE_URL=/api/upload/files
+```
 
-Public inventory is filtered to approved and verified vehicles. The public API also exposes vehicle detail, availability, reviews, review summary, and active promotions.
+The upload service:
 
-### Booking lifecycle
+- limits accepted image size;
+- allowlists JPEG, PNG, and WebP;
+- validates file signatures against MIME types;
+- generates random filenames;
+- normalizes public file paths before filesystem access.
 
-A renter selects a car and dates, creates an authenticated booking, and follows booking/trip status through the customer workspace. Vehicle owners review incoming booking requests and handle trip pickup/return operations.
+No Cloudinary, S3, Garage, or MinIO service is required by the runtime.
 
-### Identity verification
+## OTP delivery
 
-Renters and owners submit KYC data and document images. Administrators review KYC submissions and approve or reject them. Uploaded files are stored through the backend upload abstraction.
+OTP delivery is implemented as a local application-log transport. This keeps authentication flows testable without an external transactional-email account.
 
-### Vehicle review
+A future external mail adapter must remain optional and must not become a prerequisite for build, tests, or local development.
 
-Owners create and maintain fleet records. New vehicles enter a review state; administrators approve or reject them before they become publicly discoverable.
+## Payments
 
-### Marketplace finance
+The repository contains payment-domain state transitions and an optional provider adapter. External provider execution is disabled by default.
 
-The product includes payment records, a platform wallet/escrow model, owner wallet activity, settlements, refunds, and withdrawal review operations.
+```text
+MOCK_PAYMENTS_ENABLED=false
+MOMO_ENABLED=false
+```
 
-The current payment adapter is intentionally a sandbox implementation. It is sufficient for exercising state transitions but is not a production payment processor.
-
-### Disputes
-
-Renters can create support/dispute records. Administrators can move disputes into processing and resolve or close them with a recorded resolution.
+Local development can exercise sandbox behavior only when it is explicitly enabled outside production.
 
 ## Security boundaries
 
-### Browser to Next.js
+### Browser to frontend
 
-Frontend responses include anti-sniffing, framing, referrer, and permissions-policy headers.
+Frontend responses include content-type, framing, referrer, permissions-policy, and CSP headers.
 
-### Next.js to API
+### Frontend to API
 
-The API destination is configured by `BACKEND_URL`. CORS is restricted to explicit origins; Vercel preview origins are available only when explicitly enabled by environment configuration.
+`BACKEND_URL` controls the API destination. CORS remains restricted by backend origin configuration.
 
 ### API authorization
 
-Authorization decisions belong in backend guards and service ownership checks. Client-side routing or hidden controls are not security controls.
+JWT authentication and role-aware guards protect private operations. Cookie-authenticated state-changing requests additionally validate trusted origins.
 
 ### Secrets
 
-JWT, database, email, and object-storage credentials belong in runtime environment configuration. Local Docker configuration must reference environment variables rather than embed reusable credentials.
+Database credentials and authentication secrets belong in runtime environment configuration. Real credentials must never be committed.
 
-## Deployment model
+## CI
 
-```mermaid
-flowchart LR
-    MAIN[GitHub main] --> CI[GitHub Actions]
-    MAIN --> VERCEL[Vercel production build]
-    CI --> CHECKS[lint + typecheck + frontend build + backend build]
-    VERCEL --> PROD[elite-drive-iota.vercel.app]
+GitHub Actions validates `main` using standard `ubuntu-latest` runners.
+
+Frontend gate:
+
+```text
+npm ci
+lint
+typecheck
+build
 ```
 
-Each release should map a Git commit to both CI status and the Vercel deployment created from the same SHA.
+Backend gate:
 
-## Known production boundaries
+```text
+npm install
+prisma generate
+typecheck
+tests
+production dependency audit report
+build
+```
 
-The following areas are intentionally treated as next-stage production integrations rather than represented as already solved:
+Documentation-only changes are excluded from CI runs.
 
-- real payment-provider integration and signed webhooks;
-- broader automated end-to-end coverage;
-- centralized production observability and alerting;
-- historical Git secret removal after credential rotation;
-- tighter image-host allowlisting after storage domains are finalized.
+## Deployment independence
+
+The repository does not require a specific hosting provider. A deployment target only needs to provide:
+
+- Node.js runtime for the frontend/backend as applicable;
+- MongoDB connectivity;
+- writable storage if backend file uploads are enabled;
+- required environment variables.
+
+Hosting-provider configuration is operational metadata, not part of the application architecture.
+
+## Engineering constraints
+
+1. Local development must not require a paid external service.
+2. CI must not invoke payment, email, or storage SaaS APIs.
+3. External integrations must be explicitly enabled.
+4. Documentation must match executable configuration.
+5. Security controls remain enforced server-side.
