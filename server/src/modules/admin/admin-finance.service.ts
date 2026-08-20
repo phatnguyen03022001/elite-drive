@@ -199,9 +199,6 @@ export class AdminFinanceService {
   async getPendingReleaseTrips(query: PaginationDto) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
-    const unreleased: Prisma.DateTimeNullableFilter = {
-      OR: undefined,
-    } as never;
     const where: Prisma.TripWhereInput = {
       status: 'COMPLETED',
       booking: {
@@ -217,7 +214,6 @@ export class AdminFinanceService {
         },
       },
     };
-    void unreleased;
     const [items, total] = await Promise.all([
       this.db.trip.findMany({
         where,
