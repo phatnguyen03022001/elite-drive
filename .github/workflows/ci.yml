@@ -3,8 +3,16 @@ name: CI
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - 'Image-Data/**'
   pull_request:
     branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - 'Image-Data/**'
 
 permissions:
   contents: read
@@ -43,11 +51,11 @@ jobs:
       - name: Build
         run: npm run build
         env:
-          BACKEND_URL: https://elitedrive-demoversion.onrender.com
-          NEXT_PUBLIC_APP_URL: https://elite-drive-iota.vercel.app
+          BACKEND_URL: http://localhost:8000
+          NEXT_PUBLIC_APP_URL: http://localhost:3000
 
   backend:
-    name: Backend build
+    name: Backend quality
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -71,8 +79,10 @@ jobs:
         env:
           DATABASE_URL: mongodb://localhost:27017/elitedrive
 
-      - name: Build
+      - name: Build and test
         run: npm run build
         env:
           DATABASE_URL: mongodb://localhost:27017/elitedrive
-          JWT_SECRET: ci-only-secret
+          JWT_SECRET: ci-only-secret-ci-only-secret-ci-only-secret
+          OTP_HASH_SECRET: ci-only-otp-hash-secret-ci-only-otp-hash-secret
+          MAIL_TRANSPORT: console
