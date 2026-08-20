@@ -24,11 +24,12 @@ describe('AuthService abuse protection', () => {
   it('atomically locks an active OTP after five failed verification attempts', async () => {
     let attempts = 4;
     const expiresAt = new Date(Date.now() + 60_000);
+    const storedCode = 'a'.repeat(64);
     const prisma = {
       oTP: {
         findFirst: jest.fn(async () => ({
           id: 'otp-1',
-          code: 'a'.repeat(64),
+          code: storedCode,
           attempts,
         })),
         updateMany: jest.fn(async () => {
@@ -54,6 +55,7 @@ describe('AuthService abuse protection', () => {
     expect((prisma.oTP.updateMany as jest.Mock)).toHaveBeenCalledWith({
       where: {
         id: 'otp-1',
+        code: storedCode,
         expiresAt: { gt: expect.any(Date) },
         attempts: { lt: 5 },
       },
@@ -94,6 +96,37 @@ describe('AuthService abuse protection', () => {
 
     expect(results.every((result) => result.status === 'rejected')).toBe(true);
     expect(attempts).toBe(5);
+  });
+
+  it('does not charge a wrong attempt from an old OTP against a rotated OTP', async () => {
+    const oldDigest = 'c'.repeat(64);
+    const expiresAt = new Date(Date.now() + 60_000);
+    const prisma = {
+      oTP: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'otp-rotated',
+          code: oldDigest,
+          attempts: 0,
+        }),
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        findUnique: jest.fn().mockResolvedValue({ attempts: 0, expiresAt }),
+      },
+    } as unknown as PrismaService;
+    const service = new AuthService(
+      prisma,
+      {} as JwtService,
+      config,
+      {} as MailService,
+    );
+
+    await expect(
+      service.verifyForgotOtp({ email: 'user@example.com', code: '999999' }),
+    ).rejects.toThrow('OTP không hợp lệ hoặc đã hết hạn');
+    expect(prisma.oTP.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ code: oldDigest }),
+      }),
+    );
   });
 
   it('binds OTP consumption to the exact digest that was validated', async () => {
@@ -262,6 +295,40 @@ describe('AuthService abuse protection', () => {
     expect(attempts).toBe(5);
   });
 
+  it('cleans expired legacy login guards before deterministic first-guard creation', async () => {
+    let attempts = 0;
+    const prisma = {
+      user: { findUnique: jest.fn().mockResolvedValue(null) },
+      oTP: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
+        create: jest.fn(async () => {
+          attempts = 1;
+          return { id: 'new-guard' };
+        }),
+      },
+    } as unknown as PrismaService;
+    const service = new AuthService(
+      prisma,
+      {} as JwtService,
+      config,
+      {} as MailService,
+    );
+
+    await expect(
+      service.login({ email: 'legacy@example.com', password: 'wrong-password' }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(prisma.oTP.deleteMany).toHaveBeenCalledWith({
+      where: {
+        email: 'legacy@example.com',
+        type: 'LOGIN_PASSWORD_GUARD',
+        expiresAt: { lte: expect.any(Date) },
+      },
+    });
+    expect(attempts).toBe(1);
+  });
+
   it('locks password login after five failed attempts using the shared database counter', async () => {
     let attempts = 0;
     const expiresAt = new Date(Date.now() + 60_000);
@@ -279,6 +346,7 @@ describe('AuthService abuse protection', () => {
           if (data.attempts?.increment) attempts += 1;
           return { count: 1 };
         }),
+        deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
         create: jest.fn(async () => {
           attempts = 1;
           return { id: 'login-guard', attempts };
