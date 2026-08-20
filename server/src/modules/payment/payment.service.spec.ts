@@ -102,4 +102,42 @@ describe('PaymentService MoMo invariants', () => {
       (db as unknown as { $transaction: jest.Mock }).$transaction,
     ).not.toHaveBeenCalled();
   });
+
+  it('reports the latest local terminal status when provider success races with a local transition', async () => {
+    const findUnique = jest
+      .fn()
+      .mockResolvedValueOnce({
+        id: 'payment-1',
+        userId: 'customer-1',
+        transactionId: 'PAY-ORDER-1',
+        amount: 150000,
+        status: PaymentStatus.PENDING,
+      })
+      .mockResolvedValueOnce({
+        status: PaymentStatus.FAILED,
+        providerTransactionId: null,
+      });
+    const db = {
+      payment: { findUnique, updateMany: jest.fn() },
+      $transaction: jest.fn(),
+    } as unknown as PrismaService;
+    const momo = {
+      queryStatus: jest.fn().mockResolvedValue({
+        partnerCode: 'MOMO_TEST',
+        orderId: 'PAY-ORDER-1',
+        requestId: 'QUERY-payment-1',
+        amount: 150000,
+        resultCode: 0,
+        message: 'Successful.',
+        transId: 4088878653,
+        responseTime: Date.now(),
+      }),
+    } as unknown as MomoGatewayService;
+    const service = new PaymentService(db, momo, config);
+
+    const result = await service.queryMomoStatus('customer-1', 'payment-1');
+
+    expect(result.localStatus).toBe(PaymentStatus.FAILED);
+    expect((db as unknown as { $transaction: jest.Mock }).$transaction).not.toHaveBeenCalled();
+  });
 });
