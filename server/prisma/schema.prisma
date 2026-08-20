@@ -1,5 +1,3 @@
-// prisma/schema.prisma - OPTIMIZED & SIMPLIFIED
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -8,8 +6,6 @@ datasource db {
   provider = "mongodb"
   url      = env("DATABASE_URL")
 }
-
-// ==================== ENUMS ====================
 
 enum UserRole {
   GUEST
@@ -73,8 +69,6 @@ enum VerificationStatus {
   APPROVED
   REJECTED
 }
-
-// ==================== USERS & AUTHENTICATION ====================
 
 model User {
   id         String   @id @default(auto()) @map("_id") @db.ObjectId
@@ -144,20 +138,21 @@ model KYC {
 }
 
 model Car {
-  id           String   @id @default(auto()) @map("_id") @db.ObjectId
-  ownerId      String   @db.ObjectId
-  name         String
-  brand        String
-  model        String
-  year         Int
-  licensePlate String   @unique
-  color        String?
-  transmission String?
-  fuelType     String?
-  seatCount    Int
-  description  String?
-  mainImageUrl String?
-  imageUrls    String[]
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  ownerId         String   @db.ObjectId
+  name            String
+  brand           String
+  model           String
+  year            Int
+  licensePlate    String   @unique
+  color           String?
+  transmission    String?
+  fuelType        String?
+  seatCount       Int
+  description     String?
+  rejectionReason String?
+  mainImageUrl    String?
+  imageUrls       String[]
 
   pricePerDay        Float
   pricePerHour       Float?
@@ -257,6 +252,7 @@ model Booking {
   pickupLocation  String
   dropoffLocation String
   notes           String?
+  decisionReason  String?
   totalPrice      Float
   status          BookingStatus @default(PENDING)
   promotionId     String?       @db.ObjectId
@@ -280,23 +276,23 @@ model Booking {
 }
 
 model Payment {
-  id                        String        @id @default(auto()) @map("_id") @db.ObjectId
-  userId                    String        @db.ObjectId
-  bookingId                 String?       @db.ObjectId
-  amount                    Float
-  paymentMethod             String
-  status                    PaymentStatus @default(PENDING)
-  transactionId             String?       @unique
-  providerTransactionId     String?
-  refundOrderId             String?       @unique
-  refundRequestId           String?
+  id                          String        @id @default(auto()) @map("_id") @db.ObjectId
+  userId                      String        @db.ObjectId
+  bookingId                   String?       @db.ObjectId
+  amount                      Float
+  paymentMethod               String
+  status                      PaymentStatus @default(PENDING)
+  transactionId               String?       @unique
+  providerTransactionId       String?
+  refundOrderId               String?       @unique
+  refundRequestId             String?
   refundProviderTransactionId String?
-  refundResultCode          Int?
-  paidAt                    DateTime?
-  refundedAt                DateTime?
-  failureReason             String?
-  createdAt                 DateTime      @default(now())
-  updatedAt                 DateTime      @updatedAt
+  refundResultCode            Int?
+  paidAt                      DateTime?
+  refundedAt                  DateTime?
+  failureReason               String?
+  createdAt                   DateTime      @default(now())
+  updatedAt                   DateTime      @updatedAt
 
   user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   booking Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)

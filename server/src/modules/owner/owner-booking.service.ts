@@ -8,17 +8,13 @@ import { OwnerBookingQueryDto, RejectBookingDto } from './dto/owner.dto';
 export class OwnerBookingService {
   constructor(private readonly db: PrismaService) {}
 
-  async getBookings(
-    ownerId: string,
-    query: PaginationDto & OwnerBookingQueryDto,
-  ) {
+  async getBookings(ownerId: string, query: PaginationDto & OwnerBookingQueryDto) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 10;
     const where: Prisma.BookingWhereInput = {
       car: { ownerId },
       ...(query.status ? { status: query.status } : {}),
     };
-
     const [data, total] = await Promise.all([
       this.db.booking.findMany({
         where,
@@ -27,14 +23,12 @@ export class OwnerBookingService {
         orderBy: { createdAt: 'desc' },
         include: {
           car: { select: { name: true, licensePlate: true } },
-          customer: {
-            select: { id: true, firstName: true, lastName: true, phone: true },
-          },
+          customer: { select: { id: true, firstName: true, lastName: true, phone: true } },
+          payments: { select: { id: true, status: true, amount: true } },
         },
       }),
       this.db.booking.count({ where }),
     ]);
-
     return { data, total, page, limit };
   }
 
@@ -42,58 +36,41 @@ export class OwnerBookingService {
     return this.claimDecision(ownerId, bookingId, BookingStatus.APPROVED);
   }
 
-  async rejectBooking(
-    ownerId: string,
-    bookingId: string,
-    dto: RejectBookingDto,
-  ) {
-    const booking = await this.claimDecision(
-      ownerId,
-      bookingId,
-      BookingStatus.REJECTED,
-    );
-    return { ...booking, decisionReason: dto.reason?.trim() || null };
+  rejectBooking(ownerId: string, bookingId: string, dto: RejectBookingDto) {
+    const reason = dto.reason?.trim() || 'Vehicle unavailable for the requested dates';
+    return this.claimDecision(ownerId, bookingId, BookingStatus.REJECTED, reason);
   }
 
   private async claimDecision(
     ownerId: string,
     bookingId: string,
     targetStatus: 'APPROVED' | 'REJECTED',
+    decisionReason?: string,
   ) {
     const booking = await this.db.booking.findFirst({
       where: { id: bookingId, car: { ownerId } },
       select: { id: true, status: true },
     });
-    if (!booking) {
-      throw new NotFoundException('Booking không tồn tại hoặc bạn không có quyền');
-    }
+    if (!booking) throw new NotFoundException('Booking không tồn tại hoặc bạn không có quyền');
     if (booking.status !== BookingStatus.PENDING) {
-      throw new BadRequestException(
-        `Không thể xử lý đơn đang ở trạng thái ${booking.status}`,
-      );
+      throw new BadRequestException(`Không thể xử lý đơn đang ở trạng thái ${booking.status}`);
     }
 
     const claim = await this.db.booking.updateMany({
-      where: {
-        id: bookingId,
-        status: BookingStatus.PENDING,
-        car: { ownerId },
+      where: { id: bookingId, status: BookingStatus.PENDING, car: { ownerId } },
+      data: {
+        status: targetStatus,
+        ...(targetStatus === BookingStatus.REJECTED ? { decisionReason } : {}),
       },
-      data: { status: targetStatus },
     });
-    if (claim.count !== 1) {
-      throw new BadRequestException(
-        'Booking đã được xử lý bởi một yêu cầu khác',
-      );
-    }
+    if (claim.count !== 1) throw new BadRequestException('Booking đã được xử lý bởi một yêu cầu khác');
 
     return this.db.booking.findUniqueOrThrow({
       where: { id: bookingId },
       include: {
         car: { select: { name: true, licensePlate: true } },
-        customer: {
-          select: { id: true, firstName: true, lastName: true, phone: true },
-        },
+        customer: { select: { id: true, firstName: true, lastName: true, phone: true } },
+        payments: { select: { id: true, status: true, amount: true } },
       },
     });
   }
