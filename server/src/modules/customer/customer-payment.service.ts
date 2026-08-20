@@ -204,7 +204,10 @@ export class CustomerPaymentService {
           id: paymentId,
           status: PaymentStatus.PENDING,
           paymentMethod: 'MOCK_QR',
-          bookingId: null,
+          OR: [
+            { bookingId: null },
+            { bookingId: { isSet: false } },
+          ],
         },
         data: { status: PaymentStatus.COMPLETED, paidAt: new Date() },
       });
