@@ -1,3 +1,4 @@
+import { SettlementStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AdminSettlementService } from './admin-settlement.service';
 
@@ -17,12 +18,12 @@ describe('AdminSettlementService invariants', () => {
         ]),
     };
     const settlement = {
-      create: jest.fn().mockResolvedValue({ id: 'settlement-1' }),
+      upsert: jest.fn().mockResolvedValue({ id: 'settlement-1' }),
     };
     const db = { user, ownerTransaction, settlement } as unknown as PrismaService;
     const service = new AdminSettlementService(db);
 
-    await service.run({ period: '2026-08' });
+    const result = await service.run({ period: '2026-08' });
 
     const range = {
       gte: new Date('2026-08-01T00:00:00.000Z'),
@@ -52,14 +53,23 @@ describe('AdminSettlementService invariants', () => {
         }),
       }),
     );
-    expect(settlement.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
+    expect(settlement.upsert).toHaveBeenCalledWith({
+      where: { id: expect.any(String) },
+      create: expect.objectContaining({
         ownerId: 'owner-1',
         period: '2026-08',
         totalEarnings: 100000,
         totalPayouts: 30000,
         netAmount: 70000,
+        status: SettlementStatus.COMPLETED,
+      }),
+      update: expect.objectContaining({
+        totalEarnings: 100000,
+        totalPayouts: 30000,
+        netAmount: 70000,
+        status: SettlementStatus.COMPLETED,
       }),
     });
+    expect(result).toEqual({ success: true, processed: 1 });
   });
 });
