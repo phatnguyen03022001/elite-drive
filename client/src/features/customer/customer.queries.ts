@@ -6,7 +6,6 @@ import {
   UpdateCustomerProfileInput,
   CreateBookingInput,
   CreateWalletTopupInput,
-  ApplyPromotionInput as PromotionInput,
   CreatePaymentInput,
   SignContractInput,
 } from "./customer.schema";
@@ -109,6 +108,7 @@ export const useContract = (bookingId: string) =>
     queryKey: customerKeys.contract(bookingId),
     queryFn: () => CustomerService.getContract(bookingId),
     enabled: Boolean(bookingId),
+    retry: false,
   });
 
 export const useSignContract = () => {
@@ -182,7 +182,7 @@ export const useActivePromotions = () =>
 export const useApplyPromotion = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (dto: PromotionInput) => CustomerService.applyPromotion(dto),
+    mutationFn: (dto: ApplyPromotionInput) => CustomerService.applyPromotion(dto),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: customerKeys.bookingsRoot() });
     },
