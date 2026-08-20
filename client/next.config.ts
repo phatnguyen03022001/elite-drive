@@ -37,7 +37,6 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  transpilePackages: ["shared", "ui"],
   poweredByHeader: false,
   compress: true,
   turbopack: {
@@ -58,12 +57,6 @@ const nextConfig: NextConfig = {
         hostname: backend.hostname,
         port: backend.port,
         pathname: "/**",
-      },
-      {
-        protocol: "http",
-        hostname: "localhost",
-        port: "9000",
-        pathname: "/elitedrive/**",
       },
     ],
   },
