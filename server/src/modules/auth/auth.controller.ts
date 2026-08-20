@@ -44,7 +44,10 @@ export class AuthController {
   ) {
     const result = await this.authService.login(dto);
     this.setSessionCookie(response, result.token);
-    return ApiResponse.success(result, 'Đăng nhập thành công');
+    return ApiResponse.success(
+      { authenticated: true },
+      'Đăng nhập thành công',
+    );
   }
 
   @Post('otp/login')
@@ -60,7 +63,10 @@ export class AuthController {
   ) {
     const result = await this.authService.verifyLoginOtp(dto);
     this.setSessionCookie(response, result.token);
-    return ApiResponse.success(result, 'Xác thực OTP đăng nhập thành công');
+    return ApiResponse.success(
+      { authenticated: true },
+      'Xác thực OTP đăng nhập thành công',
+    );
   }
 
   @Post('logout')
