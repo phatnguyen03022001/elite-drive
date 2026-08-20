@@ -23,10 +23,7 @@ export class AdminFinanceService {
     const limit = query.limit ?? 20;
     const where: Prisma.PaymentWhereInput = {
       status: query.status,
-      createdAt: query.from || query.to ? {
-        gte: query.from ? new Date(query.from) : undefined,
-        lte: query.to ? new Date(query.to) : undefined,
-      } : undefined,
+      createdAt: this.paymentDateFilter(query),
     };
     const [items, total] = await Promise.all([
       this.db.payment.findMany({
@@ -241,5 +238,26 @@ export class AdminFinanceService {
       }
     }
     return { processed, skipped };
+  }
+
+  private paymentDateFilter(query: PaymentQueryDto): Prisma.DateTimeFilter | undefined {
+    if (!query.from && !query.to) return undefined;
+
+    const gte = query.from ? new Date(query.from) : undefined;
+    let lt: Date | undefined;
+    let lte: Date | undefined;
+    if (query.to) {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(query.to)) {
+        lt = new Date(`${query.to}T00:00:00.000Z`);
+        lt.setUTCDate(lt.getUTCDate() + 1);
+      } else {
+        lte = new Date(query.to);
+      }
+    }
+
+    if (gte && ((lt && gte >= lt) || (lte && gte > lte))) {
+      throw new BadRequestException('Payment filter start must be before end');
+    }
+    return { gte, lt, lte };
   }
 }
