@@ -9,6 +9,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { BookingStatus, PaymentStatus } from '@prisma/client';
 import { assertVndAmount } from '../../common/money/vnd';
+import { buildRentalContractContent } from '../../common/rental/contract';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MomoIpnDto } from './dto/momo.dto';
 import { MomoGatewayService } from './momo-gateway.service';
@@ -334,6 +335,15 @@ export class PaymentService {
         },
       });
 
+      await tx.contract.upsert({
+        where: { bookingId: payment.booking.id },
+        update: {},
+        create: {
+          bookingId: payment.booking.id,
+          content: buildRentalContractContent(payment.booking),
+          status: 'DRAFT',
+        },
+      });
       await tx.trip.upsert({
         where: { bookingId: payment.booking.id },
         update: {},

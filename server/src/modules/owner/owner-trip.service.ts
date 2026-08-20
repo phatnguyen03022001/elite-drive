@@ -28,6 +28,7 @@ export class OwnerTripService {
                   phone: true,
                 },
               },
+              contract: { select: { status: true, customerSignedAt: true } },
             },
           },
           car: { select: { id: true, name: true, licensePlate: true } },
@@ -47,7 +48,12 @@ export class OwnerTripService {
           id: true,
           bookingId: true,
           status: true,
-          booking: { select: { status: true } },
+          booking: {
+            select: {
+              status: true,
+              contract: { select: { customerSignedAt: true } },
+            },
+          },
         },
       });
       if (!trip) throw new NotFoundException('Trip không tồn tại');
@@ -56,6 +62,11 @@ export class OwnerTripService {
       }
       if (trip.booking.status !== BookingStatus.CONFIRMED) {
         throw new BadRequestException('Booking không còn ở trạng thái CONFIRMED');
+      }
+      if (!trip.booking.contract?.customerSignedAt) {
+        throw new BadRequestException(
+          'Khách hàng phải ký hợp đồng trước khi bàn giao xe',
+        );
       }
 
       const bookingLock = await tx.booking.updateMany({
@@ -139,6 +150,16 @@ export class OwnerTripService {
       if (claim.count !== 1) {
         throw new BadRequestException(
           'Trip vừa thay đổi; tải lại trước khi checkout',
+        );
+      }
+
+      const bookingComplete = await tx.booking.updateMany({
+        where: { id: trip.bookingId, status: BookingStatus.CONFIRMED },
+        data: { status: BookingStatus.COMPLETED },
+      });
+      if (bookingComplete.count !== 1) {
+        throw new BadRequestException(
+          'Không thể đồng bộ trạng thái booking sau khi trả xe',
         );
       }
 

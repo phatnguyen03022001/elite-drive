@@ -10,6 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import { BookingStatus, PaymentStatus, Prisma } from '@prisma/client';
 import { createHash, randomUUID } from 'crypto';
 import { assertVndAmount } from '../../common/money/vnd';
+import { buildRentalContractContent } from '../../common/rental/contract';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   ConfirmPaymentDto,
@@ -380,6 +381,16 @@ export class CustomerPaymentService {
             bookingId: payment.booking.id,
             paymentId: payment.id,
           },
+        },
+      });
+
+      await tx.contract.upsert({
+        where: { bookingId: payment.booking.id },
+        update: {},
+        create: {
+          bookingId: payment.booking.id,
+          content: buildRentalContractContent(payment.booking),
+          status: 'DRAFT',
         },
       });
       await tx.trip.upsert({
