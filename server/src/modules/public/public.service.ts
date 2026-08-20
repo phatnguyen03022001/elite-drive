@@ -25,6 +25,11 @@ const ACTIVE_BOOKING_STATUSES: BookingStatus[] = [
   BookingStatus.CONFIRMED,
 ];
 
+const PUBLISHED_CAR_FILTER: Prisma.CarWhereInput = {
+  status: CarStatus.APPROVED,
+  verificationStatus: VerificationStatus.APPROVED,
+};
+
 @Injectable()
 export class PublicService {
   constructor(private readonly prisma: PrismaService) {}
@@ -102,8 +107,7 @@ export class PublicService {
     const hasDateRange = Boolean(startDate && endDate);
 
     const where: Prisma.CarWhereInput = {
-      status: CarStatus.APPROVED,
-      verificationStatus: VerificationStatus.APPROVED,
+      ...PUBLISHED_CAR_FILTER,
       isAvailable: true,
       ...(categoryId && { categoryId }),
       ...(city && {
@@ -143,46 +147,18 @@ export class PublicService {
         : {}),
     };
 
-    const [cars, total] = await Promise.all([
+    const [data, total] = await Promise.all([
       this.prisma.car.findMany({
         where,
         skip,
         take: limit,
         include: {
-          category: { select: { name: true, slug: true } },
-          location: { select: { name: true, address: true, city: true } },
-          owner: {
-            select: {
-              firstName: true,
-              lastName: true,
-              avatar: true,
-            },
-          },
-          reviews: {
-            select: {
-              rating: true,
-              content: true,
-              createdAt: true,
-              user: {
-                select: { firstName: true, lastName: true, avatar: true },
-              },
-            },
-            orderBy: { createdAt: 'desc' },
-            take: 3,
-          },
+          location: { select: { name: true, city: true } },
         },
         orderBy: { createdAt: 'desc' },
       }),
       this.prisma.car.count({ where }),
     ]);
-
-    const data = cars.map((car) => ({
-      ...car,
-      reviews: car.reviews.map(({ user, ...review }) => ({
-        ...review,
-        customer: user,
-      })),
-    }));
 
     return { data, total, page, limit };
   }
@@ -191,8 +167,7 @@ export class PublicService {
     const car = await this.prisma.car.findFirst({
       where: {
         id,
-        status: CarStatus.APPROVED,
-        verificationStatus: VerificationStatus.APPROVED,
+        ...PUBLISHED_CAR_FILTER,
       },
       include: {
         category: true,
@@ -216,6 +191,7 @@ export class PublicService {
         },
         documents: {
           where: { documentType: 'INSURANCE' },
+          select: { id: true },
         },
       },
     });
@@ -240,8 +216,7 @@ export class PublicService {
     const car = await this.prisma.car.findFirst({
       where: {
         id: carId,
-        status: CarStatus.APPROVED,
-        verificationStatus: VerificationStatus.APPROVED,
+        ...PUBLISHED_CAR_FILTER,
       },
       select: { id: true, isAvailable: true },
     });
@@ -285,12 +260,20 @@ export class PublicService {
     carId: string,
     query: PaginationDto & CarReviewQueryDto,
   ) {
+    const car = await this.prisma.car.findFirst({
+      where: { id: carId, ...PUBLISHED_CAR_FILTER },
+      select: { id: true },
+    });
+    if (!car) {
+      throw new NotFoundException('Vehicle not found or not approved');
+    }
+
     const { page = 1, limit = 10 } = query;
     const skip = (page - 1) * limit;
 
     const [reviews, total] = await Promise.all([
       this.prisma.review.findMany({
-        where: { carId },
+        where: { carId: car.id },
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
@@ -304,7 +287,7 @@ export class PublicService {
           },
         },
       }),
-      this.prisma.review.count({ where: { carId } }),
+      this.prisma.review.count({ where: { carId: car.id } }),
     ]);
 
     const data = reviews.map(({ user, ...review }) => ({
@@ -317,6 +300,7 @@ export class PublicService {
 
   async getReviewSummary() {
     const result = await this.prisma.review.aggregate({
+      where: { car: { is: PUBLISHED_CAR_FILTER } },
       _avg: { rating: true },
       _count: { rating: true },
     });
