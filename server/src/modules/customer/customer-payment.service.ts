@@ -59,30 +59,43 @@ export class CustomerPaymentService {
     }
     if (paymentMethod === 'MOCK_QR') this.assertMockPaymentsEnabled();
 
-    const paymentId = createHash('sha256')
-      .update(`booking-payment:${booking.id}:${userId}`)
-      .digest('hex')
-      .slice(0, 24);
-    const merchantOrderId = `PAY-${createHash('sha256')
-      .update(`merchant-order:${booking.id}:${userId}`)
-      .digest('hex')
-      .slice(0, 32)}`;
+    const latest = await this.db.payment.findFirst({
+      where: { bookingId: booking.id, userId },
+      orderBy: { createdAt: 'desc' },
+    });
 
-    const existing = await this.db.payment.findUnique({ where: { id: paymentId } });
-    if (existing) {
-      if (existing.paymentMethod !== paymentMethod) {
-        throw new BadRequestException(
-          'Booking đã có payment bằng phương thức khác',
-        );
-      }
-      assertVndAmount(existing.amount, { field: 'Số tiền payment' });
-      if (existing.amount !== booking.totalPrice) {
+    if (latest) {
+      assertVndAmount(latest.amount, { field: 'Số tiền payment' });
+      if (latest.amount !== booking.totalPrice) {
         throw new BadRequestException(
           'Payment hiện tại không khớp tổng tiền booking',
         );
       }
-      return existing;
+
+      if (latest.status === PaymentStatus.PENDING) {
+        if (latest.paymentMethod !== paymentMethod) {
+          throw new BadRequestException(
+            'Booking đang có payment chờ xử lý bằng phương thức khác',
+          );
+        }
+        return latest;
+      }
+
+      if (latest.status === PaymentStatus.COMPLETED) {
+        return latest;
+      }
+
+      if (latest.status === PaymentStatus.REFUNDED) {
+        throw new BadRequestException(
+          'Payment của booking đã được hoàn tiền; không thể tạo lại',
+        );
+      }
     }
+
+    const paymentId = latest?.status === PaymentStatus.FAILED
+      ? this.paymentAttemptId(`retry:${latest.id}`)
+      : this.paymentAttemptId(`initial:${booking.id}:${userId}`);
+    const merchantOrderId = this.merchantOrderId(paymentId);
 
     try {
       return await this.db.payment.create({
@@ -101,8 +114,19 @@ export class CustomerPaymentService {
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2002'
       ) {
-        const replay = await this.db.payment.findUnique({ where: { id: paymentId } });
-        if (replay) return replay;
+        const replay = await this.db.payment.findUnique({
+          where: { id: paymentId },
+        });
+        if (
+          replay &&
+          replay.bookingId === booking.id &&
+          replay.userId === userId &&
+          replay.amount === booking.totalPrice &&
+          replay.paymentMethod === paymentMethod &&
+          replay.status === PaymentStatus.PENDING
+        ) {
+          return replay;
+        }
       }
       throw error;
     }
@@ -122,6 +146,7 @@ export class CustomerPaymentService {
         status: PaymentStatus.PENDING,
         paymentMethod: 'MOCK_QR',
       },
+      orderBy: { createdAt: 'desc' },
     });
     if (!payment) {
       throw new NotFoundException('Không tìm thấy yêu cầu thanh toán mock');
@@ -295,6 +320,20 @@ export class CustomerPaymentService {
 
       return tx.payment.findUniqueOrThrow({ where: { id: payment.id } });
     });
+  }
+
+  private paymentAttemptId(seed: string) {
+    return createHash('sha256')
+      .update(`booking-payment:${seed}`)
+      .digest('hex')
+      .slice(0, 24);
+  }
+
+  private merchantOrderId(paymentId: string) {
+    return `PAY-${createHash('sha256')
+      .update(`merchant-order:${paymentId}`)
+      .digest('hex')
+      .slice(0, 32)}`;
   }
 
   private assertMockPaymentsEnabled() {
