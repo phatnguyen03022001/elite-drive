@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import {
   BookingStatus,
   CarStatus,
@@ -81,6 +86,17 @@ export class PublicService {
       endDate,
       transmission,
     } = query;
+
+    this.assertOptionalDateRange(startDate, endDate);
+    if (
+      minPrice !== undefined &&
+      maxPrice !== undefined &&
+      minPrice > maxPrice
+    ) {
+      throw new BadRequestException(
+        'Minimum daily price cannot exceed maximum daily price',
+      );
+    }
 
     const skip = (page - 1) * limit;
     const hasDateRange = Boolean(startDate && endDate);
@@ -235,6 +251,7 @@ export class PublicService {
     }
 
     const { startDate, endDate } = query;
+    this.assertOptionalDateRange(startDate, endDate);
     if (!startDate || !endDate) {
       return { available: car.isAvailable };
     }
@@ -308,5 +325,16 @@ export class PublicService {
       averageRating: result._avg.rating ?? 0,
       totalReviews: result._count.rating,
     };
+  }
+
+  private assertOptionalDateRange(startDate?: Date, endDate?: Date) {
+    if (Boolean(startDate) !== Boolean(endDate)) {
+      throw new BadRequestException(
+        'startDate and endDate must be provided together',
+      );
+    }
+    if (startDate && endDate && endDate <= startDate) {
+      throw new BadRequestException('endDate must be after startDate');
+    }
   }
 }
