@@ -1,12 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CustomerService } from "./customer.service";
 import {
+  ApplyPromotionInput,
   BookingQueryInput,
   UpdateCustomerProfileInput,
   CreateBookingInput,
   CreateWalletTopupInput,
-  ApplyPromotionInput,
+  ApplyPromotionInput as PromotionInput,
   CreatePaymentInput,
+  SignContractInput,
 } from "./customer.schema";
 
 export const customerKeys = {
@@ -17,6 +19,9 @@ export const customerKeys = {
   bookings: (params: unknown) => [...customerKeys.bookingsRoot(), params] as const,
   tripsRoot: () => [...customerKeys.all, "trips"] as const,
   trips: (params: unknown) => [...customerKeys.tripsRoot(), params] as const,
+  tripStatus: (tripId: string) => [...customerKeys.tripsRoot(), tripId, "status"] as const,
+  contractsRoot: () => [...customerKeys.all, "contracts"] as const,
+  contract: (bookingId: string) => [...customerKeys.contractsRoot(), bookingId] as const,
   paymentRoot: () => [...customerKeys.all, "payment"] as const,
   payment: (bookingId: string) => [...customerKeys.paymentRoot(), bookingId] as const,
   wallet: () => [...customerKeys.all, "wallet"] as const,
@@ -36,6 +41,7 @@ export const useBookingDetail = (bookingId: string) =>
   useQuery({
     queryKey: [...customerKeys.bookingsRoot(), bookingId],
     queryFn: () => CustomerService.getBookingDetail(bookingId),
+    enabled: Boolean(bookingId),
   });
 
 export const useCancelBooking = () => {
@@ -46,6 +52,7 @@ export const useCancelBooking = () => {
       void queryClient.invalidateQueries({ queryKey: customerKeys.bookingsRoot() });
       void queryClient.invalidateQueries({ queryKey: customerKeys.wallet() });
       void queryClient.invalidateQueries({ queryKey: customerKeys.paymentRoot() });
+      void queryClient.invalidateQueries({ queryKey: customerKeys.tripsRoot() });
     },
   });
 };
@@ -79,6 +86,40 @@ export const useSubmitKyc = () => {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: customerKeys.kyc() });
       void queryClient.invalidateQueries({ queryKey: customerKeys.profile() });
+    },
+  });
+};
+
+export const useTrips = (params: { page?: number; limit?: number; status?: "UPCOMING" | "ONGOING" | "COMPLETED" } = {}) =>
+  useQuery({
+    queryKey: customerKeys.trips(params),
+    queryFn: () => CustomerService.getTrips(params),
+  });
+
+export const useTripStatus = (tripId: string) =>
+  useQuery({
+    queryKey: customerKeys.tripStatus(tripId),
+    queryFn: () => CustomerService.getTripStatus(tripId),
+    enabled: Boolean(tripId),
+    refetchInterval: 30_000,
+  });
+
+export const useContract = (bookingId: string) =>
+  useQuery({
+    queryKey: customerKeys.contract(bookingId),
+    queryFn: () => CustomerService.getContract(bookingId),
+    enabled: Boolean(bookingId),
+  });
+
+export const useSignContract = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ bookingId, dto }: { bookingId: string; dto: SignContractInput }) =>
+      CustomerService.signContract(bookingId, dto),
+    onSuccess: (_data, variables) => {
+      void queryClient.invalidateQueries({ queryKey: customerKeys.contract(variables.bookingId) });
+      void queryClient.invalidateQueries({ queryKey: customerKeys.bookingsRoot() });
+      void queryClient.invalidateQueries({ queryKey: customerKeys.tripsRoot() });
     },
   });
 };
@@ -122,6 +163,8 @@ export const useConfirmPayment = () => {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: customerKeys.bookingsRoot() });
       void queryClient.invalidateQueries({ queryKey: customerKeys.paymentRoot() });
+      void queryClient.invalidateQueries({ queryKey: customerKeys.tripsRoot() });
+      void queryClient.invalidateQueries({ queryKey: customerKeys.contractsRoot() });
     },
   });
 };
@@ -139,7 +182,7 @@ export const useActivePromotions = () =>
 export const useApplyPromotion = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (dto: ApplyPromotionInput) => CustomerService.applyPromotion(dto),
+    mutationFn: (dto: PromotionInput) => CustomerService.applyPromotion(dto),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: customerKeys.bookingsRoot() });
     },
