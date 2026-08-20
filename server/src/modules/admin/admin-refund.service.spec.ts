@@ -167,6 +167,11 @@ describe('AdminRefundService invariants', () => {
       where: { id: 'platform-wallet', balance: { gte: 100000 } },
       data: { balance: { decrement: 100000 } },
     });
+    expect(tx.promotion.updateMany).toHaveBeenCalledTimes(1);
+    expect(tx.promotion.updateMany).toHaveBeenCalledWith({
+      where: { id: 'promotion-1', usedCount: { gt: 0 } },
+      data: { usedCount: { decrement: 1 } },
+    });
     expect(tx.walletTransaction.createMany).toHaveBeenCalledTimes(1);
     expect(tx.trip.deleteMany).toHaveBeenCalledWith({
       where: { bookingId: 'booking-1', status: 'UPCOMING' },
@@ -251,7 +256,10 @@ function createRefundTx() {
   return {
     booking: {
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
-      findUnique: jest.fn().mockResolvedValue({ status: BookingStatus.CANCELLED }),
+      findUnique: jest.fn().mockResolvedValue({
+        status: BookingStatus.CANCELLED,
+        promotionId: 'promotion-1',
+      }),
     },
     payment: {
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
@@ -260,6 +268,9 @@ function createRefundTx() {
         status: PaymentStatus.COMPLETED,
         releasedAt: null,
       }),
+    },
+    promotion: {
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
     wallet: {
       findUnique: jest.fn().mockResolvedValue({

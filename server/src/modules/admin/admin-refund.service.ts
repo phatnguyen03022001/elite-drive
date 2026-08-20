@@ -429,6 +429,14 @@ export class AdminRefundService {
         }
       }
 
+      const bookingPromotion = await tx.booking.findUnique({
+        where: { id: input.bookingId },
+        select: { promotionId: true },
+      });
+      if (!bookingPromotion) {
+        throw new NotFoundException('Booking không tồn tại');
+      }
+
       const paymentClaim = await tx.payment.updateMany({
         where: {
           id: input.paymentId,
@@ -458,6 +466,16 @@ export class AdminRefundService {
         throw new BadRequestException(
           'Giao dịch đã được xử lý hoặc không còn nằm trong escrow',
         );
+      }
+
+      if (bookingPromotion.promotionId) {
+        await tx.promotion.updateMany({
+          where: {
+            id: bookingPromotion.promotionId,
+            usedCount: { gt: 0 },
+          },
+          data: { usedCount: { decrement: 1 } },
+        });
       }
 
       const platformWallet = await tx.wallet.findUnique({
