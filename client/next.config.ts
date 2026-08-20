@@ -1,20 +1,17 @@
 import type { NextConfig } from "next";
 
 const isProduction = process.env.NODE_ENV === "production";
-const defaultBackendUrl = isProduction
-  ? "https://elitedrive-demoversion.onrender.com"
-  : "http://localhost:8000";
-
-const backendUrl =
-  process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || defaultBackendUrl;
+const backendUrl = process.env.BACKEND_URL || "http://localhost:8000";
+const backend = new URL(backendUrl);
+const backendOrigin = backend.origin;
 
 const contentSecurityPolicy = [
   "default-src 'self'",
   `script-src 'self' 'unsafe-inline'${isProduction ? "" : " 'unsafe-eval'"}`,
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob: https://res.cloudinary.com https://elitedrive-demoversion.onrender.com",
+  `img-src 'self' data: blob: ${backendOrigin}`,
   "font-src 'self' data:",
-  "connect-src 'self' https://elitedrive-demoversion.onrender.com http://localhost:8000 ws://localhost:* wss://localhost:*",
+  `connect-src 'self' ${backendOrigin} http://localhost:8000 ws://localhost:* wss://localhost:*`,
   "object-src 'none'",
   "base-uri 'self'",
   "frame-ancestors 'none'",
@@ -57,11 +54,11 @@ const nextConfig: NextConfig = {
     formats: ["image/avif", "image/webp"],
     remotePatterns: [
       {
-        protocol: "https",
-        hostname: "elitedrive-demoversion.onrender.com",
+        protocol: backend.protocol === "https:" ? "https" : "http",
+        hostname: backend.hostname,
+        port: backend.port,
         pathname: "/**",
       },
-      { protocol: "https", hostname: "res.cloudinary.com", pathname: "/**" },
       {
         protocol: "http",
         hostname: "localhost",
