@@ -1,8 +1,8 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { access, mkdir, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
-import { extname, join } from 'node:path';
+import { extname, join, normalize, resolve, sep } from 'node:path';
 
 @Injectable()
 export class UploadService {
@@ -26,8 +26,7 @@ export class UploadService {
       throw new BadRequestException('Thư mục upload không hợp lệ');
     }
 
-    const uploadRoot = this.configService.get<string>('UPLOAD_DIR') || 'uploads';
-    const targetDir = join(process.cwd(), uploadRoot, safeFolder);
+    const targetDir = join(this.uploadRoot(), safeFolder);
     await mkdir(targetDir, { recursive: true });
 
     const extension = this.extensionFor(file.mimetype, file.originalname);
@@ -36,6 +35,28 @@ export class UploadService {
 
     const publicBase = this.configService.get<string>('UPLOAD_PUBLIC_BASE_URL') || '/api/upload/files';
     return `${publicBase}/${safeFolder}/${filename}`;
+  }
+
+  async resolvePublicFile(relativePath: string): Promise<string> {
+    const root = resolve(this.uploadRoot());
+    const clean = normalize(relativePath).replace(/^([/\\])+/, '');
+    const candidate = resolve(root, clean);
+
+    if (candidate !== root && !candidate.startsWith(`${root}${sep}`)) {
+      throw new BadRequestException('Đường dẫn file không hợp lệ');
+    }
+
+    try {
+      await access(candidate);
+      return candidate;
+    } catch {
+      throw new NotFoundException('Không tìm thấy file');
+    }
+  }
+
+  private uploadRoot(): string {
+    const configured = this.configService.get<string>('UPLOAD_DIR') || 'uploads';
+    return join(process.cwd(), configured);
   }
 
   private extensionFor(mimetype: string, originalName: string): string {
