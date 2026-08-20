@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  BookingStatus,
   CarStatus,
   KYCStatus,
   Prisma,
@@ -25,6 +26,8 @@ import {
   UpdateCarDto,
   UpdateOwnerProfileDto,
 } from './dto/owner.dto';
+
+const MAX_CALENDAR_UPDATE_ATTEMPTS = 3;
 
 @Injectable()
 export class OwnerService {
@@ -267,8 +270,6 @@ export class OwnerService {
         throw new ForbiddenException('Bạn không có quyền quản lý xe này');
       }
 
-      // Serialize against customer booking creation, which locks the same car
-      // document before checking conflicts and inserting a booking.
       await tx.car.update({
         where: { id: carId },
         data: { updatedAt: new Date() },
@@ -315,13 +316,93 @@ export class OwnerService {
   }
 
   async blockAvailability(userId: string, carId: string, dto: BlockCalendarDto) {
-    await this.assertOwnerCar(userId, carId);
+    const requestedDate = new Date(dto.date);
+    if (!Number.isFinite(requestedDate.getTime())) {
+      throw new BadRequestException('Ngày block lịch không hợp lệ');
+    }
+    const date = new Date(Date.UTC(
+      requestedDate.getUTCFullYear(),
+      requestedDate.getUTCMonth(),
+      requestedDate.getUTCDate(),
+    ));
+    const nextDate = new Date(date);
+    nextDate.setUTCDate(nextDate.getUTCDate() + 1);
     const isBlocked = dto.isBlocked ?? true;
-    return this.prisma.availability.upsert({
-      where: { carId_date: { carId, date: new Date(dto.date) } },
-      update: { isAvailable: !isBlocked, blockedReason: isBlocked ? dto.blockedReason : null },
-      create: { carId, date: new Date(dto.date), isAvailable: !isBlocked, blockedReason: isBlocked ? dto.blockedReason : null },
-    });
+
+    for (let attempt = 1; attempt <= MAX_CALENDAR_UPDATE_ATTEMPTS; attempt += 1) {
+      try {
+        return await this.prisma.$transaction(async (tx) => {
+          const car = await tx.car.findFirst({
+            where: { id: carId, ownerId: userId },
+            select: { id: true },
+          });
+          if (!car) {
+            const existing = await tx.car.findUnique({
+              where: { id: carId },
+              select: { ownerId: true },
+            });
+            if (!existing) throw new NotFoundException('Không tìm thấy xe');
+            throw new ForbiddenException('Bạn không có quyền quản lý xe này');
+          }
+
+          await tx.car.update({
+            where: { id: carId },
+            data: { updatedAt: new Date() },
+            select: { id: true },
+          });
+
+          if (isBlocked) {
+            const bookingConflict = await tx.booking.findFirst({
+              where: {
+                carId,
+                status: {
+                  in: [
+                    BookingStatus.PENDING,
+                    BookingStatus.APPROVED,
+                    BookingStatus.CONFIRMED,
+                  ],
+                },
+                startDate: { lt: nextDate },
+                endDate: { gt: date },
+              },
+              select: { id: true },
+            });
+            if (bookingConflict) {
+              throw new BadRequestException(
+                'Không thể block ngày đã có booking đang hoạt động',
+              );
+            }
+          }
+
+          return tx.availability.upsert({
+            where: { carId_date: { carId, date } },
+            update: {
+              isAvailable: !isBlocked,
+              blockedReason: isBlocked ? dto.blockedReason : null,
+            },
+            create: {
+              carId,
+              date,
+              isAvailable: !isBlocked,
+              blockedReason: isBlocked ? dto.blockedReason : null,
+            },
+          });
+        });
+      } catch (error) {
+        if (
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === 'P2034'
+        ) {
+          if (attempt < MAX_CALENDAR_UPDATE_ATTEMPTS) continue;
+          throw new BadRequestException(
+            'Lịch xe vừa thay đổi bởi yêu cầu khác, vui lòng thử lại',
+          );
+        }
+        throw error;
+      }
+    }
+
+    throw new BadRequestException('Không thể cập nhật lịch xe');
   }
 
   async getAvailability(userId: string, carId: string, startDate: Date, endDate: Date) {
