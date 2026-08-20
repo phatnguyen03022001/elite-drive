@@ -164,7 +164,7 @@ describe('CustomerPaymentService invariants', () => {
     expect(result.status).toBe(PaymentStatus.PENDING);
   });
 
-  it('does not credit a wallet top-up when the payment claim is already consumed', async () => {
+  it('claims wallet topups whether bookingId is null or absent in Mongo', async () => {
     const tx = {
       payment: {
         findUnique: jest.fn().mockResolvedValue({
@@ -190,6 +190,18 @@ describe('CustomerPaymentService invariants', () => {
     const service = new CustomerPaymentService(db, config);
 
     await expect(service.confirmMockWalletTopup('payment-1')).rejects.toThrow();
+    expect(tx.payment.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'payment-1',
+        status: PaymentStatus.PENDING,
+        paymentMethod: 'MOCK_QR',
+        OR: [
+          { bookingId: null },
+          { bookingId: { isSet: false } },
+        ],
+      },
+      data: { status: PaymentStatus.COMPLETED, paidAt: expect.any(Date) },
+    });
     expect(tx.wallet.upsert).not.toHaveBeenCalled();
     expect(tx.walletTransaction.create).not.toHaveBeenCalled();
   });
