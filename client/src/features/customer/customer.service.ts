@@ -106,6 +106,16 @@ export const CustomerService = {
     return axios.get(`${BASE_URL}/trips`, { params });
   },
 
+  getTripStatus: async (tripId: string) => {
+    const response = await axios.get(`${BASE_URL}/trips/${tripId}/status`);
+    return response.data;
+  },
+
+  getContract: async (bookingId: string) => {
+    const response = await axios.get(`${BASE_URL}/contracts/${bookingId}`);
+    return response.data;
+  },
+
   signContract: async (bookingId: string, dto: SignContractInput) => {
     const response = await axios.post(`${BASE_URL}/contracts/${bookingId}/sign`, dto);
     return response.data;
