@@ -5,17 +5,16 @@ import { OwnerController } from './owner.controller';
 import { OwnerDisputeService } from './owner-dispute.service';
 import { OwnerFinanceService } from './owner-finance.service';
 import { OwnerService } from './owner.service';
+import { OwnerSupportController } from './owner-support.controller';
 import { OwnerTripService } from './owner-trip.service';
 
 @Module({
   imports: [
     MulterModule.register({
-      limits: {
-        fileSize: 5 * 1024 * 1024,
-      },
+      limits: { fileSize: 5 * 1024 * 1024 },
     }),
   ],
-  controllers: [OwnerController],
+  controllers: [OwnerController, OwnerSupportController],
   providers: [
     OwnerService,
     OwnerFinanceService,
