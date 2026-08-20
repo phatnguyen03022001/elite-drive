@@ -30,7 +30,7 @@ describe('OwnerTripService invariants', () => {
     expect(tx.trip.updateMany).not.toHaveBeenCalled();
   });
 
-  it('rejects vehicle handover before the booking start time', async () => {
+  it('rejects vehicle handover before the booking start day', async () => {
     const tx = {
       trip: {
         findFirst: jest.fn().mockResolvedValue({
@@ -80,12 +80,32 @@ describe('OwnerTripService invariants', () => {
     });
   });
 
+  it('rejects checkout before the booking return day', async () => {
+    const tx = {
+      trip: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'trip-1', bookingId: 'booking-1', status: 'ONGOING', startOdometer: 1200,
+          booking: { status: BookingStatus.CONFIRMED, endDate: new Date('2999-01-02T00:00:00.000Z') },
+        }),
+        updateMany: jest.fn(),
+      },
+      booking: { updateMany: jest.fn() },
+    };
+    const db = { $transaction: jest.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)) } as unknown as PrismaService;
+    const service = new OwnerTripService(db);
+
+    await expect(service.checkoutTrip('owner-1', 'trip-1', { endOdometer: 1300, endFuelLevel: 70 }))
+      .rejects.toBeInstanceOf(BadRequestException);
+    expect(tx.booking.updateMany).not.toHaveBeenCalled();
+    expect(tx.trip.updateMany).not.toHaveBeenCalled();
+  });
+
   it('rejects checkout when the end odometer is lower than check-in', async () => {
     const tx = {
       trip: {
         findFirst: jest.fn().mockResolvedValue({
           id: 'trip-1', bookingId: 'booking-1', status: 'ONGOING', startOdometer: 1200,
-          booking: { status: BookingStatus.CONFIRMED },
+          booking: { status: BookingStatus.CONFIRMED, endDate: new Date('2020-08-21T00:00:00.000Z') },
         }),
         updateMany: jest.fn(),
       },
@@ -105,7 +125,7 @@ describe('OwnerTripService invariants', () => {
       trip: {
         findFirst: jest.fn().mockResolvedValue({
           id: 'trip-1', bookingId: 'booking-1', status: 'ONGOING', startOdometer: 1200,
-          booking: { status: BookingStatus.CONFIRMED },
+          booking: { status: BookingStatus.CONFIRMED, endDate: new Date('2020-08-21T00:00:00.000Z') },
         }),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         findUniqueOrThrow: jest.fn().mockResolvedValue({ id: 'trip-1', status: 'COMPLETED' }),
