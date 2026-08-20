@@ -99,4 +99,24 @@ describe('AdminFinanceService invariants', () => {
     expect(select.user.select.password).toBeUndefined();
     expect(select.releasedAt).toBe(true);
   });
+
+  it('treats a date-only payment end filter as the full UTC day', async () => {
+    const payment = { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) };
+    const service = new AdminFinanceService({ payment } as unknown as PrismaService, config);
+
+    await service.getPayments({
+      page: 1,
+      limit: 20,
+      from: '2026-08-19',
+      to: '2026-08-20',
+    });
+
+    const where = payment.findMany.mock.calls[0][0].where;
+    expect(where.createdAt).toEqual({
+      gte: new Date('2026-08-19T00:00:00.000Z'),
+      lt: new Date('2026-08-21T00:00:00.000Z'),
+      lte: undefined,
+    });
+    expect(payment.count).toHaveBeenCalledWith({ where });
+  });
 });
