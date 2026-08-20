@@ -6,23 +6,21 @@ import {
 } from '@nestjs/common';
 import {
   BookingStatus,
+  CarStatus,
   KYCStatus,
   Prisma,
   UserRole,
+  VerificationStatus,
 } from '@prisma/client';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UploadService } from '../upload/upload.service';
 import {
   BookingQueryDto,
-  ContractResponseDto,
-  CreateDisputeDto,
   CreateKYCDto,
-  CreateReviewDto,
   CustomerProfileResponseDto,
   KYCStatusResponseDto,
   SearchCarQueryDto,
-  SignContractDto,
   TripQueryDto,
   TripStatusResponseDto,
   UpdateCustomerProfileDto,
@@ -173,6 +171,7 @@ export class CustomerService {
           faceImageUrl: faceUrl,
           status: KYCStatus.PENDING,
           submittedAt: new Date(),
+          verifiedAt: null,
           rejectionReason: null,
         },
         create: {
@@ -186,12 +185,16 @@ export class CustomerService {
         },
       });
 
-      if (user.role === UserRole.CUSTOMER) {
-        await tx.user.update({
-          where: { id: userId },
-          data: { customerLicenseNumber: dto.documentNumber },
-        });
-      }
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          isVerified: false,
+          verificationStatus: VerificationStatus.PENDING,
+          ...(user.role === UserRole.CUSTOMER
+            ? { customerLicenseNumber: dto.documentNumber }
+            : {}),
+        },
+      });
       return kyc;
     });
   }
@@ -236,7 +239,15 @@ export class CustomerService {
         take: limit,
         orderBy: { createdAt: 'desc' },
         include: {
-          car: { select: { id: true, name: true, brand: true, mainImageUrl: true } },
+          car: {
+            select: { id: true, name: true, brand: true, mainImageUrl: true },
+          },
+          contract: { select: { status: true, customerSignedAt: true } },
+          reviews: {
+            where: { userId },
+            select: { id: true },
+            take: 1,
+          },
         },
       }),
       this.prisma.booking.count({ where }),
@@ -252,6 +263,7 @@ export class CustomerService {
         payments: { orderBy: { createdAt: 'desc' } },
         contract: true,
         trip: true,
+        reviews: { where: { userId }, select: { id: true }, take: 1 },
       },
     });
     if (!booking) throw new NotFoundException('Không tìm thấy booking');
@@ -302,35 +314,6 @@ export class CustomerService {
     return trip;
   }
 
-  async getContract(userId: string, bookingId: string) {
-    const contract = await this.prisma.contract.findFirst({
-      where: { bookingId, booking: { customerId: userId } },
-    });
-    if (!contract) throw new NotFoundException('Không tìm thấy hợp đồng');
-    return contract;
-  }
-
-  async signContract(
-    userId: string,
-    bookingId: string,
-    dto: SignContractDto,
-  ): Promise<ContractResponseDto> {
-    const contract = await this.prisma.contract.findFirst({
-      where: { bookingId, booking: { customerId: userId } },
-      select: { bookingId: true },
-    });
-    if (!contract) throw new NotFoundException('Không tìm thấy hợp đồng');
-
-    return this.prisma.contract.update({
-      where: { bookingId: contract.bookingId },
-      data: {
-        customerSignature: dto.signatureData,
-        customerSignedAt: new Date(),
-        status: 'SIGNED',
-      },
-    });
-  }
-
   async getWallet(userId: string) {
     return this.prisma.wallet.upsert({
       where: { userId },
@@ -361,7 +344,11 @@ export class CustomerService {
     const [data, total] = await Promise.all([
       this.prisma.review.findMany({
         where: { userId },
-        include: { car: { select: { id: true, name: true, brand: true, mainImageUrl: true } } },
+        include: {
+          car: {
+            select: { id: true, name: true, brand: true, mainImageUrl: true },
+          },
+        },
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * limit,
         take: limit,
@@ -374,16 +361,20 @@ export class CustomerService {
   async searchCars(query: SearchCarQueryDto) {
     const startDate = new Date(query.startDate);
     const endDate = new Date(query.endDate);
-    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime()) || endDate <= startDate) {
+    if (
+      Number.isNaN(startDate.getTime()) ||
+      Number.isNaN(endDate.getTime()) ||
+      endDate <= startDate
+    ) {
       throw new BadRequestException('Khoảng thời gian thuê xe không hợp lệ');
     }
 
     const page = Number(query.page) || 1;
     const limit = Number(query.limit) || 20;
     const where: Prisma.CarWhereInput = {
-      status: 'AVAILABLE',
-      approvalStatus: 'APPROVED',
-      isVerified: true,
+      status: CarStatus.APPROVED,
+      verificationStatus: VerificationStatus.APPROVED,
+      isAvailable: true,
       ...(query.locationId ? { locationId: query.locationId } : {}),
       ...(query.categoryId ? { categoryId: query.categoryId } : {}),
       bookings: {
@@ -413,7 +404,7 @@ export class CustomerService {
         skip: (page - 1) * limit,
         take: limit,
         orderBy: { createdAt: 'desc' },
-        include: { category: true, location: true, pricing: true },
+        include: { category: true, location: true },
       }),
       this.prisma.car.count({ where }),
     ]);
