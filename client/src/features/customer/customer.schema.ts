@@ -138,13 +138,25 @@ export const ApplyPromotionSchema = z.object({
   promoCode: z.string().min(1),
 });
 
+export const ContractSummarySchema = z.object({
+  status: z.string(),
+  customerSignedAt: z.string().nullable(),
+});
+
+export const BookingReviewSummarySchema = z.object({ id: z.string() });
+
 export const BookingDetailSchema = z.object({
   id: z.string(),
+  carId: z.string().optional(),
   status: BookingStatus,
   startDate: z.string(),
   endDate: z.string(),
+  pickupLocation: z.string().nullable().optional(),
+  dropoffLocation: z.string().nullable().optional(),
+  decisionReason: z.string().nullable().optional(),
   totalPrice: z.number(),
   discountAmount: z.number().nullable(),
+  finalPrice: z.number().nullable().optional(),
   car: z.object({
     id: z.string(),
     name: z.string(),
@@ -158,11 +170,14 @@ export const BookingDetailSchema = z.object({
       status: PaymentStatus,
       paymentMethod: PaymentMethod.or(z.string()),
       paidAt: z.string().nullable(),
+      releasedAt: z.string().nullable().optional(),
+      refundedAt: z.string().nullable().optional(),
       createdAt: z.string(),
     }),
   ),
-  contract: z.unknown().nullable(),
-  trip: z.unknown().nullable(),
+  contract: ContractSummarySchema.nullable(),
+  trip: z.object({ status: TripStatus }).passthrough().nullable(),
+  reviews: z.array(BookingReviewSummarySchema).optional(),
 });
 
 export type CreateWalletTopupInput = z.infer<typeof CreateWalletTopupSchema>;
