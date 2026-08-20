@@ -291,7 +291,12 @@ export class CustomerService {
   ): Promise<TripStatusResponseDto> {
     const trip = await this.prisma.trip.findFirst({
       where: { id: tripId, customerId: userId },
-      select: { id: true, status: true },
+      select: {
+        id: true,
+        status: true,
+        checkinTime: true,
+        checkoutTime: true,
+      },
     });
     if (!trip) throw new NotFoundException('Không tìm thấy trip');
     return trip;
@@ -319,8 +324,8 @@ export class CustomerService {
     return this.prisma.contract.update({
       where: { bookingId: contract.bookingId },
       data: {
-        customerSignedAt: new Date(),
         customerSignature: dto.signatureData,
+        customerSignedAt: new Date(),
         status: 'SIGNED',
       },
     });
@@ -334,279 +339,84 @@ export class CustomerService {
     });
   }
 
-  async getWalletTransactions(userId: string, query: PaginationDto = {}) {
+  async getWalletTransactions(userId: string, query: PaginationDto) {
+    const wallet = await this.getWallet(userId);
     const page = query.page ?? 1;
-    const limit = query.limit ?? 20;
-    const wallet = await this.prisma.wallet.findUnique({ where: { userId } });
-    if (!wallet) return { data: [], total: 0, page, limit };
-
+    const limit = query.limit ?? 10;
     const [data, total] = await Promise.all([
       this.prisma.walletTransaction.findMany({
         where: { walletId: wallet.id },
+        orderBy: { createdAt: 'desc' },
         skip: (page - 1) * limit,
         take: limit,
-        orderBy: { createdAt: 'desc' },
       }),
       this.prisma.walletTransaction.count({ where: { walletId: wallet.id } }),
     ]);
     return { data, total, page, limit };
   }
 
-  async createReview(userId: string, dto: CreateReviewDto) {
-    if (dto.bookingId) {
-      const booking = await this.prisma.booking.findUnique({
-        where: { id: dto.bookingId },
-      });
-      if (!booking) throw new NotFoundException('Không tìm thấy booking');
-      if (booking.customerId !== userId) {
-        throw new ForbiddenException('Không có quyền review booking này');
-      }
-      if (booking.status !== BookingStatus.COMPLETED) {
-        throw new BadRequestException(
-          'Chỉ có thể đánh giá sau khi chuyến đi hoàn tất',
-        );
-      }
-      if (booking.carId !== dto.carId) {
-        throw new BadRequestException('Car không khớp với booking');
-      }
-      const existed = await this.prisma.review.findFirst({
-        where: { bookingId: dto.bookingId },
-        select: { id: true },
-      });
-      if (existed) throw new BadRequestException('Booking này đã được đánh giá');
-    }
-
-    return this.prisma.review.create({
-      data: {
-        userId,
-        carId: dto.carId,
-        bookingId: dto.bookingId ?? null,
-        rating: dto.rating,
-        title: dto.title,
-        content: dto.content,
-      },
-    });
-  }
-
-  async getMyReviews(userId: string, query: PaginationDto = {}) {
+  async getMyReviews(userId: string, query: PaginationDto) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 10;
-    const where: Prisma.ReviewWhereInput = { userId };
-    const [items, total] = await Promise.all([
+    const [data, total] = await Promise.all([
       this.prisma.review.findMany({
-        where,
+        where: { userId },
+        include: { car: { select: { id: true, name: true, brand: true, mainImageUrl: true } } },
+        orderBy: { createdAt: 'desc' },
         skip: (page - 1) * limit,
         take: limit,
-        orderBy: { createdAt: 'desc' },
-        include: { car: { select: { name: true } } },
       }),
-      this.prisma.review.count({ where }),
+      this.prisma.review.count({ where: { userId } }),
     ]);
-    return { data: items, total, page, limit };
-  }
-
-  async createDispute(userId: string, dto: CreateDisputeDto) {
-    const booking = dto.bookingId
-      ? await this.prisma.booking.findFirst({
-          where: { id: dto.bookingId, customerId: userId },
-          select: { id: true },
-        })
-      : null;
-
-    if (dto.bookingId && !booking) {
-      throw new ForbiddenException('Booking không thuộc tài khoản hiện tại');
-    }
-
-    return this.prisma.dispute.create({
-      data: {
-        bookingId: booking?.id ?? null,
-        initiatedBy: userId,
-        title: `[${dto.type}] - ${booking?.id ?? 'Hỗ trợ chung'}`,
-        description: dto.description,
-        status: 'OPEN',
-      },
-    });
-  }
-
-  async getMyDisputes(userId: string) {
-    return this.prisma.dispute.findMany({
-      where: { initiatedBy: userId },
-      include: {
-        booking: { select: { car: { select: { name: true } } } },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    return { data, total, page, limit };
   }
 
   async searchCars(query: SearchCarQueryDto) {
-    const { startDate, endDate, locationId, categoryId, page = 1, limit = 20 } = query;
-    if (!startDate || !endDate) {
-      throw new BadRequestException('startDate và endDate là bắt buộc');
+    const startDate = new Date(query.startDate);
+    const endDate = new Date(query.endDate);
+    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime()) || endDate <= startDate) {
+      throw new BadRequestException('Khoảng thời gian thuê xe không hợp lệ');
     }
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
-      throw new BadRequestException('Định dạng ngày không hợp lệ');
-    }
-    if (start >= end) throw new BadRequestException('endDate phải sau startDate');
 
+    const page = Number(query.page) || 1;
+    const limit = Number(query.limit) || 20;
     const where: Prisma.CarWhereInput = {
-      isAvailable: true,
-      verificationStatus: 'APPROVED',
-      ...(locationId ? { locationId } : {}),
-      ...(categoryId ? { categoryId } : {}),
+      status: 'AVAILABLE',
+      approvalStatus: 'APPROVED',
+      isVerified: true,
+      ...(query.locationId ? { locationId: query.locationId } : {}),
+      ...(query.categoryId ? { categoryId: query.categoryId } : {}),
       bookings: {
         none: {
-          status: { notIn: [BookingStatus.CANCELLED, BookingStatus.REJECTED] },
-          AND: [{ startDate: { lt: end } }, { endDate: { gt: start } }],
+          status: {
+            in: [
+              BookingStatus.PENDING,
+              BookingStatus.APPROVED,
+              BookingStatus.CONFIRMED,
+            ],
+          },
+          startDate: { lt: endDate },
+          endDate: { gt: startDate },
         },
       },
       availability: {
         none: {
-          date: { gte: start, lt: end },
           isAvailable: false,
+          date: { gte: startDate, lt: endDate },
         },
       },
     };
 
-    const [cars, total] = await Promise.all([
+    const [data, total] = await Promise.all([
       this.prisma.car.findMany({
         where,
-        include: {
-          reviews: { select: { rating: true } },
-          location: true,
-          category: true,
-        },
         skip: (page - 1) * limit,
         take: limit,
         orderBy: { createdAt: 'desc' },
+        include: { category: true, location: true, pricing: true },
       }),
       this.prisma.car.count({ where }),
     ]);
-    return { data: cars, total, page, limit };
-  }
-
-  async previewBookingPrice(userId: string, bookingId: string) {
-    const booking = await this.prisma.booking.findFirst({
-      where: { id: bookingId, customerId: userId },
-      include: { car: true },
-    });
-    if (!booking) throw new NotFoundException('Booking hoặc Car không tồn tại');
-
-    const days =
-      Math.ceil(
-        (booking.endDate.getTime() - booking.startDate.getTime()) / 86400000,
-      ) || 1;
-    const basePrice = days * booking.car.pricePerDay;
-    const discount = booking.discountAmount ?? 0;
-    const insurance = booking.car.insurance ?? 0;
-    const deposit = booking.car.depositRequired ?? 0;
-
-    return {
-      days,
-      basePrice,
-      insurance,
-      deposit,
-      discount,
-      total: basePrice + insurance + deposit - discount,
-    };
-  }
-
-  async confirmBooking(userId: string, bookingId: string) {
-    const booking = await this.prisma.booking.findFirst({
-      where: {
-        id: bookingId,
-        customerId: userId,
-        status: BookingStatus.CONFIRMED,
-      },
-      include: { trip: true },
-    });
-    if (!booking) throw new NotFoundException('Booking không tồn tại');
-    if (!booking.trip) throw new BadRequestException('Trip chưa được tạo');
-    return booking.trip;
-  }
-
-  async getActivePromotions() {
-    const now = new Date();
-    return this.prisma.promotion.findMany({
-      where: {
-        isActive: true,
-        startDate: { lte: now },
-        endDate: { gte: now },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-  }
-
-  async applyPromotion(userId: string, bookingId: string, promoCode: string) {
-    return this.prisma.$transaction(async (tx) => {
-      const booking = await tx.booking.findFirst({
-        where: {
-          id: bookingId,
-          customerId: userId,
-          status: BookingStatus.PENDING,
-        },
-      });
-      if (!booking) {
-        throw new NotFoundException('Booking không tồn tại hoặc đã thanh toán');
-      }
-
-      const promotion = await tx.promotion.findUnique({ where: { code: promoCode } });
-      if (!promotion) throw new NotFoundException('Mã khuyến mãi không tồn tại');
-
-      const now = new Date();
-      if (!promotion.isActive || promotion.startDate > now || promotion.endDate < now) {
-        throw new BadRequestException('Mã khuyến mãi không còn hiệu lực');
-      }
-      if (promotion.maxUses && promotion.usedCount >= promotion.maxUses) {
-        throw new BadRequestException('Mã khuyến mãi đã hết lượt sử dụng');
-      }
-      if (
-        promotion.minBookingAmount &&
-        booking.totalPrice < promotion.minBookingAmount
-      ) {
-        throw new BadRequestException(
-          `Booking tối thiểu ${promotion.minBookingAmount} VND`,
-        );
-      }
-
-      let discountAmount = 0;
-      if (promotion.discountType === 'PERCENTAGE') {
-        discountAmount = (booking.totalPrice * promotion.discountValue) / 100;
-      } else if (promotion.discountType === 'FIXED') {
-        discountAmount = promotion.discountValue;
-      }
-      discountAmount = Math.min(booking.totalPrice, Math.round(discountAmount));
-      const finalPrice = booking.totalPrice - discountAmount;
-
-      const bookingClaim = await tx.booking.updateMany({
-        where: {
-          id: booking.id,
-          customerId: userId,
-          status: BookingStatus.PENDING,
-        },
-        data: {
-          promotionId: promotion.id,
-          discountAmount,
-          finalPrice,
-          totalPrice: finalPrice,
-        },
-      });
-      if (bookingClaim.count !== 1) {
-        throw new BadRequestException('Booking đã thay đổi, vui lòng thử lại');
-      }
-
-      await tx.promotion.update({
-        where: { id: promotion.id },
-        data: { usedCount: { increment: 1 } },
-      });
-
-      return {
-        originalPrice: booking.totalPrice,
-        discountAmount,
-        finalPrice,
-        promoCode: promotion.code,
-      };
-    });
+    return { data, total, page, limit };
   }
 }
