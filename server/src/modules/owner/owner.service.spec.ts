@@ -1,5 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
-import { CarStatus, VerificationStatus } from '@prisma/client';
+import { BookingStatus, CarStatus, VerificationStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UploadService } from '../upload/upload.service';
 import { OwnerService } from './owner.service';
@@ -56,5 +56,51 @@ describe('OwnerService listing invariants', () => {
     expect(tx.booking.count).toHaveBeenCalledWith({ where: { carId: 'car-1' } });
     expect(tx.car.update.mock.invocationCallOrder[0]).toBeLessThan(tx.booking.count.mock.invocationCallOrder[0]);
     expect(tx.car.delete).not.toHaveBeenCalled();
+  });
+
+  it('normalizes a block to a UTC day and rejects overlap with an active booking', async () => {
+    const tx = {
+      car: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'car-1' }),
+        findUnique: jest.fn(),
+        update: jest.fn().mockResolvedValue({ id: 'car-1' }),
+      },
+      booking: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'booking-1' }),
+      },
+      availability: {
+        upsert: jest.fn(),
+      },
+    };
+    const prisma = {
+      $transaction: jest.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
+    } as unknown as PrismaService;
+    const upload = { uploadFile: jest.fn() } as unknown as UploadService;
+    const service = new OwnerService(prisma, upload);
+
+    await expect(
+      service.blockAvailability('owner-1', 'car-1', {
+        date: '2026-08-20T15:30:00.000Z',
+        isBlocked: true,
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(tx.car.update).toHaveBeenCalledTimes(1);
+    expect(tx.booking.findFirst).toHaveBeenCalledWith({
+      where: {
+        carId: 'car-1',
+        status: {
+          in: [
+            BookingStatus.PENDING,
+            BookingStatus.APPROVED,
+            BookingStatus.CONFIRMED,
+          ],
+        },
+        startDate: { lt: new Date('2026-08-21T00:00:00.000Z') },
+        endDate: { gt: new Date('2026-08-20T00:00:00.000Z') },
+      },
+      select: { id: true },
+    });
+    expect(tx.availability.upsert).not.toHaveBeenCalled();
   });
 });
