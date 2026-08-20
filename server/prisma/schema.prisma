@@ -7,15 +7,68 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum UserRole { GUEST CUSTOMER OWNER ADMIN }
-enum KYCStatus { NONE PENDING APPROVED REJECTED }
-enum BookingStatus { PENDING APPROVED REJECTED CONFIRMED COMPLETED CANCELLED }
-enum PaymentStatus { PENDING COMPLETED FAILED REFUNDED }
-enum TripStatus { UPCOMING ONGOING COMPLETED }
-enum DisputeStatus { OPEN IN_PROGRESS RESOLVED CLOSED }
-enum SettlementStatus { PENDING PROCESSING COMPLETED FAILED }
-enum CarStatus { DRAFT PENDING APPROVED REJECTED }
-enum VerificationStatus { PENDING APPROVED REJECTED }
+enum UserRole {
+  GUEST
+  CUSTOMER
+  OWNER
+  ADMIN
+}
+
+enum KYCStatus {
+  NONE
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum BookingStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum TripStatus {
+  UPCOMING
+  ONGOING
+  COMPLETED
+}
+
+enum DisputeStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum SettlementStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum CarStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum VerificationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
 
 model User {
   id String @id @default(auto()) @map("_id") @db.ObjectId
