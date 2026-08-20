@@ -16,11 +16,22 @@ import { PublicModule } from './modules/public/public.module';
 import { UploadModule } from './modules/upload/upload.module';
 import { PrismaModule } from './prisma/prisma.module';
 
+const LOCAL_PLATFORM_USER_ID = '000000000000000000000001';
+
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
+      load: [
+        () => ({
+          PLATFORM_USER_ID:
+            process.env.PLATFORM_USER_ID ||
+            (process.env.NODE_ENV !== 'production'
+              ? LOCAL_PLATFORM_USER_ID
+              : undefined),
+        }),
+      ],
     }),
     PrismaModule,
     AuthModule,
