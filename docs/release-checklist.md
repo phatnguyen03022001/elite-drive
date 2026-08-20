@@ -1,12 +1,12 @@
-# Production Release Checklist
+# Release Checklist
 
 Use this checklist for changes merged or committed directly to `main`.
 
 ## 1. Repository state
 
 - Confirm the intended commit is the current `main` SHA.
-- Confirm no `.env` file, credential, runtime database state, object-storage data, log file, or `*.tsbuildinfo` file is staged or tracked.
-- Review the diff for placeholder copy, fake metrics, hard-coded credentials, and debug-only behavior.
+- Confirm no `.env`, credentials, runtime database state, upload data, logs, or generated build state are tracked.
+- Review the diff for hard-coded secrets, debug-only behavior, and obsolete infrastructure references.
 
 ## 2. Frontend validation
 
@@ -18,92 +18,85 @@ npm run typecheck
 npm run build
 ```
 
-Required outcome: all commands exit successfully.
+All commands must exit successfully.
 
 ## 3. Backend validation
 
 ```bash
 cd server
-npm ci
+npm install
 npx prisma generate
 npm run build
 ```
 
-Required outcome: Prisma generation and NestJS compilation exit successfully.
+`npm run build` includes backend type checking, tests, dependency audit reporting, and compilation.
 
 ## 4. Configuration review
 
 Frontend:
 
 - `BACKEND_URL` points to the intended API origin.
-- `NEXT_PUBLIC_APP_URL` matches the canonical application origin.
+- `NEXT_PUBLIC_APP_URL` matches the intended web origin.
 
 Backend:
 
-- `APP_PORT` is set or the `8000` default is acceptable.
-- `FRONTEND_URL` is the intended additional browser origin.
-- `ALLOW_VERCEL_PREVIEWS` is enabled only when preview-origin access is required.
-- database, JWT, email, and storage credentials are provided through the deployment environment.
+- `DATABASE_URL` targets the intended MongoDB instance.
+- JWT and OTP secrets are set through the runtime environment.
+- `UPLOAD_DIR` points to writable storage.
+- `MOCK_PAYMENTS_ENABLED=false` unless a non-production sandbox test explicitly needs it.
+- `MOMO_ENABLED=false` unless the optional provider adapter is deliberately configured.
+
+No Cloudinary, Brevo, Resend, AWS storage, Garage, or MinIO account is required.
 
 ## 5. CI
 
-Verify the GitHub Actions workflow for the release commit completes successfully:
+Verify GitHub Actions completes successfully for code changes:
 
 - frontend lint;
 - frontend type-check;
 - frontend build;
 - Prisma generation;
-- backend build.
+- backend type-check/tests/audit/build.
 
-## 6. Vercel deployment
+Documentation-only changes are intentionally ignored by CI.
 
-- Confirm Vercel created a production deployment for the same Git SHA.
-- Wait for the deployment state to become `READY`.
-- If it becomes `ERROR`, inspect the build logs and fix the failing commit before considering the release complete.
+## 6. Deployment
 
-## 7. Production smoke test
+The repository is hosting-provider independent. If a deployment is configured, verify it is built from the same Git SHA that passed CI.
 
-Test the canonical production domain:
+A deployment is not considered healthy merely because a provider accepted the commit. Confirm the application itself starts and serves expected routes.
 
-```text
-https://elite-drive-iota.vercel.app
-```
+## 7. Smoke tests
 
-Public checks:
+Public:
 
 - `/` renders successfully.
-- live vehicle inventory loads or shows a legitimate empty/error state.
-- search/filter controls respond.
-- `/login` renders the English authentication experience.
-- `/register` renders renter/owner registration.
-- `/forgot-password` renders password recovery.
+- vehicle inventory loads or shows an intentional empty/error state.
+- `/login`, `/register`, and password-recovery routes render.
 
-Authenticated checks when test accounts are available:
+Authenticated when test accounts are available:
 
-- renter booking list and booking creation;
-- renter KYC and promotions;
-- owner dashboard and fleet management;
-- owner booking approval and trip handover;
-- admin KYC and vehicle review;
-- admin finance, withdrawal, dispute, and promotion operations.
+- renter booking and KYC flows;
+- owner fleet and booking workflows;
+- admin review and finance workflows.
 
-## 8. Security smoke test
+## 8. Security checks
 
-- Confirm expected security headers are present on frontend responses.
-- Confirm unauthenticated users cannot call protected renter, owner, or admin operations.
-- Confirm a renter cannot access owner/admin operations and vice versa.
-- Confirm no secret values appear in build or runtime logs.
+- Protected routes reject unauthenticated access.
+- Role boundaries reject unauthorized renter/owner/admin access.
+- State-changing cookie requests enforce trusted origins.
+- Uploads reject unsupported types and oversized files.
+- No secrets appear in logs or generated artifacts.
 
 ## 9. Runtime review
 
-Inspect recent production runtime errors after deployment. Investigate unexpected `4xx` spikes, `5xx` responses, proxy failures, authentication errors, or asset failures before closing the release.
+After deployment, inspect application errors and unexpected `4xx`/`5xx` responses. Hosting-provider status alone is not a substitute for runtime validation.
 
-## 10. Release complete
+## 10. Complete
 
-A release is complete only when:
+A release is complete when:
 
-- the intended commit is on `main`;
-- CI is green;
-- the matching Vercel deployment is `READY`;
-- public smoke tests pass;
-- no new critical runtime errors are present.
+- the intended SHA is on `main`;
+- CI is green for code changes;
+- local or deployed smoke tests pass;
+- no new critical runtime/security issue is known.
