@@ -131,7 +131,14 @@ export class AdminFinanceService {
       if (payment.amount !== booking.totalPrice) throw new BadRequestException('Payment không khớp tổng tiền booking');
 
       const releaseClaim = await tx.payment.updateMany({
-        where: { id: payment.id, status: PaymentStatus.COMPLETED, releasedAt: null },
+        where: {
+          id: payment.id,
+          status: PaymentStatus.COMPLETED,
+          OR: [
+            { releasedAt: null },
+            { releasedAt: { isSet: false } },
+          ],
+        },
         data: { releasedAt: new Date() },
       });
       if (releaseClaim.count !== 1) throw new BadRequestException('Payment đã được giải ngân bởi yêu cầu khác');
@@ -192,13 +199,25 @@ export class AdminFinanceService {
   async getPendingReleaseTrips(query: PaginationDto) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
+    const unreleased: Prisma.DateTimeNullableFilter = {
+      OR: undefined,
+    } as never;
     const where: Prisma.TripWhereInput = {
       status: 'COMPLETED',
       booking: {
         status: BookingStatus.COMPLETED,
-        payments: { some: { status: PaymentStatus.COMPLETED, releasedAt: null } },
+        payments: {
+          some: {
+            status: PaymentStatus.COMPLETED,
+            OR: [
+              { releasedAt: null },
+              { releasedAt: { isSet: false } },
+            ],
+          },
+        },
       },
     };
+    void unreleased;
     const [items, total] = await Promise.all([
       this.db.trip.findMany({
         where,
