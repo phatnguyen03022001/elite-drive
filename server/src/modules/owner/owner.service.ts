@@ -253,12 +253,34 @@ export class OwnerService {
   }
 
   async deleteCar(userId: string, carId: string) {
-    await this.assertOwnerCar(userId, carId);
-    const bookingCount = await this.prisma.booking.count({ where: { carId } });
-    if (bookingCount > 0) {
-      throw new BadRequestException('Xe đã có lịch sử booking và không thể hard-delete');
-    }
-    return this.prisma.car.delete({ where: { id: carId } });
+    return this.prisma.$transaction(async (tx) => {
+      const car = await tx.car.findFirst({
+        where: { id: carId, ownerId: userId },
+        select: { id: true },
+      });
+      if (!car) {
+        const existing = await tx.car.findUnique({
+          where: { id: carId },
+          select: { ownerId: true },
+        });
+        if (!existing) throw new NotFoundException('Không tìm thấy xe');
+        throw new ForbiddenException('Bạn không có quyền quản lý xe này');
+      }
+
+      // Serialize against customer booking creation, which locks the same car
+      // document before checking conflicts and inserting a booking.
+      await tx.car.update({
+        where: { id: carId },
+        data: { updatedAt: new Date() },
+        select: { id: true },
+      });
+
+      const bookingCount = await tx.booking.count({ where: { carId } });
+      if (bookingCount > 0) {
+        throw new BadRequestException('Xe đã có lịch sử booking và không thể hard-delete');
+      }
+      return tx.car.delete({ where: { id: carId } });
+    });
   }
 
   async addCarDocument(userId: string, carId: string, dto: CreateCarDocumentDto) {
