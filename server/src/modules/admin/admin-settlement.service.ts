@@ -71,8 +71,7 @@ export class AdminSettlementService {
       payoutRows.map((row) => [row.ownerId, row._sum.amount ?? 0]),
     );
 
-    let created = 0;
-    let skipped = 0;
+    let processed = 0;
 
     for (const owner of owners) {
       const totalEarnings = earningsByOwner.get(owner.id) ?? 0;
@@ -95,34 +94,32 @@ export class AdminSettlementService {
         .update(`settlement:${owner.id}:${dto.period}`)
         .digest('hex')
         .slice(0, 24);
+      const processedAt = new Date();
 
-      try {
-        await this.db.settlement.create({
-          data: {
-            id: settlementId,
-            ownerId: owner.id,
-            period: dto.period,
-            totalEarnings,
-            totalPayouts,
-            netAmount,
-            status: SettlementStatus.COMPLETED,
-            processedAt: new Date(),
-          },
-        });
-        created += 1;
-      } catch (error) {
-        if (
-          error instanceof Prisma.PrismaClientKnownRequestError &&
-          error.code === 'P2002'
-        ) {
-          skipped += 1;
-          continue;
-        }
-        throw error;
-      }
+      await this.db.settlement.upsert({
+        where: { id: settlementId },
+        create: {
+          id: settlementId,
+          ownerId: owner.id,
+          period: dto.period,
+          totalEarnings,
+          totalPayouts,
+          netAmount,
+          status: SettlementStatus.COMPLETED,
+          processedAt,
+        },
+        update: {
+          totalEarnings,
+          totalPayouts,
+          netAmount,
+          status: SettlementStatus.COMPLETED,
+          processedAt,
+        },
+      });
+      processed += 1;
     }
 
-    return { success: true, created, skipped };
+    return { success: true, processed };
   }
 
   async getHistory(query: PaginationDto & SettlementHistoryQueryDto) {
