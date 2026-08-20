@@ -1,6 +1,5 @@
 {
   "compilerOptions": {
-    
     "module": "commonjs",
     "declaration": true,
     "removeComments": true,
@@ -12,9 +11,7 @@
     "outDir": "./dist",
     "baseUrl": "./",
     "paths": {
-      "@/*": ["src/*"],
-      "@prisma/client": ["@generated/prisma"], // Thêm mapping này
-      "@generated/*": ["@generated/*"]
+      "@/*": ["src/*"]
     },
     "incremental": true,
     "skipLibCheck": true,
