@@ -1,0 +1,59 @@
+name: Backend CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'server/**'
+      - '.github/workflows/backend-ci.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'server/**'
+      - '.github/workflows/backend-ci.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Backend quality
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    env:
+      DATABASE_URL: mongodb://localhost:27017/elitedrive
+      JWT_SECRET: ci-only-secret-ci-only-secret-ci-only-secret
+      OTP_HASH_SECRET: ci-only-otp-hash-secret-ci-only-otp-hash-secret
+      PLATFORM_USER_ID: 507f1f77bcf86cd799439011
+      MAIL_TRANSPORT: console
+      MOCK_PAYMENTS_ENABLED: 'true'
+      NODE_ENV: test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Typecheck and generate Prisma client
+        run: npm run typecheck
+
+      - name: Tests
+        run: npm run test:ci
+
+      - name: Production dependency audit
+        run: npm run security:audit:prod:report
+
+      - name: Build
+        run: npx nest build
