@@ -6,7 +6,7 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
-    "start": "nest start",
+    "start": "NODE_ENV=production node dist/main",
     "start:dev": "nest start --watch",
     "start:prod": "NODE_ENV=production node dist/main",
     "start:debug": "nest start --watch --debug",
