@@ -112,14 +112,20 @@ jobs:
           fi
 
           description="$label"
+          context='ci/backend'
+          if [[ "$state" == 'failure' ]]; then
+            context="ci/backend/${label// /-}"
+          fi
           if [[ -n "$detail" ]]; then
             description="$label: $detail"
+            context="$context | ${detail:0:90}"
           fi
           description="${description:0:140}"
+          context="${context:0:140}"
 
           gh api --method POST \
             "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state="$state" \
-            -f context='ci/backend' \
+            -f context="$context" \
             -f description="$description" \
             >/dev/null
