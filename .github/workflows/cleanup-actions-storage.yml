@@ -1,0 +1,74 @@
+name: Actions storage cleanup
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/cleanup-actions-storage.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+  statuses: write
+
+concurrency:
+  group: actions-storage-cleanup
+  cancel-in-progress: true
+
+jobs:
+  cleanup:
+    name: Delete Actions caches and artifacts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete all repository Actions caches and artifacts
+        id: cleanup
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cache_count=0
+          artifact_count=0
+
+          while IFS= read -r cache_id; do
+            [[ -z "$cache_id" ]] && continue
+            gh api --method DELETE "repos/${GITHUB_REPOSITORY}/actions/caches/${cache_id}" >/dev/null
+            cache_count=$((cache_count + 1))
+          done < <(gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/caches?per_page=100" --jq '.actions_caches[].id')
+
+          while IFS= read -r artifact_id; do
+            [[ -z "$artifact_id" ]] && continue
+            gh api --method DELETE "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}" >/dev/null
+            artifact_count=$((artifact_count + 1))
+          done < <(gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" --jq '.artifacts[].id')
+
+          echo "caches=${cache_count}" >> "$GITHUB_OUTPUT"
+          echo "artifacts=${artifact_count}" >> "$GITHUB_OUTPUT"
+          echo "Deleted ${cache_count} caches and ${artifact_count} artifacts."
+
+      - name: Report cleanup status
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CLEANUP_OUTCOME: ${{ steps.cleanup.outcome }}
+          CACHES: ${{ steps.cleanup.outputs.caches }}
+          ARTIFACTS: ${{ steps.cleanup.outputs.artifacts }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$CLEANUP_OUTCOME" == "success" ]]; then
+            state=success
+            description="deleted ${CACHES:-0} caches and ${ARTIFACTS:-0} artifacts"
+          else
+            state=failure
+            description="Actions storage cleanup failed"
+          fi
+
+          gh api --method POST \
+            "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state="$state" \
+            -f context='maintenance/actions-storage' \
+            -f description="${description:0:140}" \
+            >/dev/null
