@@ -94,7 +94,12 @@ jobs:
 
           detail=''
           if [[ -n "$logfile" && -f "$logfile" ]]; then
-            detail="$(grep -E -m1 'error TS[0-9]+:|Cannot find module|Module not found|npm ERR!|Error:|FAIL |Failed|✖|ESLint' "$logfile" | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g' || true)"
+            if [[ "$label" == 'lint failed' ]]; then
+              detail="$(awk '/Calling setState synchronously within an effect/ {print prev " | " $0; exit} {prev=$0}' "$logfile" | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g' || true)"
+            fi
+            if [[ -z "$detail" ]]; then
+              detail="$(grep -E -m1 'error TS[0-9]+:|Cannot find module|Module not found|npm ERR!|Error:|FAIL |Failed|✖|ESLint' "$logfile" | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g' || true)"
+            fi
             if [[ -z "$detail" ]]; then
               detail="$(tail -n 1 "$logfile" | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g')"
             fi

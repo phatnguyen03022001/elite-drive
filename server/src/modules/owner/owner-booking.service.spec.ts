@@ -3,6 +3,26 @@ import { BookingStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OwnerBookingService } from './owner-booking.service';
 
+type BookingMock = {
+  findFirst: jest.Mock;
+  updateMany: jest.Mock;
+  findUniqueOrThrow: jest.Mock;
+};
+
+function createPrismaMock(booking: BookingMock): PrismaService {
+  const tx = {
+    booking,
+    promotion: { updateMany: jest.fn() },
+  };
+  const db = {
+    ...tx,
+    $transaction: jest.fn(
+      async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx),
+    ),
+  };
+  return db as unknown as PrismaService;
+}
+
 describe('OwnerBookingService invariants', () => {
   it('uses a conditional PENDING claim before approving a booking', async () => {
     const booking = {
@@ -10,7 +30,7 @@ describe('OwnerBookingService invariants', () => {
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       findUniqueOrThrow: jest.fn().mockResolvedValue({ id: 'booking-1', status: BookingStatus.APPROVED }),
     };
-    const service = new OwnerBookingService({ booking } as unknown as PrismaService);
+    const service = new OwnerBookingService(createPrismaMock(booking));
     await service.approveBooking('owner-1', 'booking-1');
     expect(booking.updateMany).toHaveBeenCalledWith({
       where: { id: 'booking-1', status: BookingStatus.PENDING, car: { ownerId: 'owner-1' } },
@@ -24,7 +44,7 @@ describe('OwnerBookingService invariants', () => {
       updateMany: jest.fn().mockResolvedValue({ count: 0 }),
       findUniqueOrThrow: jest.fn(),
     };
-    const service = new OwnerBookingService({ booking } as unknown as PrismaService);
+    const service = new OwnerBookingService(createPrismaMock(booking));
     await expect(service.rejectBooking('owner-1', 'booking-1', { reason: 'Unavailable' })).rejects.toBeInstanceOf(BadRequestException);
     expect(booking.findUniqueOrThrow).not.toHaveBeenCalled();
   });
@@ -40,8 +60,7 @@ describe('OwnerBookingService invariants', () => {
         decisionReason: 'Vehicle unavailable',
       }),
     };
-    const db = { booking } as unknown as PrismaService;
-    const service = new OwnerBookingService(db);
+    const service = new OwnerBookingService(createPrismaMock(booking));
     const result = await service.rejectBooking('owner-1', 'booking-1', { reason: '  Vehicle unavailable  ' });
 
     expect(booking.updateMany).toHaveBeenCalledWith({
