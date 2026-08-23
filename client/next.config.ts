@@ -7,12 +7,13 @@ const defaultBackendUrl = isProduction
 const backendUrl = process.env.BACKEND_URL || defaultBackendUrl;
 const backend = new URL(backendUrl);
 const backendOrigin = backend.origin;
+const cloudinaryOrigin = "https://res.cloudinary.com";
 
 const contentSecurityPolicy = [
   "default-src 'self'",
   `script-src 'self' 'unsafe-inline'${isProduction ? "" : " 'unsafe-eval'"}`,
   "style-src 'self' 'unsafe-inline'",
-  `img-src 'self' data: blob: ${backendOrigin}`,
+  `img-src 'self' data: blob: ${backendOrigin} ${cloudinaryOrigin}`,
   "font-src 'self' data:",
   `connect-src 'self' ${backendOrigin} http://localhost:8000 ws://localhost:* wss://localhost:*`,
   "object-src 'none'",
@@ -59,6 +60,11 @@ const nextConfig: NextConfig = {
         protocol: backend.protocol === "https:" ? "https" : "http",
         hostname: backend.hostname,
         port: backend.port,
+        pathname: "/**",
+      },
+      {
+        protocol: "https",
+        hostname: "res.cloudinary.com",
         pathname: "/**",
       },
     ],

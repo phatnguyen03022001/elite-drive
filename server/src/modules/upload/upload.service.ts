@@ -1,8 +1,14 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { access, mkdir, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { extname, join, normalize, resolve, sep } from 'node:path';
+import { CloudinaryUploadService } from './cloudinary-upload.service';
 
 @Injectable()
 export class UploadService {
@@ -13,7 +19,10 @@ export class UploadService {
     'image/webp',
   ]);
 
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly cloudinaryUploadService: CloudinaryUploadService,
+  ) {}
 
   async uploadFile(
     file: Express.Multer.File,
@@ -26,6 +35,16 @@ export class UploadService {
       throw new BadRequestException('Thư mục upload không hợp lệ');
     }
 
+    if (this.cloudinaryUploadService.isEnabled()) {
+      try {
+        return await this.cloudinaryUploadService.uploadImage(file.buffer, safeFolder);
+      } catch {
+        throw new ServiceUnavailableException(
+          'Không thể tải ảnh lên Cloudinary lúc này',
+        );
+      }
+    }
+
     const targetDir = join(this.uploadRoot(), safeFolder);
     await mkdir(targetDir, { recursive: true });
 
@@ -33,7 +52,9 @@ export class UploadService {
     const filename = `${randomUUID()}${extension}`;
     await writeFile(join(targetDir, filename), file.buffer, { flag: 'wx' });
 
-    const publicBase = this.configService.get<string>('UPLOAD_PUBLIC_BASE_URL') || '/api/upload/files';
+    const publicBase =
+      this.configService.get<string>('UPLOAD_PUBLIC_BASE_URL') ||
+      '/api/upload/files';
     return `${publicBase}/${safeFolder}/${filename}`;
   }
 
@@ -55,7 +76,8 @@ export class UploadService {
   }
 
   private uploadRoot(): string {
-    const configured = this.configService.get<string>('UPLOAD_DIR') || 'uploads';
+    const configured =
+      this.configService.get<string>('UPLOAD_DIR') || 'uploads';
     return join(process.cwd(), configured);
   }
 
@@ -80,9 +102,20 @@ export class UploadService {
     }
 
     const bytes = file.buffer;
-    const isJpeg = bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
-    const isPng = bytes.length >= 8 && bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
-    const isWebp = bytes.length >= 12 && bytes.subarray(0, 4).toString('ascii') === 'RIFF' && bytes.subarray(8, 12).toString('ascii') === 'WEBP';
+    const isJpeg =
+      bytes.length >= 3 &&
+      bytes[0] === 0xff &&
+      bytes[1] === 0xd8 &&
+      bytes[2] === 0xff;
+    const isPng =
+      bytes.length >= 8 &&
+      bytes
+        .subarray(0, 8)
+        .equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+    const isWebp =
+      bytes.length >= 12 &&
+      bytes.subarray(0, 4).toString('ascii') === 'RIFF' &&
+      bytes.subarray(8, 12).toString('ascii') === 'WEBP';
 
     const signatureMatchesMime =
       (file.mimetype === 'image/jpeg' && isJpeg) ||

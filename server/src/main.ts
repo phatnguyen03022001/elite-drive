@@ -1,4 +1,5 @@
 import { Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import type { NextFunction, Request, Response } from 'express';
 import { AppModule } from './app.module';
@@ -7,6 +8,7 @@ import {
   buildTrustedOrigins,
   isTrustedFrontendOrigin,
 } from './common/security/trusted-origins';
+import { logEnvironmentDiagnostics } from './config/env-contract';
 import { PrismaService } from './prisma/prisma.service';
 
 const bootstrapLogger = new Logger('Bootstrap');
@@ -14,6 +16,9 @@ const MAX_REQUEST_TARGET_LENGTH = 4_096;
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  const configService = app.get(ConfigService);
+  logEnvironmentDiagnostics(configService, bootstrapLogger);
+
   const prismaService = app.get(PrismaService);
 
   try {
@@ -48,8 +53,8 @@ async function bootstrap() {
   app.useGlobalPipes(GlobalValidationPipe);
 
   const trustedOrigins = buildTrustedOrigins(
-    process.env.FRONTEND_URL,
-    process.env.ALLOW_VERCEL_PREVIEWS === 'true',
+    configService.get<string>('FRONTEND_URL'),
+    configService.get<string>('ALLOW_VERCEL_PREVIEWS') === 'true',
   );
 
   app.enableCors({
@@ -66,7 +71,11 @@ async function bootstrap() {
     allowedHeaders: 'Content-Type, Authorization, Accept',
   });
 
-  const port = Number(process.env.PORT ?? process.env.APP_PORT ?? 8000);
+  const port = Number(
+    configService.get<string>('PORT') ??
+      configService.get<string>('APP_PORT') ??
+      8000,
+  );
   await app.listen(port, '0.0.0.0');
   bootstrapLogger.log(`Elite Drive API listening on port ${port}`);
 }

@@ -1,6 +1,7 @@
 import { Global, Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { MulterModule } from '@nestjs/platform-express';
+import { CloudinaryUploadService } from './cloudinary-upload.service';
 import { UploadController } from './upload.controller';
 import { UploadService } from './upload.service';
 
@@ -15,7 +16,7 @@ import { UploadService } from './upload.service';
     }),
   ],
   controllers: [UploadController],
-  providers: [UploadService],
+  providers: [CloudinaryUploadService, UploadService],
   exports: [UploadService],
 })
 export class UploadModule {}
