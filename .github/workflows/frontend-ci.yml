@@ -15,6 +15,7 @@ on:
 
 permissions:
   contents: read
+  statuses: write
 
 concurrency:
   group: frontend-ci-${{ github.ref }}
@@ -39,17 +40,75 @@ jobs:
           cache-dependency-path: client/package-lock.json
 
       - name: Install dependencies
-        run: npm ci --no-audit --no-fund
+        id: install
+        run: |
+          set -o pipefail
+          npm ci --no-audit --no-fund 2>&1 | tee /tmp/frontend-install.log
 
       - name: Lint
-        run: npm run lint
+        id: lint
+        run: |
+          set -o pipefail
+          npm run lint 2>&1 | tee /tmp/frontend-lint.log
 
       - name: Production dependency audit
-        run: npm run security:audit:prod:report
+        id: audit
+        run: |
+          set -o pipefail
+          npm run security:audit:prod:report 2>&1 | tee /tmp/frontend-audit.log
 
       - name: Build and typecheck
-        run: npx next build
+        id: build
+        run: |
+          set -o pipefail
+          npx next build 2>&1 | tee /tmp/frontend-build.log
         env:
           BACKEND_URL: http://localhost:8000
           NEXT_PUBLIC_APP_URL: http://localhost:3000
           NEXT_PUBLIC_MOMO_ENABLED: 'false'
+
+      - name: Report frontend CI status
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INSTALL_OUTCOME: ${{ steps.install.outcome }}
+          LINT_OUTCOME: ${{ steps.lint.outcome }}
+          AUDIT_OUTCOME: ${{ steps.audit.outcome }}
+          BUILD_OUTCOME: ${{ steps.build.outcome }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          state=success
+          label='all checks passed'
+          logfile=''
+
+          if [[ "$INSTALL_OUTCOME" == 'failure' ]]; then
+            state=failure; label='install failed'; logfile=/tmp/frontend-install.log
+          elif [[ "$LINT_OUTCOME" == 'failure' ]]; then
+            state=failure; label='lint failed'; logfile=/tmp/frontend-lint.log
+          elif [[ "$AUDIT_OUTCOME" == 'failure' ]]; then
+            state=failure; label='audit failed'; logfile=/tmp/frontend-audit.log
+          elif [[ "$BUILD_OUTCOME" == 'failure' ]]; then
+            state=failure; label='build failed'; logfile=/tmp/frontend-build.log
+          fi
+
+          detail=''
+          if [[ -n "$logfile" && -f "$logfile" ]]; then
+            detail="$(grep -E -m1 'error TS[0-9]+:|Cannot find module|Module not found|npm ERR!|Error:|FAIL |Failed|✖|ESLint' "$logfile" | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g' || true)"
+            if [[ -z "$detail" ]]; then
+              detail="$(tail -n 1 "$logfile" | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g')"
+            fi
+          fi
+
+          description="$label"
+          if [[ -n "$detail" ]]; then
+            description="$label: $detail"
+          fi
+          description="${description:0:140}"
+
+          gh api --method POST \
+            "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state="$state" \
+            -f context='ci/frontend' \
+            -f description="$description" \
+            >/dev/null

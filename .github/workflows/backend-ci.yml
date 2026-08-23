@@ -15,6 +15,7 @@ on:
 
 permissions:
   contents: read
+  statuses: write
 
 concurrency:
   group: backend-ci-${{ github.ref }}
@@ -45,16 +46,80 @@ jobs:
           node-version: 24
 
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        id: install
+        run: |
+          set -o pipefail
+          npm install --no-audit --no-fund 2>&1 | tee /tmp/backend-install.log
 
       - name: Typecheck and generate Prisma client
-        run: npm run typecheck
+        id: typecheck
+        run: |
+          set -o pipefail
+          npm run typecheck 2>&1 | tee /tmp/backend-typecheck.log
 
       - name: Tests
-        run: npm run test:ci
+        id: tests
+        run: |
+          set -o pipefail
+          npm run test:ci 2>&1 | tee /tmp/backend-tests.log
 
       - name: Production dependency audit
-        run: npm run security:audit:prod:report
+        id: audit
+        run: |
+          set -o pipefail
+          npm run security:audit:prod:report 2>&1 | tee /tmp/backend-audit.log
 
       - name: Build
-        run: npx nest build
+        id: build
+        run: |
+          set -o pipefail
+          npx nest build 2>&1 | tee /tmp/backend-build.log
+
+      - name: Report backend CI status
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INSTALL_OUTCOME: ${{ steps.install.outcome }}
+          TYPECHECK_OUTCOME: ${{ steps.typecheck.outcome }}
+          TESTS_OUTCOME: ${{ steps.tests.outcome }}
+          AUDIT_OUTCOME: ${{ steps.audit.outcome }}
+          BUILD_OUTCOME: ${{ steps.build.outcome }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          state=success
+          label='all checks passed'
+          logfile=''
+
+          if [[ "$INSTALL_OUTCOME" == 'failure' ]]; then
+            state=failure; label='install failed'; logfile=/tmp/backend-install.log
+          elif [[ "$TYPECHECK_OUTCOME" == 'failure' ]]; then
+            state=failure; label='typecheck failed'; logfile=/tmp/backend-typecheck.log
+          elif [[ "$TESTS_OUTCOME" == 'failure' ]]; then
+            state=failure; label='tests failed'; logfile=/tmp/backend-tests.log
+          elif [[ "$AUDIT_OUTCOME" == 'failure' ]]; then
+            state=failure; label='audit failed'; logfile=/tmp/backend-audit.log
+          elif [[ "$BUILD_OUTCOME" == 'failure' ]]; then
+            state=failure; label='build failed'; logfile=/tmp/backend-build.log
+          fi
+
+          detail=''
+          if [[ -n "$logfile" && -f "$logfile" ]]; then
+            detail="$(grep -E -m1 'error TS[0-9]+:|Cannot find module|Module not found|npm ERR!|Error:|FAIL |Failed|✖' "$logfile" | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g' || true)"
+            if [[ -z "$detail" ]]; then
+              detail="$(tail -n 1 "$logfile" | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g')"
+            fi
+          fi
+
+          description="$label"
+          if [[ -n "$detail" ]]; then
+            description="$label: $detail"
+          fi
+          description="${description:0:140}"
+
+          gh api --method POST \
+            "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state="$state" \
+            -f context='ci/backend' \
+            -f description="$description" \
+            >/dev/null
