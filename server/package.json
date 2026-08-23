@@ -12,6 +12,7 @@
     "start:debug": "nest start --watch --debug",
     "prebuild": "npm run typecheck && npm run test:ci && npm run security:audit:prod:report",
     "build": "nest build",
+    "gcp-build": "DATABASE_URL=mongodb://127.0.0.1:27017/build-placeholder prisma generate --schema=./prisma/schema.prisma && nest build",
     "pretypecheck": "prisma generate",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "jest --runInBand",
@@ -40,7 +41,7 @@
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.3",
     "passport": "^0.7.0",
-    "passport-jwt": "^4.0.1",
+    "passport-jwt": "^11.0.2",
     "reflect-metadata": "^0.2.0",
     "rxjs": "^7.8.1"
   },
