@@ -76,7 +76,7 @@ jobs:
           for attempt in $(seq 1 60); do
             if docker compose -f docker/mongodb/docker-compose.yml -p elite-drive-ci exec -T mongo \
               mongosh --quiet --host localhost:27017/test \
-              --eval 'const hello = db.hello(); if (hello.setName === "rs0" && hello.isWritablePrimary === true) quit(0); quit(1)' \
+              --eval 'if (rs.status().myState !== 1) throw new Error("MongoDB is not PRIMARY")' \
               >/dev/null 2>&1; then
               echo "MongoDB replica set is PRIMARY"
               exit 0
@@ -102,7 +102,6 @@ jobs:
         working-directory: .
         run: |
           docker compose -f docker/mongodb/docker-compose.yml -p elite-drive-ci down --volumes --remove-orphans
-          rm -rf -- docker/mongodb/mongo-data
 
       - name: Production dependency audit
         id: audit
