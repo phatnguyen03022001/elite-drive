@@ -118,6 +118,56 @@ describe('MoMo provider-success recovery', () => {
       .expect(403);
   });
 
+  it('serializes the APPROVED booking claim against completion writes in Mongo', async () => {
+    let releaseA!: () => void;
+    let releaseB!: () => void;
+    let aClaimed!: () => void;
+    let bRead!: () => void;
+    const aMayCommit = new Promise<void>((resolve) => { releaseA = resolve; });
+    const bMayWrite = new Promise<void>((resolve) => { releaseB = resolve; });
+    const aClaimedPromise = new Promise<void>((resolve) => { aClaimed = resolve; });
+    const bReadPromise = new Promise<void>((resolve) => { bRead = resolve; });
+
+    const transactionA = prisma.$transaction(async (tx) => {
+      const claim = await tx.booking.updateMany({
+        where: { id: IDS.booking, status: BookingStatus.APPROVED },
+        data: { status: BookingStatus.APPROVED },
+      });
+      expect(claim.count).toBe(1);
+      aClaimed();
+      await aMayCommit;
+      return 'claim-created';
+    });
+
+    await aClaimedPromise;
+    const transactionB = prisma.$transaction(async (tx) => {
+      const booking = await tx.booking.findUniqueOrThrow({ where: { id: IDS.booking } });
+      expect(booking.status).toBe(BookingStatus.APPROVED);
+      bRead();
+      await bMayWrite;
+      const completionClaim = await tx.booking.updateMany({
+        where: { id: IDS.booking, status: BookingStatus.APPROVED },
+        data: { status: BookingStatus.CONFIRMED },
+      });
+      expect(completionClaim.count).toBe(1);
+      return 'completion-created';
+    });
+
+    await bReadPromise;
+    releaseA();
+    await transactionA;
+    releaseB();
+
+    const outcomes = await Promise.allSettled([transactionA, transactionB]);
+    const fulfilled = outcomes.filter((outcome) => outcome.status === 'fulfilled');
+    const rejected = outcomes.filter((outcome) => outcome.status === 'rejected');
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    expect((rejected[0] as PromiseRejectedResult).reason.code).toBe('P2034');
+    expect((await prisma.booking.findUniqueOrThrow({ where: { id: IDS.booking } })).status)
+      .toBe(BookingStatus.APPROVED);
+  });
+
   it('completes an authoritative conflict exactly once and replays without duplicates', async () => {
     await prisma.booking.update({
       where: { id: IDS.booking },
@@ -207,12 +257,75 @@ describe('MoMo provider-success recovery', () => {
       .expect(({ body }) => expect(body.data.disposition).toBe('REFUNDED'));
     expect((await prisma.payment.findUniqueOrThrow({ where: { id: IDS.payment } })).status)
       .toBe(PaymentStatus.REFUNDED);
-    expect((await prisma.payment.findUniqueOrThrow({ where: { id: newerPaymentId } })).status)
+    const stale = await prisma.payment.findUniqueOrThrow({ where: { id: IDS.payment } });
+    const newer = await prisma.payment.findUniqueOrThrow({ where: { id: newerPaymentId } });
+    expect(stale.status).not.toBe(PaymentStatus.COMPLETED);
+    expect([stale.status, newer.status]).not.toEqual([
+      PaymentStatus.COMPLETED,
+      PaymentStatus.PENDING,
+    ]);
+    expect(newer.status)
       .toBe(PaymentStatus.PENDING);
     expect((await prisma.booking.findUniqueOrThrow({ where: { id: IDS.booking } })).status)
       .toBe(BookingStatus.APPROVED);
     expect(await prisma.wallet.count()).toBe(0);
     expect(fakeMomo.refund).toHaveBeenCalledTimes(1);
+  });
+
+  it('persists REFUND_PENDING and resumes through queryRefund without local effects', async () => {
+    await prisma.payment.update({
+      where: { id: IDS.payment },
+      data: {
+        status: PaymentStatus.FAILED,
+        providerTransactionId: '900001',
+        providerSuccessConflictAt: new Date(),
+        providerSuccessResultCode: 0,
+      },
+    });
+    fakeMomo.queryStatus.mockResolvedValue({
+      resultCode: 0, amount: 1000000, transId: 900001, message: 'Successful.',
+    });
+    fakeMomo.refund.mockResolvedValue({
+      resultCode: 1000,
+      amount: 1000000,
+      transId: 900002,
+      message: 'Processing.',
+    });
+    fakeMomo.queryRefund.mockResolvedValue({
+      resultCode: 1000,
+      refundTrans: [],
+    });
+    const admin = await login('integration.admin@example.com');
+
+    await admin
+      .post(`/api/admin/payments/momo/conflicts/${IDS.payment}/recover`)
+      .set('Origin', 'http://localhost:3000')
+      .expect(201)
+      .expect(({ body }) => expect(body.data.disposition).toBe('REFUND_PENDING'));
+
+    const pending = await prisma.payment.findUniqueOrThrow({ where: { id: IDS.payment } });
+    expect(pending.status).toBe(PaymentStatus.FAILED);
+    expect(pending.refundOrderId).toBe(`RF-${IDS.payment}`);
+    expect(pending.refundRequestId).toBe(`RFR-${IDS.payment}`);
+    expect(pending.refundResultCode).toBe(1000);
+    expect(await prisma.wallet.count()).toBe(0);
+    expect(await prisma.walletTransaction.count()).toBe(0);
+    expect(await prisma.contract.count()).toBe(0);
+    expect(await prisma.trip.count()).toBe(0);
+    expect(fakeMomo.refund).toHaveBeenCalledTimes(1);
+
+    await admin
+      .post(`/api/admin/payments/momo/conflicts/${IDS.payment}/recover`)
+      .set('Origin', 'http://localhost:3000')
+      .expect(201)
+      .expect(({ body }) => expect(body.data.disposition).toBe('REFUND_PENDING'));
+    expect(fakeMomo.queryRefund).toHaveBeenCalledWith(
+      `RF-${IDS.payment}`,
+      `RFR-${IDS.payment}`,
+    );
+    expect(fakeMomo.refund).toHaveBeenCalledTimes(1);
+    expect((await prisma.payment.findUniqueOrThrow({ where: { id: IDS.payment } })).status)
+      .toBe(PaymentStatus.FAILED);
   });
 
   it('resumes a successful provider refund from persisted deterministic intent', async () => {
