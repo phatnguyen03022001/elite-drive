@@ -56,6 +56,12 @@ jobs:
           set -o pipefail
           npm run test:ci 2>&1 | tee /tmp/backend-tests.log
 
+      - name: Environment synchronization tests
+        id: env-sync
+        run: |
+          set -o pipefail
+          npm run test:env-sync 2>&1 | tee /tmp/backend-env-sync.log
+
       - name: Production dependency audit
         id: audit
         run: |

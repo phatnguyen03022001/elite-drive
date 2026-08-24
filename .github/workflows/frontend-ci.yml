@@ -5,6 +5,8 @@ on:
     branches: [dev]
     paths:
       - 'client/**'
+      - 'server/scripts/sync-env.mjs'
+      - 'server/scripts/sync-env.test.mjs'
       - '.github/workflows/frontend-ci.yml'
 
 permissions:
@@ -35,6 +37,12 @@ jobs:
         run: |
           set -o pipefail
           npm ci --no-audit --no-fund 2>&1 | tee /tmp/frontend-install.log
+
+      - name: Environment synchronization tests
+        id: env-sync
+        run: |
+          set -o pipefail
+          npm run test:env-sync 2>&1 | tee /tmp/frontend-env-sync.log
 
       - name: Lint
         id: lint
