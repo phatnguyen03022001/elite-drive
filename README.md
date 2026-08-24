@@ -43,6 +43,8 @@ Uploaded images are stored by the backend under `UPLOAD_DIR` and are served thro
 
 See [`docs/architecture.md`](docs/architecture.md) for more detail.
 
+Operational documentation: [`docs/branch-workflow.md`](docs/branch-workflow.md) and [`docs/platform-runbook.md`](docs/platform-runbook.md). The concise release gate is [`docs/release-checklist.md`](docs/release-checklist.md).
+
 ## Product capabilities
 
 - Public vehicle discovery and availability

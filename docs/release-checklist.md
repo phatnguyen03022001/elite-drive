@@ -1,10 +1,11 @@
 # Release Checklist
 
-Use this checklist for changes merged or committed directly to `main`.
+Use this concise checklist for the lifecycle `dev → local verification → optional shared CI → review/acceptance → exact candidate SHA → explicit promotion to main → explicit deployment → runtime verification`. See [Branch Workflow](branch-workflow.md) and [Platform Runbook](platform-runbook.md) for the operating model and provider procedures.
 
 ## 1. Repository state
 
-- Confirm the intended commit is the current `main` SHA.
+- Confirm the intended candidate is based on `dev` and capture its exact SHA.
+- Confirm `main` and the candidate have not moved since review; promote explicitly only with authorization.
 - Confirm no `.env`, credentials, runtime database state, upload data, logs, or generated build state are tracked.
 - Review the diff for hard-coded secrets, debug-only behavior, and obsolete infrastructure references.
 
@@ -48,9 +49,9 @@ Backend:
 
 No Cloudinary, Brevo, Resend, AWS storage, Garage, or MinIO account is required.
 
-## 5. CI
+## 5. Shared CI and review
 
-Verify GitHub Actions completes successfully for code changes:
+When applicable, use GitHub Actions as shared verification after local checks:
 
 - frontend lint;
 - frontend type-check;
@@ -58,11 +59,11 @@ Verify GitHub Actions completes successfully for code changes:
 - Prisma generation;
 - backend type-check/tests/audit/build.
 
-Documentation-only changes are intentionally ignored by CI.
+Documentation-only changes should not unnecessarily consume CI. CI success is not promotion or deployment authorization. The current workflows still target `main`; see [Branch Workflow](branch-workflow.md) for the governance gap.
 
-## 6. Deployment
+## 6. Deployment and runtime verification
 
-The repository is hosting-provider independent. If a deployment is configured, verify it is built from the same Git SHA that passed CI.
+Deployment is explicit and separate from promotion. If a deployment is configured, verify it is built from the same exact Git SHA that passed local/shared verification.
 
 A deployment is not considered healthy merely because a provider accepted the commit. Confirm the application itself starts and serves expected routes.
 
@@ -96,7 +97,7 @@ After deployment, inspect application errors and unexpected `4xx`/`5xx` response
 
 A release is complete when:
 
-- the intended SHA is on `main`;
+- the explicitly promoted candidate SHA is on `main`;
 - CI is green for code changes;
 - local or deployed smoke tests pass;
 - no new critical runtime/security issue is known.
