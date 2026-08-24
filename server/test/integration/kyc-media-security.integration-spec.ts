@@ -105,4 +105,24 @@ describe('real HTTP KYC media access contract', () => {
       expect([400, 401, 404]).toContain(response.status);
     });
   });
+
+  it('denies authenticated traversal and never returns an escaped fixture', async () => {
+    const escapedFixture = Buffer.from('authenticated-traversal-sentinel');
+    const escapedFixturePath = join(uploadRoot, 'escaped.png');
+    await writeFile(escapedFixturePath, escapedFixture);
+    const customer = await login('kyc.customer@example.com');
+
+    const assertDeniedWithoutFixture = (response: request.Response) => {
+      expect(response.status).toBe(404);
+      expect(Buffer.isBuffer(response.body) && response.body.equals(escapedFixture)).toBe(false);
+      expect(response.text || '').not.toContain('authenticated-traversal-sentinel');
+    };
+
+    await customer
+      .get('/api/upload/files/customers/kyc/%2e%2e/%2e%2e/escaped.png')
+      .expect(assertDeniedWithoutFixture);
+    await customer
+      .get('/api/upload/files/cars/%2e%2e/customers/kyc/front/customer.png')
+      .expect(assertDeniedWithoutFixture);
+  });
 });
