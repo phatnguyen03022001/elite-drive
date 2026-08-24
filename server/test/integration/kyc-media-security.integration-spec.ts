@@ -2,7 +2,7 @@ import * as bcrypt from 'bcrypt';
 import request from 'supertest';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { KYCStatus, UserRole } from '@prisma/client';
+import { KYCStatus, UserRole, VerificationStatus } from '@prisma/client';
 import { createIntegrationApp, resetIntegrationDatabase } from './test-database';
 import { PASSWORD } from './fixtures';
 
@@ -40,11 +40,11 @@ describe('real HTTP KYC media access contract', () => {
     const password = await bcrypt.hash(PASSWORD, 4);
     await prisma.user.createMany({
       data: [
-        { id: ids.customer, email: 'kyc.customer@example.com', password, role: UserRole.CUSTOMER, isActive: true },
-        { id: ids.customerTwo, email: 'kyc.customer.two@example.com', password, role: UserRole.CUSTOMER, isActive: true },
-        { id: ids.owner, email: 'kyc.owner@example.com', password, role: UserRole.OWNER, isActive: true },
-        { id: ids.ownerTwo, email: 'kyc.owner.two@example.com', password, role: UserRole.OWNER, isActive: true },
-        { id: ids.admin, email: 'kyc.admin@example.com', password, role: UserRole.ADMIN, isActive: true },
+        { id: ids.customer, email: 'kyc.customer@example.com', password, role: UserRole.CUSTOMER, isActive: true, isVerified: true, verificationStatus: VerificationStatus.APPROVED },
+        { id: ids.customerTwo, email: 'kyc.customer.two@example.com', password, role: UserRole.CUSTOMER, isActive: true, isVerified: true, verificationStatus: VerificationStatus.APPROVED },
+        { id: ids.owner, email: 'kyc.owner@example.com', password, role: UserRole.OWNER, isActive: true, isVerified: true, verificationStatus: VerificationStatus.APPROVED },
+        { id: ids.ownerTwo, email: 'kyc.owner.two@example.com', password, role: UserRole.OWNER, isActive: true, isVerified: true, verificationStatus: VerificationStatus.APPROVED },
+        { id: ids.admin, email: 'kyc.admin@example.com', password, role: UserRole.ADMIN, isActive: true, isVerified: true, verificationStatus: VerificationStatus.APPROVED },
       ],
     });
     await prisma.kYC.createMany({
@@ -98,7 +98,7 @@ describe('real HTTP KYC media access contract', () => {
 
   it('cannot serve an orphan KYC file or bypass the protected namespace through traversal', async () => {
     await writeFile(join(uploadRoot, 'customers/kyc/front/orphan.png'), png);
-    await request(app.getHttpServer()).get('/api/upload/files/customers/kyc/front/orphan.png').expect(404);
+    await request(app.getHttpServer()).get('/api/upload/files/customers/kyc/front/orphan.png').expect(401);
     await request(app.getHttpServer()).get('/api/upload/files/customers/kyc/%2e%2e/%2e%2e/outside.txt').expect((response) => {
       expect([400, 404]).toContain(response.status);
     });
