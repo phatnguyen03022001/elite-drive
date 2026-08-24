@@ -20,6 +20,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "jest --runInBand",
     "test:ci": "jest --runInBand",
+    "test:integration": "jest --config test/jest-integration.json --runInBand",
     "test:env-sync": "node --test scripts/sync-env.test.mjs",
     "env:check": "node scripts/sync-env.mjs --check",
     "env:sync": "node scripts/sync-env.mjs --sync",

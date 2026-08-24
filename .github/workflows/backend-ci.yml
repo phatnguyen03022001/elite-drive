@@ -22,13 +22,14 @@ jobs:
       run:
         working-directory: server
     env:
-      DATABASE_URL: mongodb://localhost:27017/elitedrive
+      DATABASE_URL: mongodb://127.0.0.1:27017/elitedrive_integration?replicaSet=rs0
       JWT_SECRET: ci-only-secret-ci-only-secret-ci-only-secret
       OTP_HASH_SECRET: ci-only-otp-hash-secret-ci-only-otp-hash-secret
       PLATFORM_USER_ID: 507f1f77bcf86cd799439011
       MAIL_TRANSPORT: console
       MOCK_PAYMENTS_ENABLED: 'true'
       NODE_ENV: test
+      APP_PORT: '8000'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -61,6 +62,47 @@ jobs:
         run: |
           set -o pipefail
           npm run test:env-sync 2>&1 | tee /tmp/backend-env-sync.log
+
+      - name: Start MongoDB replica set
+        id: mongo-start
+        working-directory: .
+        run: docker compose -f docker/mongodb/docker-compose.yml -p elite-drive-ci up -d
+
+      - name: Wait for MongoDB PRIMARY
+        id: mongo-ready
+        working-directory: .
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 60); do
+            if docker compose -f docker/mongodb/docker-compose.yml -p elite-drive-ci exec -T mongo \
+              mongosh --quiet --host localhost:27017/test \
+              --eval 'const hello = db.hello(); if (hello.setName === "rs0" && hello.isWritablePrimary === true) quit(0); quit(1)' \
+              >/dev/null 2>&1; then
+              echo "MongoDB replica set is PRIMARY"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "MongoDB replica set did not reach PRIMARY within 60 seconds"
+          docker compose -f docker/mongodb/docker-compose.yml -p elite-drive-ci logs --no-color mongo mongo-init
+          exit 1
+
+      - name: Prepare disposable integration schema
+        id: integration-schema
+        run: npx prisma db push --schema=./prisma/schema.prisma --accept-data-loss --skip-generate
+
+      - name: Real Mongo integration tests
+        id: integration
+        run: |
+          set -o pipefail
+          npm run test:integration 2>&1 | tee /tmp/backend-integration.log
+
+      - name: Cleanup MongoDB
+        if: ${{ always() }}
+        working-directory: .
+        run: |
+          docker compose -f docker/mongodb/docker-compose.yml -p elite-drive-ci down --volumes --remove-orphans
+          rm -rf -- docker/mongodb/mongo-data
 
       - name: Production dependency audit
         id: audit
