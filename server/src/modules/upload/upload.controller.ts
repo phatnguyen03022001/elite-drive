@@ -62,7 +62,8 @@ export class UploadController {
 
   @Public()
   @Get('files/cars/*path')
-  async getCarFile(@Param('path') path: string | string[], @Res() response: Response): Promise<void> {
+  async getCarFile(@Param('path') path: string | string[], @Req() request: any, @Res() response: Response): Promise<void> {
+    if (UploadService.isPrivateKycRequestUrl(request.originalUrl)) throw new NotFoundException('Không tìm thấy file');
     const fullPath = ['cars', ...(Array.isArray(path) ? path : [path])];
     if (UploadService.isPrivateKycPath(fullPath)) throw new NotFoundException('Không tìm thấy file');
     const filePath = await this.uploadService.resolvePublicFile(fullPath);
@@ -71,7 +72,8 @@ export class UploadController {
 
   @Public()
   @Get('files/avatars/*path')
-  async getAvatarFile(@Param('path') path: string | string[], @Res() response: Response): Promise<void> {
+  async getAvatarFile(@Param('path') path: string | string[], @Req() request: any, @Res() response: Response): Promise<void> {
+    if (UploadService.isPrivateKycRequestUrl(request.originalUrl)) throw new NotFoundException('Không tìm thấy file');
     const fullPath = ['avatars', ...(Array.isArray(path) ? path : [path])];
     if (UploadService.isPrivateKycPath(fullPath)) throw new NotFoundException('Không tìm thấy file');
     const filePath = await this.uploadService.resolvePublicFile(fullPath);
@@ -84,6 +86,9 @@ export class UploadController {
     @Req() request: any,
     @Res() response: Response,
   ): Promise<void> {
+    if (UploadService.isPrivateKycRequestUrl(request.originalUrl)) {
+      throw new NotFoundException('Không tìm thấy file');
+    }
     if (UploadService.isPrivateKycPath(path)) {
       await this.sendAuthorizedKycFile(path, request.user, response);
       return;

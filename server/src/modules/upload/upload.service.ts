@@ -97,6 +97,15 @@ export class UploadService {
     return /^(customers|owners)\/kyc\//.test(clean);
   }
 
+  static isPrivateKycRequestUrl(requestUrl: string): boolean {
+    try {
+      const path = decodeURIComponent(requestUrl.split('?')[0]);
+      return /\/api\/upload\/files\/.*(?:customers|owners)\/kyc(?:\/|$)/.test(path);
+    } catch {
+      return true;
+    }
+  }
+
   async resolvePublicFile(relativePath: string | string[]): Promise<string> {
     const root = resolve(this.uploadRoot());
     const pathValue = Array.isArray(relativePath) ? relativePath.join('/') : relativePath;
