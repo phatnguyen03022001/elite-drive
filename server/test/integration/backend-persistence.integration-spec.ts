@@ -41,6 +41,25 @@ describe('real Mongo persistence and transaction boundaries', () => {
     expect(activeBookings).toBe(1);
   });
 
+  it('preserves Prisma unique indexes when resetting the database', async () => {
+    const email = 'integration.index-preservation@example.com';
+    await prisma.user.create({
+      data: {
+        email,
+        password: 'integration-password',
+      },
+    });
+
+    await expect(
+      prisma.user.create({
+        data: {
+          email,
+          password: 'integration-password',
+        },
+      }),
+    ).rejects.toMatchObject({ code: 'P2002' });
+  });
+
   it('persists payment completion effects once and remains replay-safe', async () => {
     await seedUsers(prisma);
     await seedCar(prisma);

@@ -41,7 +41,22 @@ export function assertSafeDatabaseAuthority() {
 
 export async function resetIntegrationDatabase(prisma: PrismaService) {
   assertSafeIntegrationDatabase();
-  await prisma.$runCommandRaw({ dropDatabase: 1 });
+  const collectionsResult = (await prisma.$runCommandRaw({
+    listCollections: 1,
+    nameOnly: true,
+  })) as {
+    cursor?: { firstBatch?: Array<{ name?: string }> };
+  };
+
+  for (const collection of collectionsResult.cursor?.firstBatch ?? []) {
+    const name = collection.name;
+    if (!name || name.startsWith('system.')) continue;
+
+    await prisma.$runCommandRaw({
+      delete: name,
+      deletes: [{ q: {}, limit: 0 }],
+    });
+  }
 }
 
 export async function createIntegrationApp(): Promise<{
