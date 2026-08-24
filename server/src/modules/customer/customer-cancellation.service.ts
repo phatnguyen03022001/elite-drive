@@ -3,8 +3,8 @@ import { ConfigService } from '@nestjs/config';
 import { BookingStatus, PaymentStatus } from '@prisma/client';
 import { assertVndAmount } from '../../common/money/vnd';
 import {
-  bookingTripAllowsPreStartCancellation,
   evaluateFullRefundEligibility,
+  evaluatePreStartCancellationEligibility,
   paymentMatchesBookingAmount,
 } from '../../common/rental/lifecycle-policy';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -29,10 +29,10 @@ export class CustomerCancellationService {
       if (!booking) throw new NotFoundException('Không tìm thấy đơn đặt xe');
 
       if (
-        !bookingTripAllowsPreStartCancellation(
+        evaluatePreStartCancellationEligibility(
           booking.status,
           booking.trip?.status,
-        )
+        ).reason === 'TRIP_STARTED'
       ) {
         throw new BadRequestException(
           'Không thể hủy booking sau khi chuyến đi đã bắt đầu',

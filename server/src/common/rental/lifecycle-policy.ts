@@ -37,18 +37,32 @@ export function evaluateFullRefundEligibility(input: {
   return { eligible: true, reason: 'ELIGIBLE' };
 }
 
-export function bookingTripAllowsPreStartCancellation(
+type PreStartCancellationEligibilityReason =
+  | 'ELIGIBLE'
+  | 'BOOKING_NOT_CANCELLABLE'
+  | 'TRIP_STARTED';
+
+export function evaluatePreStartCancellationEligibility(
   bookingStatus: BookingStatus,
   tripStatus?: TripStatus | null,
-): boolean {
+): {
+  eligible: boolean;
+  reason: PreStartCancellationEligibilityReason;
+} {
+  if (
+    tripStatus === TripStatus.ONGOING ||
+    tripStatus === TripStatus.COMPLETED
+  ) {
+    return { eligible: false, reason: 'TRIP_STARTED' };
+  }
+
   const bookingCanBeCancelled = new Set<BookingStatus>([
     BookingStatus.PENDING,
     BookingStatus.APPROVED,
     BookingStatus.CONFIRMED,
   ]).has(bookingStatus);
-  const tripHasNotStarted =
-    tripStatus === undefined ||
-    tripStatus === null ||
-    tripStatus === TripStatus.UPCOMING;
-  return bookingCanBeCancelled && tripHasNotStarted;
+  if (!bookingCanBeCancelled) {
+    return { eligible: false, reason: 'BOOKING_NOT_CANCELLABLE' };
+  }
+  return { eligible: true, reason: 'ELIGIBLE' };
 }

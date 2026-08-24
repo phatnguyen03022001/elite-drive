@@ -131,6 +131,29 @@ describe('CustomerCancellationService invariants', () => {
     });
   });
 
+  it('keeps invalid booking statuses on the booking claim failure path', async () => {
+    const tx = {
+      booking: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'booking-1',
+          status: BookingStatus.CANCELLED,
+          trip: null,
+          payments: [],
+        }),
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+      },
+    };
+    const db = {
+      $transaction: jest.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
+    } as unknown as PrismaService;
+    const service = new CustomerCancellationService(db, config);
+
+    await expect(service.cancelBooking('customer-1', 'booking-1')).rejects.toThrow(
+      'Booking đã được xử lý, trip đã bắt đầu hoặc không thể hủy',
+    );
+    expect(tx.booking.updateMany).toHaveBeenCalledTimes(1);
+  });
+
   it('releases the promotion slot once an unpaid cancellation is claimed', async () => {
     const tx = {
       booking: {

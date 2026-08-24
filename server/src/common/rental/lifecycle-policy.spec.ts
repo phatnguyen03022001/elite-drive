@@ -1,8 +1,8 @@
 import { BookingStatus, PaymentStatus, TripStatus } from '@prisma/client';
 import {
   bookingAllowsPayment,
-  bookingTripAllowsPreStartCancellation,
   evaluateFullRefundEligibility,
+  evaluatePreStartCancellationEligibility,
   paymentMatchesBookingAmount,
 } from './lifecycle-policy';
 
@@ -58,14 +58,18 @@ describe('rental lifecycle policy', () => {
     ).toEqual({ eligible: false, reason });
   });
 
-  it('allows cancellation only for the existing booking and trip states', () => {
+  it('distinguishes booking status from trip-start eligibility for cancellation', () => {
     for (const status of [
       BookingStatus.PENDING,
       BookingStatus.APPROVED,
       BookingStatus.CONFIRMED,
     ]) {
-      expect(bookingTripAllowsPreStartCancellation(status, undefined)).toBe(true);
-      expect(bookingTripAllowsPreStartCancellation(status, TripStatus.UPCOMING)).toBe(true);
+      expect(
+        evaluatePreStartCancellationEligibility(status, undefined),
+      ).toEqual({ eligible: true, reason: 'ELIGIBLE' });
+      expect(
+        evaluatePreStartCancellationEligibility(status, TripStatus.UPCOMING),
+      ).toEqual({ eligible: true, reason: 'ELIGIBLE' });
     }
 
     for (const status of [
@@ -73,13 +77,21 @@ describe('rental lifecycle policy', () => {
       BookingStatus.COMPLETED,
       BookingStatus.CANCELLED,
     ]) {
-      expect(bookingTripAllowsPreStartCancellation(status, TripStatus.UPCOMING)).toBe(false);
+      expect(
+        evaluatePreStartCancellationEligibility(status, TripStatus.UPCOMING),
+      ).toEqual({ eligible: false, reason: 'BOOKING_NOT_CANCELLABLE' });
     }
     expect(
-      bookingTripAllowsPreStartCancellation(BookingStatus.CONFIRMED, TripStatus.ONGOING),
-    ).toBe(false);
+      evaluatePreStartCancellationEligibility(
+        BookingStatus.CONFIRMED,
+        TripStatus.ONGOING,
+      ),
+    ).toEqual({ eligible: false, reason: 'TRIP_STARTED' });
     expect(
-      bookingTripAllowsPreStartCancellation(BookingStatus.CONFIRMED, TripStatus.COMPLETED),
-    ).toBe(false);
+      evaluatePreStartCancellationEligibility(
+        BookingStatus.CONFIRMED,
+        TripStatus.COMPLETED,
+      ),
+    ).toEqual({ eligible: false, reason: 'TRIP_STARTED' });
   });
 });
