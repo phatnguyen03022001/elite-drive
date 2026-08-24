@@ -59,7 +59,7 @@ When applicable, use GitHub Actions as shared verification after local checks:
 - Prisma generation;
 - backend type-check/tests/audit/build.
 
-Documentation-only changes should not unnecessarily consume CI. CI success is not promotion or deployment authorization. The current workflows still target `main`; see [Branch Workflow](branch-workflow.md) for the governance gap.
+Documentation-only changes should not unnecessarily consume CI. Shared frontend/backend CI validates relevant pushes to `dev`; record the exact candidate SHA. CI success remains separate from review, promotion, deployment, and runtime health.
 
 ## 6. Deployment and runtime verification
 

@@ -64,7 +64,7 @@ Local shell verification is the primary development loop. Actions are remote/sha
 
 Avoid unnecessary matrices, duplicate workflows, artifacts, caches, large runners, manual dispatch, automatic retries, or paid external services without evidence that they solve a real problem. A documentation-only change should not consume CI when path filters can avoid it.
 
-The current repository workflows still target `main` for push and pull-request events. Therefore the desired branch governance and current GitHub Actions triggers are not yet aligned. **FOLLOW_UP:** define and review a bounded `dev` integration workflow; do not treat the current `main` filters as proof that `dev` CI exists. The workflows were not changed by this documentation task.
+Frontend and backend CI run on relevant pushes to `dev`, with path filters that avoid unrelated frontend/backend runs. Documentation-only changes do not run these workflows unless the workflow file itself is modified. CI is shared verification, not promotion or deployment authority. Promotion to `main` does not automatically imply rerunning these workflows.
 
 CI success, code review, Architect acceptance, promotion authorization, deployment success, and runtime health are separate signals. A successful Action never authorizes promotion or deployment by itself.
 

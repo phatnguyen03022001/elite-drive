@@ -2,20 +2,13 @@ name: Backend CI
 
 on:
   push:
-    branches: [main]
+    branches: [dev]
     paths:
       - 'server/**'
       - '.github/workflows/backend-ci.yml'
-  pull_request:
-    branches: [main]
-    paths:
-      - 'server/**'
-      - '.github/workflows/backend-ci.yml'
-  workflow_dispatch:
 
 permissions:
   contents: read
-  statuses: write
 
 concurrency:
   group: backend-ci-${{ github.ref }}
@@ -74,58 +67,3 @@ jobs:
         run: |
           set -o pipefail
           npx nest build 2>&1 | tee /tmp/backend-build.log
-
-      - name: Report backend CI status
-        if: always()
-        env:
-          GH_TOKEN: ${{ github.token }}
-          INSTALL_OUTCOME: ${{ steps.install.outcome }}
-          TYPECHECK_OUTCOME: ${{ steps.typecheck.outcome }}
-          TESTS_OUTCOME: ${{ steps.tests.outcome }}
-          AUDIT_OUTCOME: ${{ steps.audit.outcome }}
-          BUILD_OUTCOME: ${{ steps.build.outcome }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          state=success
-          label='all checks passed'
-          logfile=''
-
-          if [[ "$INSTALL_OUTCOME" == 'failure' ]]; then
-            state=failure; label='install failed'; logfile=/tmp/backend-install.log
-          elif [[ "$TYPECHECK_OUTCOME" == 'failure' ]]; then
-            state=failure; label='typecheck failed'; logfile=/tmp/backend-typecheck.log
-          elif [[ "$TESTS_OUTCOME" == 'failure' ]]; then
-            state=failure; label='tests failed'; logfile=/tmp/backend-tests.log
-          elif [[ "$AUDIT_OUTCOME" == 'failure' ]]; then
-            state=failure; label='audit failed'; logfile=/tmp/backend-audit.log
-          elif [[ "$BUILD_OUTCOME" == 'failure' ]]; then
-            state=failure; label='build failed'; logfile=/tmp/backend-build.log
-          fi
-
-          detail=''
-          if [[ -n "$logfile" && -f "$logfile" ]]; then
-            detail="$(grep -E -m1 'error TS[0-9]+:|Cannot find module|Module not found|npm ERR!|Error:|FAIL |Failed|✖' "$logfile" | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g' || true)"
-            if [[ -z "$detail" ]]; then
-              detail="$(tail -n 1 "$logfile" | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g')"
-            fi
-          fi
-
-          description="$label"
-          context='ci/backend'
-          if [[ "$state" == 'failure' ]]; then
-            context="ci/backend/${label// /-}"
-          fi
-          if [[ -n "$detail" ]]; then
-            description="$label: $detail"
-            context="$context | ${detail:0:90}"
-          fi
-          description="${description:0:140}"
-          context="${context:0:140}"
-
-          gh api --method POST \
-            "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            -f state="$state" \
-            -f context="$context" \
-            -f description="$description" \
-            >/dev/null
