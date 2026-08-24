@@ -89,9 +89,7 @@ describe('MoMo provider-success recovery', () => {
       .post(`/api/admin/payments/momo/conflicts/${IDS.payment}/recover`)
       .set('Origin', 'http://localhost:3000')
       .expect(201)
-      .expect(({ body }) =>
-        expect(body.data).toEqual(expect.objectContaining({ disposition: 'REFUNDED' })),
-      );
+      .expect(({ body }) => expect(body.data.disposition).toBe('REFUNDED'));
 
     const refunded = await prisma.payment.findUniqueOrThrow({ where: { id: IDS.payment } });
     expect(refunded.status).toBe(PaymentStatus.REFUNDED);

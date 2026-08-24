@@ -659,8 +659,20 @@ export class PaymentService {
           id: payment.id,
           status: PaymentStatus.FAILED,
           providerSuccessConflictAt: { not: null },
-          refundOrderId: null,
-          refundRequestId: null,
+          AND: [
+            {
+              OR: [
+                { refundOrderId: null },
+                { refundOrderId: { isSet: false } },
+              ],
+            },
+            {
+              OR: [
+                { refundRequestId: null },
+                { refundRequestId: { isSet: false } },
+              ],
+            },
+          ],
         },
         data: { refundOrderId, refundRequestId },
       });
