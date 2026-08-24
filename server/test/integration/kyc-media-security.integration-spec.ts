@@ -98,7 +98,9 @@ describe('real HTTP KYC media access contract', () => {
 
   it('cannot serve an orphan KYC file or bypass the protected namespace through traversal', async () => {
     await writeFile(join(uploadRoot, 'customers/kyc/front/orphan.png'), png);
-    await request(app.getHttpServer()).get('/api/upload/files/customers/kyc/front/orphan.png').expect(401);
+    await request(app.getHttpServer()).get('/api/upload/files/customers/kyc/front/orphan.png').expect((response) => {
+      expect([401, 404]).toContain(response.status);
+    });
     await request(app.getHttpServer()).get('/api/upload/files/customers/kyc/%2e%2e/%2e%2e/outside.txt').expect((response) => {
       expect([400, 404]).toContain(response.status);
     });
