@@ -259,6 +259,27 @@ export class PaymentService {
       }
 
       if (currentStatus === PaymentStatus.FAILED) {
+        if (this.isValidProviderTransactionId(providerTransactionId)) {
+          const incomingProviderTransactionId = String(providerTransactionId);
+          if (!latest.providerTransactionId) {
+            await this.db.payment.updateMany({
+              where: {
+                id: paymentId,
+                status: PaymentStatus.FAILED,
+                OR: [
+                  { providerTransactionId: null },
+                  { providerTransactionId: { isSet: false } },
+                ],
+              },
+              data: { providerTransactionId: incomingProviderTransactionId },
+            });
+          } else if (latest.providerTransactionId !== incomingProviderTransactionId) {
+            this.logger.warn(
+              `MoMo provider identity conflict for payment ${paymentId}: existing=${latest.providerTransactionId}, incoming=${incomingProviderTransactionId}`,
+            );
+          }
+        }
+
         if (!latest.providerSuccessConflictAt) {
           await this.db.payment.updateMany({
             where: {
@@ -272,11 +293,6 @@ export class PaymentService {
             data: {
               providerSuccessConflictAt: new Date(),
               providerSuccessResultCode: resultCode,
-              ...(latest.providerTransactionId
-                ? {}
-                : this.isValidProviderTransactionId(providerTransactionId)
-                  ? { providerTransactionId: String(providerTransactionId) }
-                  : {}),
             },
           });
         }

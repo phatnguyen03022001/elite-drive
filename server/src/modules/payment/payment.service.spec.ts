@@ -1,4 +1,4 @@
-import { BadRequestException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Logger, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PaymentStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -178,11 +178,14 @@ describe('PaymentService MoMo invariants', () => {
     expect(result.localStatus).toBe(PaymentStatus.FAILED);
     expect(updateMany).toHaveBeenCalledWith(expect.objectContaining({
       where: expect.objectContaining({ id: 'payment-1', status: PaymentStatus.FAILED }),
-      data: expect.objectContaining({
+      data: { providerTransactionId: '4088878653' },
+    }));
+    expect(updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ id: 'payment-1', status: PaymentStatus.FAILED }),
+      data: {
         providerSuccessResultCode: 0,
-        providerTransactionId: '4088878653',
         providerSuccessConflictAt: expect.any(Date),
-      }),
+      },
     }));
     expect((db as unknown as { $transaction: jest.Mock }).$transaction).not.toHaveBeenCalled();
   });
@@ -221,5 +224,72 @@ describe('PaymentService MoMo invariants', () => {
       data: expect.objectContaining({ providerTransactionId: '999999' }),
     }));
     expect((db as unknown as { $transaction: jest.Mock }).$transaction).not.toHaveBeenCalled();
+  });
+
+  it('backfills a valid provider identity after conflict evidence was already recorded', async () => {
+    const conflictAt = new Date('2026-08-24T00:00:00.000Z');
+    const findUnique = jest
+      .fn()
+      .mockResolvedValueOnce({
+        id: 'payment-1', userId: 'customer-1', transactionId: 'PAY-ORDER-1', amount: 150000, status: PaymentStatus.FAILED,
+      })
+      .mockResolvedValueOnce({
+        status: PaymentStatus.FAILED,
+        providerTransactionId: null,
+        providerSuccessConflictAt: conflictAt,
+      });
+    const updateMany = jest.fn().mockResolvedValue({ count: 1 });
+    const db = { payment: { findUnique, updateMany }, $transaction: jest.fn() } as unknown as PrismaService;
+    const momo = {
+      queryStatus: jest.fn().mockResolvedValue({
+        orderId: 'PAY-ORDER-1', requestId: 'QUERY-payment-1', amount: 150000,
+        resultCode: 0, message: 'Successful.', transId: 222, responseTime: Date.now(),
+      }),
+    } as unknown as MomoGatewayService;
+    const service = new PaymentService(db, momo, config);
+
+    const result = await service.queryMomoStatus('customer-1', 'payment-1');
+
+    expect(result.localStatus).toBe(PaymentStatus.FAILED);
+    expect(updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ id: 'payment-1', status: PaymentStatus.FAILED }),
+      data: { providerTransactionId: '222' },
+    }));
+    expect(updateMany).not.toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ providerSuccessConflictAt: expect.any(Date) }),
+    }));
+    expect((db as unknown as { $transaction: jest.Mock }).$transaction).not.toHaveBeenCalled();
+  });
+
+  it('warns and preserves an existing provider identity when a different one arrives', async () => {
+    const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
+    const findUnique = jest
+      .fn()
+      .mockResolvedValueOnce({
+        id: 'payment-1', userId: 'customer-1', transactionId: 'PAY-ORDER-1', amount: 150000, status: PaymentStatus.FAILED,
+      })
+      .mockResolvedValueOnce({
+        status: PaymentStatus.FAILED,
+        providerTransactionId: '111',
+        providerSuccessConflictAt: new Date('2026-08-24T00:00:00.000Z'),
+      });
+    const updateMany = jest.fn();
+    const db = { payment: { findUnique, updateMany }, $transaction: jest.fn() } as unknown as PrismaService;
+    const momo = {
+      queryStatus: jest.fn().mockResolvedValue({
+        orderId: 'PAY-ORDER-1', requestId: 'QUERY-payment-1', amount: 150000,
+        resultCode: 0, message: 'Successful.', transId: 222, responseTime: Date.now(),
+      }),
+    } as unknown as MomoGatewayService;
+    const service = new PaymentService(db, momo, config);
+
+    const result = await service.queryMomoStatus('customer-1', 'payment-1');
+
+    expect(result.localStatus).toBe(PaymentStatus.FAILED);
+    expect(updateMany).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('111'));
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('222'));
+    expect((db as unknown as { $transaction: jest.Mock }).$transaction).not.toHaveBeenCalled();
+    warn.mockRestore();
   });
 });
