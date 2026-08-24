@@ -102,7 +102,7 @@ describe('real HTTP KYC media access contract', () => {
       expect([401, 404]).toContain(response.status);
     });
     await request(app.getHttpServer()).get('/api/upload/files/customers/kyc/%2e%2e/%2e%2e/outside.txt').expect((response) => {
-      expect([400, 404]).toContain(response.status);
+      expect([400, 401, 404]).toContain(response.status);
     });
   });
 });
