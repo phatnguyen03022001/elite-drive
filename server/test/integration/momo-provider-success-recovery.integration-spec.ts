@@ -119,6 +119,10 @@ describe('MoMo provider-success recovery', () => {
   });
 
   it('serializes the APPROVED booking claim against completion writes in Mongo', async () => {
+    await prisma.booking.update({
+      where: { id: IDS.booking },
+      data: { status: BookingStatus.APPROVED },
+    });
     let releaseA!: () => void;
     let releaseB!: () => void;
     let aClaimed!: () => void;
