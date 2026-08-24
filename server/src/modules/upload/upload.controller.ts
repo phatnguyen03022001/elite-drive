@@ -52,27 +52,29 @@ export class UploadController {
 
   @Get('files/customers/kyc/*path')
   async getCustomerKycFile(@Param('path') path: string | string[], @Req() request: any, @Res() response: Response): Promise<void> {
-    await this.sendAuthorizedKycFile(path, request.user, response);
+    await this.sendAuthorizedKycFile(['customers', 'kyc', ...(Array.isArray(path) ? path : [path])], request.user, response);
   }
 
   @Get('files/owners/kyc/*path')
   async getOwnerKycFile(@Param('path') path: string | string[], @Req() request: any, @Res() response: Response): Promise<void> {
-    await this.sendAuthorizedKycFile(path, request.user, response);
+    await this.sendAuthorizedKycFile(['owners', 'kyc', ...(Array.isArray(path) ? path : [path])], request.user, response);
   }
 
   @Public()
   @Get('files/cars/*path')
   async getCarFile(@Param('path') path: string | string[], @Res() response: Response): Promise<void> {
-    if (UploadService.isPrivateKycPath(['cars', ...(Array.isArray(path) ? path : [path])])) throw new NotFoundException('Không tìm thấy file');
-    const filePath = await this.uploadService.resolvePublicFile(path);
+    const fullPath = ['cars', ...(Array.isArray(path) ? path : [path])];
+    if (UploadService.isPrivateKycPath(fullPath)) throw new NotFoundException('Không tìm thấy file');
+    const filePath = await this.uploadService.resolvePublicFile(fullPath);
     response.sendFile(filePath);
   }
 
   @Public()
   @Get('files/avatars/*path')
   async getAvatarFile(@Param('path') path: string | string[], @Res() response: Response): Promise<void> {
-    if (UploadService.isPrivateKycPath(['avatars', ...(Array.isArray(path) ? path : [path])])) throw new NotFoundException('Không tìm thấy file');
-    const filePath = await this.uploadService.resolvePublicFile(path);
+    const fullPath = ['avatars', ...(Array.isArray(path) ? path : [path])];
+    if (UploadService.isPrivateKycPath(fullPath)) throw new NotFoundException('Không tìm thấy file');
+    const filePath = await this.uploadService.resolvePublicFile(fullPath);
     response.sendFile(filePath);
   }
 
