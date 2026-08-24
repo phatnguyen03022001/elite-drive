@@ -166,8 +166,13 @@ export async function main(args = process.argv.slice(2), io = { stdout: console.
       : await syncEnv(options);
     printKeys(io, 'Missing', result.missing);
     printKeys(io, options.mode === 'sync' ? 'Removed' : 'Extra', result.extra);
-    if (result.missing.length === 0 && result.extra.length === 0) io.stdout(options.mode === 'check' ? 'Environment is structurally synchronized.' : 'Environment synchronized.');
-    return result.missing.length || result.extra.length ? 1 : 0;
+    const drift = result.missing.length > 0 || result.extra.length > 0;
+    if (options.mode === 'check') {
+      if (!drift) io.stdout('Environment is structurally synchronized.');
+      return drift ? 1 : 0;
+    }
+    io.stdout('Environment synchronized.');
+    return 0;
   } catch (error) {
     io.stderr(error instanceof EnvSyncError ? error.message : 'Environment operation failed');
     return 2;

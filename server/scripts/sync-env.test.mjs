@@ -49,6 +49,24 @@ test('check reports missing and extra names without values', async () => {
   assert.ok(!captured.output.join('\n').includes(SECRET));
 });
 
+test('CLI exit contract distinguishes check drift from successful sync', async () => {
+  const paths = await fixture('A=template\nB=template-default\n', `A="${SECRET}"\nEXTRA=${SECRET}\n`);
+  const checkOutput = capture();
+  assert.equal(await main(['--check', '--example', paths.examplePath, '--env', paths.envPath], checkOutput.io), 1);
+  assert.ok(!checkOutput.output.join('\n').includes(SECRET));
+
+  const syncOutput = capture();
+  assert.equal(await main(['--sync', '--example', paths.examplePath, '--env', paths.envPath], syncOutput.io), 0);
+  assert.match(syncOutput.output.join('\n'), /Environment synchronized\./);
+  assert.ok(!syncOutput.output.join('\n').includes(SECRET));
+  assert.equal(await read(paths.envPath), `A="${SECRET}"\n# ⚠ MISSING LOCAL VALUE — set before use\nB=\n`);
+
+  const malformed = await fixture('A=template\n', `A=${SECRET}\nexport B=bad\n`);
+  const errorOutput = capture();
+  assert.equal(await main(['--sync', '--example', malformed.examplePath, '--env', malformed.envPath], errorOutput.io), 2);
+  assert.ok(!errorOutput.output.join('\n').includes(SECRET));
+});
+
 test('sync removes extra keys and adds missing keys empty with warnings', async () => {
   const paths = await fixture('# First\nA=template\n\n# Second\nB=default\n', `A=${SECRET}\nOLD=removed\n`);
   const result = await syncEnv(paths);
