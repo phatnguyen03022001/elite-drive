@@ -2,6 +2,11 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { ConfigService } from '@nestjs/config';
 import { BookingStatus, PaymentStatus } from '@prisma/client';
 import { assertVndAmount } from '../../common/money/vnd';
+import {
+  bookingTripAllowsPreStartCancellation,
+  evaluateFullRefundEligibility,
+  paymentMatchesBookingAmount,
+} from '../../common/rental/lifecycle-policy';
 import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
@@ -24,8 +29,10 @@ export class CustomerCancellationService {
       if (!booking) throw new NotFoundException('Không tìm thấy đơn đặt xe');
 
       if (
-        booking.trip?.status === 'ONGOING' ||
-        booking.trip?.status === 'COMPLETED'
+        !bookingTripAllowsPreStartCancellation(
+          booking.status,
+          booking.trip?.status,
+        )
       ) {
         throw new BadRequestException(
           'Không thể hủy booking sau khi chuyến đi đã bắt đầu',
@@ -40,7 +47,14 @@ export class CustomerCancellationService {
           'Booking đã thanh toán MoMo cần provider refund/reversal; vui lòng liên hệ hỗ trợ',
         );
       }
-      if (completedPayment?.releasedAt) {
+      if (
+        completedPayment &&
+        evaluateFullRefundEligibility({
+          paymentStatus: completedPayment.status,
+          releasedAt: completedPayment.releasedAt,
+          tripStatus: booking.trip?.status,
+        }).reason === 'PAYMENT_RELEASED'
+      ) {
         throw new BadRequestException(
           'Payment đã được giải ngân; cần reversal/adjustment flow riêng',
         );
@@ -83,7 +97,7 @@ export class CustomerCancellationService {
 
       assertVndAmount(completedPayment.amount, { field: 'Số tiền hoàn' });
       assertVndAmount(booking.totalPrice, { field: 'Tổng tiền booking' });
-      if (completedPayment.amount !== booking.totalPrice) {
+      if (!paymentMatchesBookingAmount(completedPayment.amount, booking.totalPrice)) {
         throw new BadRequestException(
           'Payment không khớp tổng tiền booking; không thể tự động hoàn tiền',
         );

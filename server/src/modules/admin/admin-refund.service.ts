@@ -8,6 +8,10 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { BookingStatus, PaymentStatus } from '@prisma/client';
 import { assertVndAmount } from '../../common/money/vnd';
+import {
+  evaluateFullRefundEligibility,
+  paymentMatchesBookingAmount,
+} from '../../common/rental/lifecycle-policy';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MomoGatewayService } from '../payment/momo-gateway.service';
 import { RefundPaymentDto } from './dto/admin.dto';
@@ -56,7 +60,7 @@ export class AdminRefundService {
 
     assertVndAmount(payment.amount, { field: 'Số tiền payment' });
     assertVndAmount(booking.totalPrice, { field: 'Tổng tiền booking' });
-    if (payment.amount !== booking.totalPrice) {
+    if (!paymentMatchesBookingAmount(payment.amount, booking.totalPrice)) {
       throw new BadRequestException('Payment không khớp tổng tiền booking');
     }
 
@@ -67,16 +71,18 @@ export class AdminRefundService {
         message: 'Payment đã được hoàn trước đó',
       };
     }
-    if (payment.releasedAt) {
+    const refundEligibility = evaluateFullRefundEligibility({
+      paymentStatus: payment.status,
+      releasedAt: payment.releasedAt,
+      tripStatus: booking.trip?.status,
+    });
+    if (refundEligibility.reason === 'PAYMENT_RELEASED') {
       throw new BadRequestException(
         'Payment đã được giải ngân; cần reversal/adjustment flow riêng',
       );
     }
 
-    if (
-      booking.trip?.status === 'ONGOING' ||
-      booking.trip?.status === 'COMPLETED'
-    ) {
+    if (refundEligibility.reason === 'TRIP_STARTED') {
       throw new BadRequestException(
         'Trip đã bắt đầu hoặc hoàn tất; cần reversal/adjustment flow riêng',
       );

@@ -10,6 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import { BookingStatus, PaymentStatus } from '@prisma/client';
 import { assertVndAmount } from '../../common/money/vnd';
 import { buildRentalContractContent } from '../../common/rental/contract';
+import { paymentMatchesBookingAmount } from '../../common/rental/lifecycle-policy';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MomoIpnDto } from './dto/momo.dto';
 import { MomoGatewayService } from './momo-gateway.service';
@@ -297,7 +298,7 @@ export class PaymentService {
         min: 1000,
         field: 'Tổng tiền booking',
       });
-      if (payment.amount !== payment.booking.totalPrice) {
+      if (!paymentMatchesBookingAmount(payment.amount, payment.booking.totalPrice)) {
         throw new BadRequestException(
           'Số tiền payment không khớp tổng tiền booking',
         );

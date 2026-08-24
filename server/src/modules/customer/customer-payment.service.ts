@@ -11,6 +11,10 @@ import { BookingStatus, PaymentStatus, Prisma } from '@prisma/client';
 import { createHash, randomUUID } from 'crypto';
 import { assertVndAmount } from '../../common/money/vnd';
 import { buildRentalContractContent } from '../../common/rental/contract';
+import {
+  bookingAllowsPayment,
+  paymentMatchesBookingAmount,
+} from '../../common/rental/lifecycle-policy';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   ConfirmPaymentDto,
@@ -46,7 +50,7 @@ export class CustomerPaymentService {
     if (booking.customerId !== userId) {
       throw new ForbiddenException('Booking không thuộc tài khoản hiện tại');
     }
-    if (booking.status !== BookingStatus.APPROVED) {
+    if (!bookingAllowsPayment(booking.status)) {
       throw new BadRequestException(
         'Booking phải ở trạng thái APPROVED mới có thể thanh toán',
       );
@@ -66,7 +70,7 @@ export class CustomerPaymentService {
 
     if (latest) {
       assertVndAmount(latest.amount, { field: 'Số tiền payment' });
-      if (latest.amount !== booking.totalPrice) {
+      if (!paymentMatchesBookingAmount(latest.amount, booking.totalPrice)) {
         throw new BadRequestException(
           'Payment hiện tại không khớp tổng tiền booking',
         );
@@ -254,7 +258,7 @@ export class CustomerPaymentService {
       assertVndAmount(payment.booking.totalPrice, {
         field: 'Tổng tiền booking',
       });
-      if (payment.amount !== payment.booking.totalPrice) {
+      if (!paymentMatchesBookingAmount(payment.amount, payment.booking.totalPrice)) {
         throw new BadRequestException(
           'Số tiền payment không khớp tổng tiền booking',
         );
