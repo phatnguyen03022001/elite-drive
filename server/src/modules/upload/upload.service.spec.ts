@@ -1,5 +1,5 @@
 import { BadRequestException, ServiceUnavailableException } from '@nestjs/common';
-import { access, rm } from 'node:fs/promises';
+import { access, mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { CloudinaryUploadService } from './cloudinary-upload.service';
 import { UploadService } from './upload.service';
@@ -100,5 +100,23 @@ describe('UploadService', () => {
       BadRequestException,
     );
     expect(uploadImage).not.toHaveBeenCalled();
+  });
+
+  it('resolves nested public files when Express 5 supplies wildcard segments as an array', async () => {
+    const uploadDir = `uploads-test-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const { service } = createService({ uploadDir });
+    const relativePath = join('cars', 'nested.png');
+    const absolutePath = join(process.cwd(), uploadDir, relativePath);
+
+    try {
+      await mkdir(join(process.cwd(), uploadDir, 'cars'), { recursive: true });
+      await writeFile(absolutePath, png);
+
+      await expect(
+        service.resolvePublicFile(['cars', 'nested.png'] as never),
+      ).resolves.toBe(absolutePath);
+    } finally {
+      await rm(join(process.cwd(), uploadDir), { recursive: true, force: true });
+    }
   });
 });

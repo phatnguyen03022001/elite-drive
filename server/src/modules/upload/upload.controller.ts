@@ -44,7 +44,7 @@ export class UploadController {
   @Public()
   @Get('files/*path')
   async getFile(
-    @Param('path') path: string,
+    @Param('path') path: string | string[],
     @Res() response: Response,
   ): Promise<void> {
     const filePath = await this.uploadService.resolvePublicFile(path);

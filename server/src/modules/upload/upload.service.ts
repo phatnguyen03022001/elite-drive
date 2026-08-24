@@ -58,9 +58,10 @@ export class UploadService {
     return `${publicBase}/${safeFolder}/${filename}`;
   }
 
-  async resolvePublicFile(relativePath: string): Promise<string> {
+  async resolvePublicFile(relativePath: string | string[]): Promise<string> {
     const root = resolve(this.uploadRoot());
-    const clean = normalize(relativePath).replace(/^([/\\])+/, '');
+    const pathValue = Array.isArray(relativePath) ? relativePath.join('/') : relativePath;
+    const clean = normalize(pathValue).replace(/^([/\\])+/, '');
     const candidate = resolve(root, clean);
 
     if (candidate !== root && !candidate.startsWith(`${root}${sep}`)) {

@@ -42,7 +42,7 @@ jobs:
         id: install
         run: |
           set -o pipefail
-          npm install --no-audit --no-fund 2>&1 | tee /tmp/backend-install.log
+          npm ci --no-audit --no-fund 2>&1 | tee /tmp/backend-install.log
 
       - name: Typecheck and generate Prisma client
         id: typecheck
