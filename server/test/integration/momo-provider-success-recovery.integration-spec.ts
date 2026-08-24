@@ -189,6 +189,7 @@ describe('MoMo provider-success recovery', () => {
         paymentMethod: 'MOMO',
         status: PaymentStatus.PENDING,
         transactionId: 'INTEGRATION-PAYMENT-NEW',
+        refundOrderId: `UNUSED-${newerPaymentId}`,
       },
     });
     fakeMomo.queryStatus.mockResolvedValue({
