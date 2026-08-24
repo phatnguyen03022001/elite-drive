@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 const PUBLIC_EXACT_ROUTES = ["/", "/login", "/register", "/forgot-password", "/otp"];
-const PUBLIC_ROUTE_PREFIXES = ["/reset-password", "/customer/cars"];
+const PUBLIC_ROUTE_PREFIXES = ["/customer/cars"];
 
 function isPublicRoute(pathname: string) {
   return (
