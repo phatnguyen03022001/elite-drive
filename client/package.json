@@ -12,6 +12,7 @@
     "env:check": "node ../server/scripts/sync-env.mjs --check --example .env.example --env .env.local",
     "env:sync": "node ../server/scripts/sync-env.mjs --sync --example .env.example --env .env.local",
     "test:env-sync": "node --test scripts/sync-env.test.mjs",
+    "test:config": "node --test scripts/next-config.test.mjs",
     "lock:secure-preview": "node scripts/generate-secure-lock-preview.mjs",
     "security:audit:prod": "npm audit --omit=dev --audit-level=high",
     "security:audit:prod:report": "node scripts/audit-production-deps.mjs",

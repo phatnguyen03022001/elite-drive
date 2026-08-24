@@ -1,10 +1,17 @@
 import type { NextConfig } from "next";
 
 const isProduction = process.env.NODE_ENV === "production";
-const defaultBackendUrl = isProduction
-  ? "https://elite-drive-api-eq4iwb3wxa-as.a.run.app"
-  : "http://localhost:8000";
-const backendUrl = process.env.BACKEND_URL || defaultBackendUrl;
+
+function resolveBackendUrl() {
+  const configured = process.env.BACKEND_URL?.trim();
+
+  if (configured) return configured;
+  if (isProduction) throw new Error("BACKEND_URL is required in production");
+
+  return "http://localhost:8000";
+}
+
+const backendUrl = resolveBackendUrl();
 const backend = new URL(backendUrl);
 const backendOrigin = backend.origin;
 const cloudinaryOrigin = "https://res.cloudinary.com";

@@ -44,6 +44,12 @@ jobs:
           set -o pipefail
           npm run test:env-sync 2>&1 | tee /tmp/frontend-env-sync.log
 
+      - name: Next config tests
+        id: config
+        run: |
+          set -o pipefail
+          npm run test:config 2>&1 | tee /tmp/frontend-config.log
+
       - name: Lint
         id: lint
         run: |
