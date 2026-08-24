@@ -102,16 +102,28 @@ export class CustomerPaymentService {
     const merchantOrderId = this.merchantOrderId(paymentId);
 
     try {
-      return await this.db.payment.create({
-        data: {
-          id: paymentId,
-          bookingId: booking.id,
-          userId,
-          amount: booking.totalPrice,
-          paymentMethod,
-          status: PaymentStatus.PENDING,
-          transactionId: merchantOrderId,
-        },
+      return await this.db.$transaction(async (tx) => {
+        // Serialize payment-attempt creation with recovery's booking claim.
+        // The status is intentionally unchanged; the conditional write makes
+        // both operations contend on the same booking document.
+        const bookingClaim = await tx.booking.updateMany({
+          where: { id: booking.id, status: BookingStatus.APPROVED },
+          data: { status: BookingStatus.APPROVED },
+        });
+        if (bookingClaim.count !== 1) {
+          throw new BadRequestException('Booking vừa thay đổi; không thể tạo payment');
+        }
+        return tx.payment.create({
+          data: {
+            id: paymentId,
+            bookingId: booking.id,
+            userId,
+            amount: booking.totalPrice,
+            paymentMethod,
+            status: PaymentStatus.PENDING,
+            transactionId: merchantOrderId,
+          },
+        });
       });
     } catch (error) {
       if (

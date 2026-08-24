@@ -63,6 +63,8 @@ describe('CustomerPaymentService invariants', () => {
         }),
       },
       payment,
+      $transaction: jest.fn(async (callback: (tx: any) => unknown) =>
+        callback({ payment, booking: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) } })),
     } as unknown as PrismaService;
     const service = new CustomerPaymentService(db, config);
 
@@ -110,6 +112,8 @@ describe('CustomerPaymentService invariants', () => {
         }),
       },
       payment,
+      $transaction: jest.fn(async (callback: (tx: any) => unknown) =>
+        callback({ payment, booking: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) } })),
     } as unknown as PrismaService;
     const service = new CustomerPaymentService(db, config);
 
@@ -152,6 +156,8 @@ describe('CustomerPaymentService invariants', () => {
         }),
       },
       payment,
+      $transaction: jest.fn(async (callback: (tx: any) => unknown) =>
+        callback({ payment, booking: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) } })),
     } as unknown as PrismaService;
     const service = new CustomerPaymentService(db, config);
 
