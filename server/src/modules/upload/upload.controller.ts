@@ -93,8 +93,7 @@ export class UploadController {
       await this.sendAuthorizedKycFile(path, request.user, response);
       return;
     }
-    const filePath = await this.uploadService.resolvePublicFile(path);
-    response.sendFile(filePath);
+    throw new NotFoundException('Không tìm thấy file');
   }
 
   private async sendAuthorizedKycFile(path: string | string[], user: { id: string; role: UserRole }, response: Response): Promise<void> {
