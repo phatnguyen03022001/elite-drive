@@ -155,12 +155,12 @@ export class CustomerService {
     const folderPath =
       user.role === UserRole.OWNER ? 'owners/kyc' : 'customers/kyc';
     const [frontUrl, backUrl, faceUrl] = await Promise.all([
-      this.uploadService.uploadFile(frontFile, `${folderPath}/front`),
-      this.uploadService.uploadFile(backFile, `${folderPath}/back`),
-      this.uploadService.uploadFile(faceFile, `${folderPath}/faces`),
+      this.uploadService.uploadPrivateImage(frontFile, `${folderPath}/front`),
+      this.uploadService.uploadPrivateImage(backFile, `${folderPath}/back`),
+      this.uploadService.uploadPrivateImage(faceFile, `${folderPath}/faces`),
     ]);
 
-    return this.prisma.$transaction(async (tx) => {
+    const kyc = await this.prisma.$transaction(async (tx) => {
       const kyc = await tx.kYC.upsert({
         where: { userId },
         update: {
@@ -197,6 +197,7 @@ export class CustomerService {
       });
       return kyc;
     });
+    return this.resolveKycMedia(kyc);
   }
 
   async getKycStatus(userId: string): Promise<KYCStatusResponseDto> {
@@ -213,7 +214,7 @@ export class CustomerService {
         submittedAt: null,
       };
     }
-    return {
+    return this.resolveKycMedia({
       status: kyc.status,
       documentType: kyc.documentType,
       documentNumber: kyc.documentNumber,
@@ -222,6 +223,15 @@ export class CustomerService {
       faceImageUrl: kyc.faceImageUrl,
       rejectionReason: kyc.rejectionReason,
       submittedAt: kyc.submittedAt,
+    });
+  }
+
+  private resolveKycMedia<T extends { documentFrontUrl?: string | null; documentBackUrl?: string | null; faceImageUrl?: string | null }>(kyc: T): T {
+    return {
+      ...kyc,
+      documentFrontUrl: kyc.documentFrontUrl ? this.uploadService.resolvePrivateImageUrl(kyc.documentFrontUrl) : kyc.documentFrontUrl,
+      documentBackUrl: kyc.documentBackUrl ? this.uploadService.resolvePrivateImageUrl(kyc.documentBackUrl) : kyc.documentBackUrl,
+      faceImageUrl: kyc.faceImageUrl ? this.uploadService.resolvePrivateImageUrl(kyc.faceImageUrl) : kyc.faceImageUrl,
     };
   }
 

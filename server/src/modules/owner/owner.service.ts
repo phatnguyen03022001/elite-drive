@@ -118,12 +118,12 @@ export class OwnerService {
     if (!frontFile || !backFile || !faceFile) throw new BadRequestException('Cần đủ mặt trước, mặt sau GTTT và ảnh chân dung');
 
     const [frontUrl, backUrl, faceUrl] = await Promise.all([
-      this.uploadService.uploadFile(frontFile, 'owners/kyc/front'),
-      this.uploadService.uploadFile(backFile, 'owners/kyc/back'),
-      this.uploadService.uploadFile(faceFile, 'owners/kyc/faces'),
+      this.uploadService.uploadPrivateImage(frontFile, 'owners/kyc/front'),
+      this.uploadService.uploadPrivateImage(backFile, 'owners/kyc/back'),
+      this.uploadService.uploadPrivateImage(faceFile, 'owners/kyc/faces'),
     ]);
 
-    return this.prisma.$transaction(async (tx) => {
+    const kyc = await this.prisma.$transaction(async (tx) => {
       const kyc = await tx.kYC.upsert({
         where: { userId },
         update: {
@@ -153,12 +153,13 @@ export class OwnerService {
       });
       return kyc;
     });
+    return this.resolveKycMedia(kyc);
   }
 
   async getKycStatus(userId: string): Promise<KYCStatusResponseDto> {
     const kyc = await this.prisma.kYC.findUnique({ where: { userId } });
     if (!kyc) return { status: KYCStatus.NONE, submittedAt: null };
-    return {
+    return this.resolveKycMedia({
       status: kyc.status,
       documentType: kyc.documentType ?? undefined,
       documentNumber: kyc.documentNumber ?? undefined,
@@ -167,6 +168,15 @@ export class OwnerService {
       faceImageUrl: kyc.faceImageUrl ?? undefined,
       rejectionReason: kyc.rejectionReason ?? undefined,
       submittedAt: kyc.submittedAt,
+    });
+  }
+
+  private resolveKycMedia<T extends { documentFrontUrl?: string | null; documentBackUrl?: string | null; faceImageUrl?: string | null }>(kyc: T): T {
+    return {
+      ...kyc,
+      documentFrontUrl: kyc.documentFrontUrl ? this.uploadService.resolvePrivateImageUrl(kyc.documentFrontUrl) : kyc.documentFrontUrl,
+      documentBackUrl: kyc.documentBackUrl ? this.uploadService.resolvePrivateImageUrl(kyc.documentBackUrl) : kyc.documentBackUrl,
+      faceImageUrl: kyc.faceImageUrl ? this.uploadService.resolvePrivateImageUrl(kyc.faceImageUrl) : kyc.faceImageUrl,
     };
   }
 

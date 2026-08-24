@@ -58,6 +58,43 @@ export class UploadService {
     return `${publicBase}/${safeFolder}/${filename}`;
   }
 
+  async uploadPrivateImage(
+    file: Express.Multer.File,
+    folder: string,
+  ): Promise<string> {
+    this.assertSafeImage(file);
+    const safeFolder = folder.replace(/[^a-zA-Z0-9/_-]/g, '').slice(0, 120);
+    if (!safeFolder) throw new BadRequestException('Thư mục upload không hợp lệ');
+
+    if (this.cloudinaryUploadService.isEnabled()) {
+      try {
+        return await this.cloudinaryUploadService.uploadPrivateImage(file.buffer, safeFolder);
+      } catch {
+        throw new ServiceUnavailableException('Không thể tải ảnh lên Cloudinary lúc này');
+      }
+    }
+
+    return this.uploadFile(file, safeFolder);
+  }
+
+  resolvePrivateImageUrl(locator: string): string {
+    const base = this.configService.get<string>('UPLOAD_PUBLIC_BASE_URL') || '/api/upload/files';
+    const localPrefix = `${base}/`;
+    if (locator.startsWith(localPrefix)) {
+      if (!UploadService.isPrivateKycPath(locator.slice(localPrefix.length))) {
+        throw new NotFoundException('KYC media is unavailable');
+      }
+      return locator;
+    }
+    return this.cloudinaryUploadService.resolvePrivateUrl(locator);
+  }
+
+  static isPrivateKycPath(relativePath: string | string[]): boolean {
+    const value = Array.isArray(relativePath) ? relativePath.join('/') : relativePath;
+    const clean = normalize(value).replace(/^([/\\])+/, '');
+    return /^(customers|owners)\/kyc\//.test(clean);
+  }
+
   async resolvePublicFile(relativePath: string | string[]): Promise<string> {
     const root = resolve(this.uploadRoot());
     const pathValue = Array.isArray(relativePath) ? relativePath.join('/') : relativePath;

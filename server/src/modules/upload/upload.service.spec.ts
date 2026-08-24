@@ -37,6 +37,8 @@ function createService(options?: {
   const cloudinaryUploadService = {
     isEnabled: jest.fn(() => options?.cloudinaryEnabled ?? false),
     uploadImage: options?.uploadImage ?? jest.fn(),
+    uploadPrivateImage: jest.fn(),
+    resolvePrivateUrl: jest.fn((url: string) => url),
   };
 
   return {
@@ -71,6 +73,25 @@ describe('UploadService', () => {
       'https://res.cloudinary.com/demo/image/upload/car.png',
     );
     expect(uploadImage).toHaveBeenCalledWith(png, 'cars');
+  });
+
+  it('uses the private upload API without changing public upload behavior', async () => {
+    const uploadPrivateImage = jest.fn().mockResolvedValue('private-locator');
+    const { service, cloudinaryUploadService } = createService({ cloudinaryEnabled: true });
+    cloudinaryUploadService.uploadPrivateImage = uploadPrivateImage;
+
+    await expect(service.uploadPrivateImage(imageFile(), 'customers/kyc/front')).resolves.toBe('private-locator');
+    expect(uploadPrivateImage).toHaveBeenCalledWith(png, 'customers/kyc/front');
+  });
+
+  it('recognizes private local URLs when the configured public base is absolute', () => {
+    const { service } = createService();
+    (service as never as { configService: { get: jest.Mock } }).configService.get = jest.fn((key: string) =>
+      key === 'UPLOAD_PUBLIC_BASE_URL' ? 'https://app.example.test/api/upload/files' : 'uploads-test',
+    );
+    expect(service.resolvePrivateImageUrl('https://app.example.test/api/upload/files/customers/kyc/front/doc.png')).toBe(
+      'https://app.example.test/api/upload/files/customers/kyc/front/doc.png',
+    );
   });
 
   it('maps provider failures to a safe service-unavailable error', async () => {

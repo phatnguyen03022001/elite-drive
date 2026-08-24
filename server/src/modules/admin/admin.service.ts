@@ -9,6 +9,7 @@ import {
 } from '@prisma/client';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 import { PrismaService } from '../../prisma/prisma.service';
+import { UploadService } from '../upload/upload.service';
 import {
   AdminKYCQueryDto,
   CreateCategoryDto,
@@ -21,7 +22,10 @@ import {
 
 @Injectable()
 export class AdminService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly uploadService: UploadService,
+  ) {}
 
   async getOverviewReport() {
     const [users, cars, bookings, revenue] = await Promise.all([
@@ -178,7 +182,17 @@ export class AdminService {
       }),
       this.prisma.kYC.count({ where }),
     ]);
-    return { items, total, page, limit };
+    return {
+      items: items.map((item) => ({
+        ...item,
+        documentFrontUrl: item.documentFrontUrl ? this.uploadService.resolvePrivateImageUrl(item.documentFrontUrl) : item.documentFrontUrl,
+        documentBackUrl: item.documentBackUrl ? this.uploadService.resolvePrivateImageUrl(item.documentBackUrl) : item.documentBackUrl,
+        faceImageUrl: item.faceImageUrl ? this.uploadService.resolvePrivateImageUrl(item.faceImageUrl) : item.faceImageUrl,
+      })),
+      total,
+      page,
+      limit,
+    };
   }
 
   async approveKyc(userId: string) {
