@@ -91,7 +91,9 @@ export class UploadService {
 
   static isPrivateKycPath(relativePath: string | string[]): boolean {
     const value = Array.isArray(relativePath) ? relativePath.join('/') : relativePath;
-    const clean = normalize(value).replace(/^([/\\])+/, '');
+    const raw = value.replace(/^([/\\])+/, '');
+    if (/^(customers|owners)\/kyc(?:[\/]|$)/.test(raw)) return true;
+    const clean = normalize(raw).replace(/^([/\\])+/, '');
     return /^(customers|owners)\/kyc\//.test(clean);
   }
 
