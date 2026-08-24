@@ -68,9 +68,13 @@ describe('MoMo provider-success recovery', () => {
     });
 
     const admin = await login('integration.admin@example.com');
-    await request(app.getHttpServer()).post('/api/admin/payments/momo/reconcile').expect(401);
+    await request(app.getHttpServer())
+      .post('/api/admin/payments/momo/reconcile')
+      .set('Origin', 'http://localhost:3000')
+      .expect(401);
     await admin
       .post('/api/admin/payments/momo/reconcile')
+      .set('Origin', 'http://localhost:3000')
       .expect(201)
       .expect(({ body }) => expect(body.data.failed).toBe(1));
 
@@ -83,6 +87,7 @@ describe('MoMo provider-success recovery', () => {
 
     await admin
       .post(`/api/admin/payments/momo/conflicts/${IDS.payment}/recover`)
+      .set('Origin', 'http://localhost:3000')
       .expect(201)
       .expect(({ body }) => expect(body.data.disposition).toBe('REFUNDED'));
 
@@ -100,9 +105,11 @@ describe('MoMo provider-success recovery', () => {
     const owner = await login('integration.owner@example.com');
     await customer
       .post(`/api/admin/payments/momo/conflicts/${IDS.payment}/recover`)
+      .set('Origin', 'http://localhost:3000')
       .expect(403);
     await owner
       .post(`/api/admin/payments/momo/conflicts/${IDS.payment}/recover`)
+      .set('Origin', 'http://localhost:3000')
       .expect(403);
   });
 });
