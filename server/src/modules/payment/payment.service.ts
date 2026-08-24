@@ -157,6 +157,32 @@ export class PaymentService {
     return summary;
   }
 
+  async listOpenMomoProviderSuccessConflicts(limit = 50) {
+    const safeLimit = Math.max(1, Math.min(Math.trunc(limit), 100));
+    return this.db.payment.findMany({
+      where: {
+        paymentMethod: 'MOMO',
+        status: PaymentStatus.FAILED,
+        providerSuccessConflictAt: { not: null },
+      },
+      orderBy: { providerSuccessConflictAt: 'asc' },
+      take: safeLimit,
+      select: {
+        id: true,
+        bookingId: true,
+        amount: true,
+        status: true,
+        transactionId: true,
+        providerTransactionId: true,
+        failureReason: true,
+        providerSuccessResultCode: true,
+        providerSuccessConflictAt: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+  }
+
   async handleMomoIpn(payload: MomoIpnDto) {
     if (!this.momo.verifyIpn(payload)) {
       throw new UnauthorizedException('Chữ ký MoMo không hợp lệ');
@@ -198,7 +224,11 @@ export class PaymentService {
   ): Promise<PaymentStatus> {
     const latest = await this.db.payment.findUnique({
       where: { id: paymentId },
-      select: { status: true, providerTransactionId: true },
+      select: {
+        status: true,
+        providerTransactionId: true,
+        providerSuccessConflictAt: true,
+      },
     });
     if (!latest) throw new NotFoundException('Payment không tồn tại');
 
@@ -226,6 +256,31 @@ export class PaymentService {
           });
         }
         return PaymentStatus.COMPLETED;
+      }
+
+      if (currentStatus === PaymentStatus.FAILED) {
+        if (!latest.providerSuccessConflictAt) {
+          await this.db.payment.updateMany({
+            where: {
+              id: paymentId,
+              status: PaymentStatus.FAILED,
+              OR: [
+                { providerSuccessConflictAt: null },
+                { providerSuccessConflictAt: { isSet: false } },
+              ],
+            },
+            data: {
+              providerSuccessConflictAt: new Date(),
+              providerSuccessResultCode: resultCode,
+              ...(latest.providerTransactionId
+                ? {}
+                : this.isValidProviderTransactionId(providerTransactionId)
+                  ? { providerTransactionId: String(providerTransactionId) }
+                  : {}),
+            },
+          });
+        }
+        return PaymentStatus.FAILED;
       }
 
       this.logger.warn(

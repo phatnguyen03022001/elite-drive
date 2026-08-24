@@ -1,4 +1,4 @@
-import { Controller, Post, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 import { Type } from 'class-transformer';
 import { IsInt, IsOptional, Max, Min } from 'class-validator';
@@ -29,5 +29,13 @@ export class AdminPaymentReconciliationController {
       query.limit,
     );
     return ApiResponse.success(summary, 'MoMo reconciliation completed');
+  }
+
+  @Get('conflicts')
+  async listConflicts(@Query() query: ReconcileMomoQueryDto) {
+    const conflicts = await this.paymentService.listOpenMomoProviderSuccessConflicts(
+      query.limit,
+    );
+    return ApiResponse.success(conflicts, 'MoMo conflicts retrieved');
   }
 }

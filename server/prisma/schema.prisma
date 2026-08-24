@@ -264,6 +264,8 @@ model Payment {
   status PaymentStatus @default(PENDING)
   transactionId String? @unique
   providerTransactionId String?
+  providerSuccessConflictAt DateTime?
+  providerSuccessResultCode Int?
   refundOrderId String? @unique
   refundRequestId String?
   refundProviderTransactionId String?

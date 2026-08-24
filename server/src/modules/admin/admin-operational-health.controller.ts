@@ -31,6 +31,7 @@ export class AdminOperationalHealthController {
       openDisputes,
       pendingWithdrawals,
       pendingSettlements,
+      openMomoProviderSuccessConflicts,
     ] = await Promise.all([
       this.db.payment.count({
         where: {
@@ -60,6 +61,13 @@ export class AdminOperationalHealthController {
           },
         },
       }),
+      this.db.payment.count({
+        where: {
+          paymentMethod: 'MOMO',
+          status: PaymentStatus.FAILED,
+          providerSuccessConflictAt: { not: null },
+        },
+      }),
     ]);
 
     const queues = {
@@ -68,6 +76,7 @@ export class AdminOperationalHealthController {
       openDisputes,
       pendingWithdrawals,
       pendingSettlements,
+      openMomoProviderSuccessConflicts,
     };
     const needsAttention = Object.values(queues).reduce(
       (total, count) => total + count,
