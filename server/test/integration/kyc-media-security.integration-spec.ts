@@ -122,7 +122,7 @@ describe('real HTTP KYC media access contract', () => {
       .get('/api/upload/files/customers/kyc/%2e%2e/%2e%2e/escaped.png')
       .expect(assertDeniedWithoutFixture);
     await customer
-      .get('/api/upload/files/cars/%2e%2e/customers/kyc/front/customer.png')
+      .get('/api/upload/files/cars/%2e%2e%2fcustomers%2fkyc%2ffront%2fcustomer.png')
       .expect(assertDeniedWithoutFixture);
   });
 });
