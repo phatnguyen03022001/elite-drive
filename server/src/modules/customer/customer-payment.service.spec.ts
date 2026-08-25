@@ -98,7 +98,7 @@ describe('CustomerPaymentService invariants', () => {
       status: PaymentStatus.PENDING,
     };
     const payment = {
-      findFirst: jest.fn().mockResolvedValue(failed),
+      findFirst: jest.fn().mockResolvedValueOnce(failed).mockResolvedValueOnce(null),
       create: jest.fn().mockResolvedValue(created),
       findUnique: jest.fn(),
     };
@@ -132,9 +132,126 @@ describe('CustomerPaymentService invariants', () => {
     expect(data.bookingId).toBe('booking-1');
   });
 
+  it('rejects when an older unresolved MoMo conflict is hidden by a newer failed payment', async () => {
+    const latest = {
+      id: 'bbbbbbbbbbbbbbbbbbbbbbbb',
+      bookingId: 'booking-1',
+      userId: 'customer-1',
+      amount: 100000,
+      paymentMethod: 'MOMO',
+      status: PaymentStatus.FAILED,
+      createdAt: new Date('2026-08-21T00:00:00.000Z'),
+    };
+    const olderConflict = {
+      id: 'aaaaaaaaaaaaaaaaaaaaaaaa',
+      bookingId: 'booking-1',
+      userId: 'customer-1',
+      amount: 100000,
+      paymentMethod: 'MOMO',
+      status: PaymentStatus.FAILED,
+      providerSuccessConflictAt: new Date('2026-08-20T00:00:00.000Z'),
+      createdAt: new Date('2026-08-20T00:00:00.000Z'),
+    };
+    const payment = {
+      findFirst: jest.fn()
+        .mockResolvedValueOnce(latest)
+        .mockResolvedValueOnce(olderConflict),
+      create: jest.fn(),
+      findUnique: jest.fn(),
+    };
+    const db = {
+      booking: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'booking-1',
+          customerId: 'customer-1',
+          status: BookingStatus.APPROVED,
+          totalPrice: 100000,
+        }),
+      },
+      payment,
+      $transaction: jest.fn(async (callback: (tx: any) => unknown) =>
+        callback({ payment, booking: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) } })),
+    } as unknown as PrismaService;
+    const service = new CustomerPaymentService(db, config);
+
+    await expect(service.createPayment('customer-1', {
+      bookingId: 'booking-1',
+      paymentMethod: 'MOMO',
+    })).rejects.toThrow('Payment MoMo trước đó đang chờ đối soát hoặc hoàn tiền; chưa thể tạo payment mới');
+    expect(payment.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects switching to MOCK_QR while an unresolved MoMo conflict exists', async () => {
+    const conflict = {
+      id: 'aaaaaaaaaaaaaaaaaaaaaaaa',
+      bookingId: 'booking-1',
+      userId: 'customer-1',
+      amount: 100000,
+      paymentMethod: 'MOMO',
+      status: PaymentStatus.FAILED,
+      providerSuccessConflictAt: new Date(),
+      createdAt: new Date(),
+    };
+    const payment = {
+      findFirst: jest.fn().mockResolvedValueOnce(conflict).mockResolvedValueOnce(conflict),
+      create: jest.fn(),
+      findUnique: jest.fn(),
+    };
+    const db = {
+      booking: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'booking-1', customerId: 'customer-1', status: BookingStatus.APPROVED, totalPrice: 100000,
+        }),
+      },
+      payment,
+      $transaction: jest.fn(async (callback: (tx: any) => unknown) =>
+        callback({ payment, booking: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) } })),
+    } as unknown as PrismaService;
+    const service = new CustomerPaymentService(db, config);
+
+    await expect(service.createPayment('customer-1', {
+      bookingId: 'booking-1', paymentMethod: 'MOCK_QR',
+    })).rejects.toThrow('Payment MoMo trước đó đang chờ đối soát hoặc hoàn tiền; chưa thể tạo payment mới');
+    expect(payment.create).not.toHaveBeenCalled();
+  });
+
+  it('allows a retry when historical conflict metadata is terminally REFUNDED', async () => {
+    const latest = {
+      id: 'bbbbbbbbbbbbbbbbbbbbbbbb', bookingId: 'booking-1', userId: 'customer-1', amount: 100000,
+      paymentMethod: 'MOMO', status: PaymentStatus.FAILED, createdAt: new Date(),
+    };
+    const refunded = {
+      id: 'aaaaaaaaaaaaaaaaaaaaaaaa', bookingId: 'booking-1', userId: 'customer-1', amount: 100000,
+      paymentMethod: 'MOMO', status: PaymentStatus.REFUNDED, providerSuccessConflictAt: new Date(),
+      createdAt: new Date('2026-08-20T00:00:00.000Z'),
+    };
+    const payment = {
+      findFirst: jest.fn().mockResolvedValueOnce(latest).mockResolvedValueOnce(null),
+      create: jest.fn().mockResolvedValue({ ...latest, id: 'cccccccccccccccccccccccc', status: PaymentStatus.PENDING }),
+      findUnique: jest.fn(),
+    };
+    const db = {
+      booking: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'booking-1', customerId: 'customer-1', status: BookingStatus.APPROVED, totalPrice: 100000,
+        }),
+      },
+      payment,
+      $transaction: jest.fn(async (callback: (tx: any) => unknown) =>
+        callback({ payment, booking: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) } })),
+    } as unknown as PrismaService;
+    const service = new CustomerPaymentService(db, config);
+
+    await expect(service.createPayment('customer-1', {
+      bookingId: 'booking-1', paymentMethod: 'MOMO',
+    })).resolves.toBeDefined();
+    expect(payment.create).toHaveBeenCalled();
+    expect(refunded.status).toBe(PaymentStatus.REFUNDED);
+  });
+
   it('allows switching payment method only after the previous attempt failed', async () => {
     const payment = {
-      findFirst: jest.fn().mockResolvedValue({
+      findFirst: jest.fn().mockResolvedValueOnce({
         id: 'bbbbbbbbbbbbbbbbbbbbbbbb',
         bookingId: 'booking-1',
         userId: 'customer-1',
@@ -142,7 +259,7 @@ describe('CustomerPaymentService invariants', () => {
         paymentMethod: 'MOMO',
         status: PaymentStatus.FAILED,
         createdAt: new Date(),
-      }),
+      }).mockResolvedValueOnce(null),
       create: jest.fn().mockImplementation(({ data }) => Promise.resolve(data)),
       findUnique: jest.fn(),
     };

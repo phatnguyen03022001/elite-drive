@@ -113,6 +113,20 @@ export class CustomerPaymentService {
         if (bookingClaim.count !== 1) {
           throw new BadRequestException('Booking vừa thay đổi; không thể tạo payment');
         }
+        const unresolvedProviderSuccessConflict = await tx.payment.findFirst({
+          where: {
+            bookingId: booking.id,
+            paymentMethod: 'MOMO',
+            status: PaymentStatus.FAILED,
+            providerSuccessConflictAt: { not: null },
+          },
+          select: { id: true },
+        });
+        if (unresolvedProviderSuccessConflict) {
+          throw new BadRequestException(
+            'Payment MoMo trước đó đang chờ đối soát hoặc hoàn tiền; chưa thể tạo payment mới',
+          );
+        }
         return tx.payment.create({
           data: {
             id: paymentId,

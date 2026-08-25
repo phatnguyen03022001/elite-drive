@@ -8,6 +8,7 @@ import { IDS, PASSWORD, seedBookingPayment, seedCar, seedUsers } from './fixture
 
 describe('MoMo provider-success recovery', () => {
   const newerPaymentId = '507f1f77bcf86cd799439109';
+  const newerFailedPaymentId = '507f1f77bcf86cd799439110';
   const fakeMomo = {
     isEnabled: jest.fn().mockReturnValue(true),
     queryStatus: jest.fn(),
@@ -53,6 +54,92 @@ describe('MoMo provider-success recovery', () => {
       .expect(201);
     return agent;
   }
+
+  it('blocks MoMo retry and MOCK_QR switching when an older conflict is not the latest payment', async () => {
+    await prisma.booking.update({
+      where: { id: IDS.booking },
+      data: { status: BookingStatus.APPROVED },
+    });
+    await prisma.payment.update({
+      where: { id: IDS.payment },
+      data: {
+        status: PaymentStatus.FAILED,
+        paymentMethod: 'MOMO',
+        providerTransactionId: '900001',
+        providerSuccessConflictAt: new Date('2026-08-20T00:00:00.000Z'),
+        providerSuccessResultCode: 0,
+        createdAt: new Date('2026-08-20T00:00:00.000Z'),
+      },
+    });
+    await prisma.payment.create({
+      data: {
+        id: newerFailedPaymentId,
+        userId: IDS.customer,
+        bookingId: IDS.booking,
+        amount: 1000000,
+        paymentMethod: 'MOMO',
+        status: PaymentStatus.FAILED,
+        transactionId: 'INTEGRATION-PAYMENT-FAILED-NEW',
+        createdAt: new Date('2026-08-21T00:00:00.000Z'),
+      },
+    });
+    const customer = await login('integration.customer@example.com');
+    const before = await prisma.payment.count({ where: { bookingId: IDS.booking } });
+
+    await customer
+      .post('/api/customer/payments/create')
+      .set('Origin', 'http://localhost:3000')
+      .send({ bookingId: IDS.booking, paymentMethod: 'MOMO' })
+      .expect(400);
+    expect(await prisma.payment.count({ where: { bookingId: IDS.booking } })).toBe(before);
+
+    await customer
+      .post('/api/customer/payments/create')
+      .set('Origin', 'http://localhost:3000')
+      .send({ bookingId: IDS.booking, paymentMethod: 'MOCK_QR' })
+      .expect(400);
+    expect(await prisma.payment.count({ where: { bookingId: IDS.booking } })).toBe(before);
+    expect(await prisma.payment.count({
+      where: { bookingId: IDS.booking, status: PaymentStatus.PENDING },
+    })).toBe(0);
+  });
+
+  it('still creates a retry after an ordinary failed payment without conflict metadata', async () => {
+    await prisma.booking.update({
+      where: { id: IDS.booking },
+      data: { status: BookingStatus.APPROVED },
+    });
+    await prisma.payment.update({
+      where: { id: IDS.payment },
+      data: {
+        status: PaymentStatus.FAILED,
+        paymentMethod: 'MOMO',
+        providerSuccessConflictAt: null,
+        providerTransactionId: null,
+        createdAt: new Date('2026-08-20T00:00:00.000Z'),
+      },
+    });
+    const customer = await login('integration.customer@example.com');
+    const before = await prisma.payment.count({ where: { bookingId: IDS.booking } });
+
+    await customer
+      .post('/api/customer/payments/create')
+      .set('Origin', 'http://localhost:3000')
+      .send({ bookingId: IDS.booking, paymentMethod: 'MOMO' })
+      .expect(201);
+
+    expect(await prisma.payment.count({ where: { bookingId: IDS.booking } })).toBe(before + 1);
+    const payments = await prisma.payment.findMany({
+      where: { bookingId: IDS.booking },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(payments[0]).toEqual(expect.objectContaining({
+      bookingId: IDS.booking,
+      paymentMethod: 'MOMO',
+      status: PaymentStatus.PENDING,
+    }));
+    expect(payments[0].id).not.toBe(IDS.payment);
+  });
 
   it('durably records cancellation conflict, then refunds it without local escrow', async () => {
     fakeMomo.queryStatus.mockResolvedValue({
