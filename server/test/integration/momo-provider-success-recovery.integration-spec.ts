@@ -56,6 +56,12 @@ describe('MoMo provider-success recovery', () => {
   }
 
   it('blocks MoMo retry and MOCK_QR switching when an older conflict is not the latest payment', async () => {
+    const indexes = (await prisma.$runCommandRaw({ listIndexes: 'Payment' })) as {
+      cursor?: { firstBatch?: Array<{ name?: string }> };
+    };
+    expect(indexes.cursor?.firstBatch?.map((index) => index.name)).not.toContain(
+      'Payment_refundOrderId_key',
+    );
     await prisma.booking.update({
       where: { id: IDS.booking },
       data: { status: BookingStatus.APPROVED },
