@@ -29,6 +29,8 @@
     "money:backfill:long": "npm run money:audit && tsx prisma/backfill-money-long.ts",
     "security:audit:prod": "npm audit --omit=dev --audit-level=high",
     "security:audit:prod:report": "node scripts/audit-production-deps.mjs",
+    "db:refund-index:check": "node scripts/drop-refund-order-id-index.cjs --check",
+    "db:refund-index:apply": "node scripts/drop-refund-order-id-index.cjs --apply",
     "db:seed": "tsx prisma/reset-seed.ts && tsx prisma/seed.ts && tsx prisma/seed-assets.ts",
     "tree": "tree -L 6 -I \"node_modules|dist|.git|test|coverage|Docs|generated|.vscode\"",
     "dump:shared": "find src/shared -type f -name \"*.ts\" -exec sh -c 'echo \"\\n===== {} =====\\n\"; cat {}' \\; > zcode/shared-code.txt",
