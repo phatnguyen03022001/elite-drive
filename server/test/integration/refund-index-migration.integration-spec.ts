@@ -20,10 +20,7 @@ describe('obsolete Payment refund index migration', () => {
 
   beforeEach(async () => {
     await resetIntegrationDatabase(prisma);
-    await prisma.$runCommandRaw({
-      dropIndexes: 'Payment',
-      index: INDEX_NAME,
-    }).catch(() => undefined);
+    await dropTargetIndexIfPresent();
     await prisma.$runCommandRaw({
       createIndexes: 'Payment',
       indexes: [{ key: { refundOrderId: 1 }, name: INDEX_NAME, unique: true }],
@@ -38,12 +35,7 @@ describe('obsolete Payment refund index migration', () => {
   });
 
   afterEach(async () => {
-    if (prisma) {
-      await prisma.$runCommandRaw({
-        dropIndexes: 'Payment',
-        index: INDEX_NAME,
-      }).catch(() => undefined);
-    }
+    if (prisma) await dropTargetIndexIfPresent();
   });
 
   async function paymentIndexes() {
@@ -51,6 +43,12 @@ describe('obsolete Payment refund index migration', () => {
       cursor?: { firstBatch?: Array<Record<string, unknown>> };
     };
     return result.cursor?.firstBatch ?? [];
+  }
+
+  async function dropTargetIndexIfPresent() {
+    if ((await paymentIndexes()).some((index) => index.name === INDEX_NAME)) {
+      await prisma.$runCommandRaw({ dropIndexes: 'Payment', index: INDEX_NAME });
+    }
   }
 
   it('proves the legacy null constraint, checks without mutation, applies safely, and is idempotent', async () => {
@@ -97,6 +95,7 @@ describe('obsolete Payment refund index migration', () => {
           paymentMethod: 'MOCK_QR',
           status: PaymentStatus.PENDING,
           transactionId: 'INTEGRATION-PAYMENT-02',
+          refundOrderId: null,
         },
         {
           id: THIRD_PAYMENT_ID,
@@ -106,10 +105,16 @@ describe('obsolete Payment refund index migration', () => {
           paymentMethod: 'MOCK_QR',
           status: PaymentStatus.PENDING,
           transactionId: 'INTEGRATION-PAYMENT-03',
+          refundOrderId: null,
         },
       ],
     });
-    expect(await prisma.payment.count({ where: { refundOrderId: null } })).toBe(3);
+    const nullablePayments = await prisma.payment.findMany({
+      where: { id: { in: [SECOND_PAYMENT_ID, THIRD_PAYMENT_ID] } },
+      select: { id: true, refundOrderId: true },
+    });
+    expect(nullablePayments).toHaveLength(2);
+    expect(nullablePayments.every((payment) => payment.refundOrderId === null)).toBe(true);
   });
 
   it('rejects a same-name wrong definition without dropping it or unrelated indexes', async () => {
