@@ -4,7 +4,7 @@
 
 **Goal:** Add an inspect-first, fail-closed tool that removes only the obsolete `Payment_refundOrderId_key` from an explicitly identified Mongo database.
 
-**Architecture:** Keep the repair localized in `server/scripts/drop-refund-order-id-index.mjs`. The script exports pure classification/guard helpers and a Prisma-backed migration function, while its CLI defaults to check mode and requires an exact target name plus acknowledgement for apply mode. A disposable-Mongo Jest integration spec proves the old invariant, repair, idempotency, fail-closed mismatch handling, and restored nullable-payment behavior.
+**Architecture:** Keep the repair localized in `server/scripts/drop-refund-order-id-index.cjs`. The script exports pure classification/guard helpers and a Prisma-backed migration function, while its CLI defaults to check mode and requires an exact target name plus acknowledgement for apply mode. A disposable-Mongo Jest integration spec proves the old invariant, repair, idempotency, fail-closed mismatch handling, and restored nullable-payment behavior.
 
 **Tech Stack:** Node.js ESM, `@prisma/client`, MongoDB commands through Prisma `$runCommandRaw`, Jest/ts-jest integration harness.
 

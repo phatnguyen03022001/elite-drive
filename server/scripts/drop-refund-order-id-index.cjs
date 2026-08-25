@@ -4,6 +4,18 @@ const TARGET_COLLECTION = 'Payment';
 const TARGET_INDEX_NAME = 'Payment_refundOrderId_key';
 const ACKNOWLEDGEMENT = TARGET_INDEX_NAME;
 const ALLOWED_INDEX_FIELDS = new Set(['name', 'key', 'unique', 'sparse', 'v', 'ns']);
+const SAFE_FAILURE_MESSAGE = 'Refund index migration failed; database state is not asserted. Re-run --check.';
+
+function formatSuccessResult({ mode, classification, mutated }) {
+  if (classification === 'ABSENT' && !mutated) return 'already-absent';
+  if (mode === 'apply' && classification === 'LEGACY_MATCH' && mutated) return 'removed';
+  if (mode === 'check' && classification === 'LEGACY_MATCH' && !mutated) return 'migration-required';
+  throw new Error('Unsupported successful migration result');
+}
+
+function safeFailureMessage() {
+  return SAFE_FAILURE_MESSAGE;
+}
 
 function isLegacyDefinition(index) {
   if (!index || index.name !== TARGET_INDEX_NAME || index.unique !== true) return false;
@@ -92,7 +104,7 @@ async function main() {
       expectedDatabaseName: process.env.EXPECTED_DATABASE_NAME,
       acknowledgement: process.env.ALLOW_REFUND_INDEX_DROP,
     });
-    const status = result.classification === 'LEGACY_MATCH' ? 'migration required' : result.classification.toLowerCase();
+    const status = formatSuccessResult({ mode, ...result });
     console.log(`database=${result.databaseName} collection=${TARGET_COLLECTION} index=${TARGET_INDEX_NAME} mode=${mode} classification=${result.classification} result=${status}`);
   } finally {
     await prisma.$disconnect();
@@ -101,6 +113,8 @@ async function main() {
 
 module.exports = {
   ACKNOWLEDGEMENT,
+  formatSuccessResult,
+  safeFailureMessage,
   TARGET_COLLECTION,
   TARGET_INDEX_NAME,
   assertTargetDatabase,
@@ -111,7 +125,7 @@ module.exports = {
 
 if (require.main === module) {
   main().catch(() => {
-    console.error('Refund index migration aborted; no mutation was performed.');
+    console.error(safeFailureMessage());
     process.exitCode = 1;
   });
 }
