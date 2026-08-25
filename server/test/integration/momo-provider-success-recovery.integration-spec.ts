@@ -80,6 +80,7 @@ describe('MoMo provider-success recovery', () => {
         paymentMethod: 'MOMO',
         status: PaymentStatus.FAILED,
         transactionId: 'INTEGRATION-PAYMENT-FAILED-NEW',
+        refundOrderId: `UNUSED-${newerFailedPaymentId}`,
         createdAt: new Date('2026-08-21T00:00:00.000Z'),
       },
     });
@@ -116,6 +117,7 @@ describe('MoMo provider-success recovery', () => {
         paymentMethod: 'MOMO',
         providerSuccessConflictAt: null,
         providerTransactionId: null,
+        refundOrderId: `UNUSED-${IDS.payment}`,
         createdAt: new Date('2026-08-20T00:00:00.000Z'),
       },
     });
