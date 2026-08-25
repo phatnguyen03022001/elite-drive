@@ -266,7 +266,7 @@ model Payment {
   providerTransactionId String?
   providerSuccessConflictAt DateTime?
   providerSuccessResultCode Int?
-  refundOrderId String? @unique
+  refundOrderId String?
   refundRequestId String?
   refundProviderTransactionId String?
   refundResultCode Int?

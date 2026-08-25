@@ -80,7 +80,6 @@ describe('MoMo provider-success recovery', () => {
         paymentMethod: 'MOMO',
         status: PaymentStatus.FAILED,
         transactionId: 'INTEGRATION-PAYMENT-FAILED-NEW',
-        refundOrderId: `UNUSED-${newerFailedPaymentId}`,
         createdAt: new Date('2026-08-21T00:00:00.000Z'),
       },
     });
@@ -93,6 +92,12 @@ describe('MoMo provider-success recovery', () => {
       .send({ bookingId: IDS.booking, paymentMethod: 'MOMO' })
       .expect(400);
     expect(await prisma.payment.count({ where: { bookingId: IDS.booking } })).toBe(before);
+    const blockedPayments = await prisma.payment.findMany({
+      where: { bookingId: IDS.booking },
+      orderBy: { createdAt: 'asc' },
+    });
+    expect(blockedPayments).toHaveLength(2);
+    expect(blockedPayments.map((payment) => payment.refundOrderId)).toEqual([null, null]);
 
     await customer
       .post('/api/customer/payments/create')
@@ -117,7 +122,6 @@ describe('MoMo provider-success recovery', () => {
         paymentMethod: 'MOMO',
         providerSuccessConflictAt: null,
         providerTransactionId: null,
-        refundOrderId: `UNUSED-${IDS.payment}`,
         createdAt: new Date('2026-08-20T00:00:00.000Z'),
       },
     });
@@ -141,6 +145,7 @@ describe('MoMo provider-success recovery', () => {
       status: PaymentStatus.PENDING,
     }));
     expect(payments[0].id).not.toBe(IDS.payment);
+    expect(payments[0].refundOrderId).toBeNull();
   });
 
   it('durably records cancellation conflict, then refunds it without local escrow', async () => {
@@ -332,7 +337,6 @@ describe('MoMo provider-success recovery', () => {
         paymentMethod: 'MOMO',
         status: PaymentStatus.PENDING,
         transactionId: 'INTEGRATION-PAYMENT-NEW',
-        refundOrderId: `UNUSED-${newerPaymentId}`,
       },
     });
     fakeMomo.queryStatus.mockResolvedValue({
