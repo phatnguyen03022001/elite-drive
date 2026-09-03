@@ -6,6 +6,7 @@ on:
     paths:
       - 'server/**'
       - '.github/workflows/backend-ci.yml'
+      - 'compose.yaml'
 
 permissions:
   contents: read
@@ -66,7 +67,7 @@ jobs:
       - name: Start MongoDB replica set
         id: mongo-start
         working-directory: .
-        run: docker compose -f docker/mongodb/docker-compose.yml -p elite-drive-ci up -d
+        run: docker compose -f compose.yaml -p elite-drive-ci up -d
 
       - name: Wait for MongoDB PRIMARY
         id: mongo-ready
@@ -74,7 +75,7 @@ jobs:
         run: |
           set -euo pipefail
           for attempt in $(seq 1 60); do
-            if docker compose -f docker/mongodb/docker-compose.yml -p elite-drive-ci exec -T mongo \
+            if docker compose -f compose.yaml -p elite-drive-ci exec -T mongo \
               mongosh --quiet 'mongodb://localhost:27017/test?directConnection=true' \
               --eval 'if (rs.status().myState !== 1) throw new Error("MongoDB is not PRIMARY")' \
               >/dev/null 2>&1; then
@@ -84,7 +85,7 @@ jobs:
             sleep 1
           done
           echo "MongoDB replica set did not reach PRIMARY within 60 seconds"
-          docker compose -f docker/mongodb/docker-compose.yml -p elite-drive-ci logs --no-color mongo mongo-init
+          docker compose -f compose.yaml -p elite-drive-ci logs --no-color mongo
           exit 1
 
       - name: Prepare disposable integration schema
@@ -101,7 +102,7 @@ jobs:
         if: ${{ always() }}
         working-directory: .
         run: |
-          docker compose -f docker/mongodb/docker-compose.yml -p elite-drive-ci down --volumes --remove-orphans
+          docker compose -f compose.yaml -p elite-drive-ci down --volumes --remove-orphans
 
       - name: Production dependency audit
         id: audit
