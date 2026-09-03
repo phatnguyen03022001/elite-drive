@@ -1,0 +1,294 @@
+protocol_version: 3
+
+task_id: TASK-0007
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_follow_up
+  task_id: TASK-0006
+  gap_id: IMMUTABLE_CLOUD_RUN_IMAGE_PUBLICATION
+
+architect_binding:
+  target_repository: phatnguyen03022001/elite-drive
+
+target:
+  repository: phatnguyen03022001/elite-drive
+  branch:
+    name: dev
+    role: primary_working_integration
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "76f2d3877d1698f91eb5a6117e2301ed49480379"
+
+execution_skills:
+  required:
+    - executor
+    - simplicity
+    - reliability
+    - verification
+  recommended: []
+
+authority_sources:
+  - source: ".agent/tasks/TASK-0006/review.yaml@dev"
+    role: "Accepted image-native PID1/signal contract and exact Cloud Run-ready application container behavior."
+    precedence: 1
+  - source: "server/Dockerfile@dev"
+    role: "Accepted backend OCI image definition using Node 24, Debian tini, non-root runtime, and compiled Node entrypoint."
+    precedence: 2
+  - source: "compose.yaml@dev"
+    role: "Canonical local Mongo-backed smoke topology for pre-push and digest-pull verification."
+    precedence: 3
+  - source: "vercel.json@dev"
+    role: "Automatic Vercel Git deployments are disabled and must remain disabled."
+    precedence: 4
+  - source: "Operator-approved TASK-0007 publication design on 2026-09-03"
+    role: "Defines clean-SHA identity, fail-closed project/location discovery, immutable Artifact Registry semantics, remote digest authority, round-trip verification, and dev-only branch authority."
+    precedence: 5
+  - source: "Operator branch policy on 2026-09-03"
+    role: "dev is the primary working branch. main is frozen/read-only until the operator explicitly requests promotion or release work."
+    precedence: 6
+  - source: "phatnguyen03022001/agent-skills@76f2d3877d1698f91eb5a6117e2301ed49480379"
+    role: "Pinned execution and verification authority."
+    precedence: 7
+
+structure_authority:
+  status: RESOLVED
+  source: "Accepted TASK-0006 image plus operator-approved publication boundary"
+  rationale: "No repository implementation change is required. OCI source revision metadata is injected at build time with Docker's label option, while the immutable remote Artifact Registry digest becomes the canonical deployment artifact identity."
+
+objective: "Publish exactly one verified linux/amd64 backend image candidate from a clean exact dev source SHA into a uniquely resolved private immutable Artifact Registry repository, resolve its canonical digest from the registry, pull and verify that exact digest round-trip, and record the source-to-digest binding without deploying Cloud Run or mutating main."
+
+scope:
+  required_changes:
+    - "Perform no application, Dockerfile, Compose, workflow, frontend, or deployment-code mutation. The exact execution-base dev HEAD is the SOURCE_SHA and must remain the build source identity."
+    - "Before any build or external mutation, require branch dev, HEAD exactly equal to the authorized execution base, clean index/worktree, origin/dev equal to HEAD after fresh fetch, main exactly frozen, topology exactly {dev, main}, and vercel.json git.deploymentEnabled=false. Dirty or stale state is BLOCKED."
+    - "Fresh-resolve the existing Cloud Run service named elite-drive-api through gcloud across accessible project scope without inferring project or region from gcloud defaults. Require exactly one viable service identity yielding one explicit PROJECT_ID and LOCATION. Zero or multiple viable matches are BLOCKED."
+    - "After resolution, every Artifact Registry command must pass explicit --project and --location values derived from that unique service identity. Do not rely on ambient gcloud project/region configuration."
+    - "Ensure Artifact Registry API availability only in the resolved project. If artifactregistry.googleapis.com is disabled, enabling exactly that API is authorized; do not enable unrelated APIs."
+    - "Use standard private Docker repository name elite-drive in the resolved project/location. If absent, create it with repository format Docker and immutable tags enabled. If present, verify it is a standard Docker repository with immutable tags enabled. Any format/mode/location/immutability mismatch is BLOCKED; do not repurpose or mutate an incompatible existing repository."
+    - "Accept the append-only consequence of immutable tags: once SOURCE_SHA is attached to a digest, the tag cannot be moved or removed, and a post-push failed candidate may remain for audit. Do not weaken repository immutability to simplify cleanup."
+    - "Use image name elite-drive and tag exactly SOURCE_SHA. Never use latest, mutable aliases, branch tags, timestamp tags, or release tags in this task."
+    - "Build exactly one single-platform linux/amd64 candidate using docker build --platform linux/amd64 from server/. Do not invoke docker buildx, do not create or select a custom builder, and do not publish a multi-platform manifest. Underlying Docker BuildKit/Buildx implementation semantics are not prohibited."
+    - "Inject OCI metadata at build time without repository source changes, including org.opencontainers.image.revision=SOURCE_SHA."
+    - "Before push, inspect the candidate and require Architecture=amd64, expected tini entrypoint, expected Node command, configured non-root user, OCI revision label equal to SOURCE_SHA, and runtime UID not equal to 0."
+    - "Run a local pre-push smoke of the exact amd64 candidate against only local/non-production Mongo infrastructure. Require /health/live success, /health/ready database=ok, and no production Cloud Run or production database access."
+    - "If remote tag IMAGE:SOURCE_SHA does not exist, authenticate to the resolved Artifact Registry with the smallest bounded mechanism and push exactly that tag. Do not push any other tag."
+    - "If remote tag IMAGE:SOURCE_SHA already exists, do not repush or move it. Resolve the existing remote digest and continue round-trip verification. If its source revision metadata or verified runtime contract does not bind to SOURCE_SHA, BLOCKED."
+    - "After push or existing-tag detection, resolve the canonical digest from the remote Artifact Registry tag using Artifact Registry remote describe semantics. Local Docker metadata is not canonical digest authority."
+    - "Remove local candidate tag/reference as needed, then docker pull the exact IMAGE@sha256:... reference resolved from Artifact Registry. Cached layers may be reused; docker system prune is neither required nor allowed."
+    - "Inspect the pulled exact digest and require Architecture=amd64, expected tini entrypoint, expected Node command, configured non-root user, OCI revision label equal to SOURCE_SHA, and runtime UID not equal to 0."
+    - "Run final health + database smoke using the exact digest-pulled image and only local/non-production Mongo infrastructure. Require /health/live success and /health/ready database=ok."
+    - "Clean task-owned local containers, network aliases, temporary tags, candidate image references, temporary auth material, and disposable local data without host-wide prune. Preserve the canonical elite-drive-mongo-data volume unless execution explicitly used disposable isolated storage."
+    - "Publish one canonical report-only commit on dev recording SOURCE_SHA, resolved project, location, repository, immutable SHA tag, canonical digest, whether repository/image existed or was created/pushed, and exact round-trip verification evidence. No implementation commit is authorized."
+    - "If an irreversible remote artifact/repository mutation occurred and later verification blocks, still preserve auditable evidence of the side effect in the terminal report rather than deleting or weakening immutable state."
+  allowed_existing_files_or_components:
+    - server/Dockerfile
+    - server/.dockerignore
+    - compose.yaml
+    - vercel.json
+    - .agent/tasks/TASK-0006/review.yaml
+    - .agent/tasks/TASK-0007/task.yaml
+  expected_files_are_restrictive: false
+
+artifact_contract:
+  repository_name: elite-drive
+  image_name: elite-drive
+  tag: "${SOURCE_SHA}"
+  canonical_identity: "${LOCATION}-docker.pkg.dev/${PROJECT_ID}/elite-drive/elite-drive@${REMOTE_DIGEST}"
+  source_identity:
+    requirement: "SOURCE_SHA equals the clean exact execution-base dev HEAD immediately before build and remains unchanged through publication."
+    oci_label: "org.opencontainers.image.revision=${SOURCE_SHA}"
+  repository_policy:
+    format: DOCKER
+    mode: STANDARD_REPOSITORY
+    immutable_tags: true
+    append_only_consequence_accepted: true
+  deployment_consumer_rule: "Future TASK-0008 may consume only the verified canonical @sha256 digest recorded by this task; it must never rebuild source or deploy by tag."
+
+invariants:
+  - "dev is the only writable Git branch for this task."
+  - "main remains exactly 7b4b45fdf3f9ade55f7f6ecf549a02e0d41e3cbf and is not checked out for work, mutated, merged, rebased, reconciled, promoted, or pushed."
+  - "Branch topology remains exactly {dev, main}."
+  - "SOURCE_SHA is the exact clean execution-base HEAD and origin/dev must equal SOURCE_SHA before build."
+  - "No repository implementation file changes are authorized; only the eventual TASK-0007 report is persisted after successful or side-effect-requiring terminal execution."
+  - "Vercel automatic Git deployments remain disabled on dev."
+  - "m3-repoworker and /Users/tienphat/Developer/.agent-scratch are not used or referenced."
+  - "No docker buildx command, custom builder, multi-platform manifest, Cloud Build, GitHub Actions image publication, Vercel deployment, Cloud Run deployment, Terraform, Kubernetes, or alternate deployment framework is used."
+  - "linux/amd64 cross-architecture build/emulation is authorized only inside this publication task and does not change the native-ARM local development contract."
+  - "Artifact Registry project/location are uniquely resolved from live elite-drive-api service evidence, never guessed from historical URLs or ambient config."
+  - "Remote Artifact Registry describe is canonical digest authority."
+  - "No production database mutation or Cloud Run traffic occurs."
+
+forbidden_changes:
+  - "Do not mutate main under any circumstance."
+  - "Do not change server/Dockerfile, compose.yaml, application source, package files, lockfiles, workflows, frontend, deployment configuration, or vercel.json."
+  - "Do not add build/push scripts, Makefiles, CI publication workflows, deployment wrappers, infrastructure-as-code, worker/sandbox layers, or another Compose stack."
+  - "Do not use latest or any mutable/non-SOURCE_SHA tag."
+  - "Do not disable immutable tags, move an existing immutable tag, delete a remote tagged artifact to make a retry easier, or repurpose an incompatible Artifact Registry repository."
+  - "Do not grant project IAM roles, broaden principal permissions, create service accounts, or mutate unrelated GCP resources. Permission failure is BLOCKED."
+  - "Do not run docker system prune, image prune, volume prune, network prune, or unrelated local Docker cleanup."
+
+gap_policy:
+  local_auto_fix: false
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  dependency_change: forbidden
+  public_contract_change: forbidden
+  blocking_gap_behavior: BLOCKED
+
+structure_policy:
+  expected_new_files:
+    - .agent/tasks/TASK-0007/report.yaml
+  unlisted_new_files:
+    allowed: false
+    max: 0
+    within: []
+    purpose: ""
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+continuation_policy:
+  mode: MANUAL
+  stop_conditions:
+    - BLOCKED
+    - STALE_STATE
+    - AUTHORITY_REQUIRED
+    - CURRENT_PHASE_CAPABILITY_UNAVAILABLE
+    - REVIEW_REQUIRED
+    - USER_STOP
+
+capability_requirements:
+  EXECUTION:
+    - exact_remote_ref_read
+    - repository_content_read
+    - repository_content_write
+    - agent_runtime_terminal_exec
+    - local_docker_cli
+    - docker_compose_v2
+    - orbstack_docker_context
+    - gcloud_cli
+    - gcloud_authenticated_identity
+    - cloud_run_service_read
+    - artifact_registry_repository_read
+    - artifact_registry_repository_create
+    - artifact_registry_image_read
+    - artifact_registry_image_push
+    - non_force_git_push
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Publication source identity is exact and clean."
+    evidence_required: "Fresh pre-build read-back proves branch dev, HEAD==origin/dev==SOURCE_SHA==authorized execution base, clean index/worktree, main frozen, topology {dev, main}, and Vercel deploymentEnabled=false."
+  - id: AC-2
+    requirement: "GCP project and location are uniquely resolved from live elite-drive-api authority."
+    evidence_required: "Executor records the discovery method and exactly one PROJECT_ID/LOCATION result; zero/multiple viable matches or ambient-config inference are absent."
+  - id: AC-3
+    requirement: "Artifact Registry repository is compatible, private, standard Docker, and immutable."
+    evidence_required: "Remote repository describe proves repository elite-drive at explicit project/location with Docker format, standard mode, immutable tags enabled; report states whether it was pre-existing or created."
+  - id: AC-4
+    requirement: "Pre-push candidate is the clean source SHA's Cloud Run-compatible amd64 image."
+    evidence_required: "docker build --platform linux/amd64 succeeds without docker buildx/custom builder/multi-platform publication; inspection proves amd64, tini entrypoint, Node command, configured non-root user, OCI revision SOURCE_SHA, runtime UID!=0; local health/live and health/ready database=ok pass against non-production Mongo."
+  - id: AC-5
+    requirement: "Immutable SHA tag is published or safely reused and registry resolves the canonical digest."
+    evidence_required: "Exactly IMAGE:SOURCE_SHA is pushed if absent, or existing immutable tag is reused without repush; Artifact Registry remote describe returns one sha256 digest recorded as REMOTE_DIGEST."
+  - id: AC-6
+    requirement: "Exact digest round-trip passes independent runtime verification."
+    evidence_required: "After local candidate reference removal, docker pull IMAGE@REMOTE_DIGEST succeeds; inspection proves amd64/tini/Node/non-root/OCI revision SOURCE_SHA, runtime UID!=0, and final health/live + health/ready database=ok pass against non-production Mongo."
+  - id: AC-7
+    requirement: "Local and credential hygiene remain bounded."
+    evidence_required: "Task-owned containers/networks/temp tags/auth material/disposable data are removed, canonical persistent volume is preserved as applicable, no host-wide prune occurs, and no unrelated operator Docker or credential state is deleted."
+  - id: AC-8
+    requirement: "Git authority and deployment boundary remain intact."
+    evidence_required: "No implementation commit exists; report is the only child commit created by execution, dev only; main remains exact frozen SHA; no Cloud Run deploy, Cloud Build, Vercel deploy, GitHub Actions publication, IAM broadening, or production DB mutation occurs."
+  - id: AC-9
+    requirement: "Future deployment has an immutable trust handoff."
+    evidence_required: "Canonical report records SOURCE_SHA, PROJECT_ID, LOCATION, repository, IMAGE:SOURCE_SHA, REMOTE_DIGEST, canonical IMAGE@REMOTE_DIGEST, OCI revision proof, and round-trip PASS; task explicitly states future Cloud Run work must consume that digest only and never rebuild/deploy tag."
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Fresh fetch/read-back; require local dev HEAD exactly authorized base and origin/dev, clean index/worktree, accepted TASK-0006 review, main exact frozen SHA, topology {dev, main}, vercel.json deploymentEnabled=false. Capture SOURCE_SHA from git rev-parse HEAD only after all checks pass."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Verify Agent Runtime, Docker CLI, Compose v2, OrbStack, gcloud authentication, Cloud Run read, Artifact Registry read/create/push capabilities. Permission gaps fail closed; do not grant IAM."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Fresh-resolve elite-drive-api across accessible GCP project scope; require exactly one viable PROJECT_ID/LOCATION. Re-run explicit service describe with both resolved values and record evidence."
+      required: true
+    - id: CHECK-4
+      command_or_check: "Explicitly inspect Artifact Registry API and repository elite-drive in resolved project/location. Enable only artifactregistry.googleapis.com if needed. Create repository only if absent with Docker format + immutable tags; otherwise verify exact compatibility and block on mismatch."
+      required: true
+    - id: CHECK-5
+      command_or_check: "Construct explicit IMAGE=${LOCATION}-docker.pkg.dev/${PROJECT_ID}/elite-drive/elite-drive and TAG=${SOURCE_SHA}. Check remote IMAGE:TAG before push and record absent/existing state."
+      required: true
+    - id: CHECK-6
+      command_or_check: "Build single-platform amd64 candidate with docker build --platform linux/amd64, SOURCE_SHA OCI label, and only SOURCE_SHA remote tag plus any bounded temporary local alias required for smoke. Do not invoke docker buildx/custom builder. Inspect image contract and runtime UID, then pass pre-push local health/database smoke."
+      required: true
+    - id: CHECK-7
+      command_or_check: "If SHA tag absent, authenticate with bounded credential handling and push exactly IMAGE:SOURCE_SHA. If tag exists, do not repush. Resolve REMOTE_DIGEST from Artifact Registry remote describe; require sha256 digest and record immutable source binding."
+      required: true
+    - id: CHECK-8
+      command_or_check: "Remove local candidate tag/reference, pull exact IMAGE@REMOTE_DIGEST, inspect architecture/entrypoint/cmd/user/OCI revision/runtime UID, and run final non-production health + database smoke using the exact digest-pulled image."
+      required: true
+    - id: CHECK-9
+      command_or_check: "Clean bounded task-owned local Docker/auth/disposable state, preserve unrelated resources and canonical Mongo volume, then fresh-read remote tag/digest again to prove unchanged immutable binding."
+      required: true
+    - id: CHECK-10
+      command_or_check: "Publish canonical TASK-0007 report as the sole execution-created Git commit on dev. Fresh post-publication read-back must prove local HEAD==origin/dev==report SHA, report parent==SOURCE_SHA, worktree clean, main frozen, topology {dev, main}, Vercel kill switch intact, canonical remote digest still resolves, and no task-owned local residue."
+      required: true
+  authoritative_verification:
+    required: true
+    mechanism: "Clean exact dev source identity + pre-push amd64 local smoke + immutable Artifact Registry remote digest resolution + exact digest pull/inspect/runtime smoke + post-publication remote/read-back evidence"
+    expected_signal: "One clean SOURCE_SHA maps to one immutable remote sha256 digest; the pulled digest is amd64, tini-based, non-root, source-labeled, healthy against non-production Mongo, and no deployment occurs."
+
+side_effect_reporting:
+  irreversible_remote_side_effects:
+    - "Artifact Registry repository elite-drive may be created with immutable tags."
+    - "IMAGE:SOURCE_SHA may become an immutable append-only remote tag and remain even if a later verification step blocks."
+  requirement: "Once any irreversible remote side effect occurs, terminal reporting must record its exact project/location/repository/tag/digest state even when result is BLOCKED. Do not hide, roll back by weakening immutability, or mutate main."
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  implementation_commit: false
+  report_only_commit: true
+  promote_to_main: false
+
+release_authority:
+  create_version_tag: false
+  mutate_repository_metadata: false
+  publish_release: false
+
+external_resource_authority:
+  gcp:
+    enable_services:
+      allowed:
+        - artifactregistry.googleapis.com
+    artifact_registry:
+      create_repository:
+        allowed: true
+        name: elite-drive
+        format: DOCKER
+        immutable_tags: true
+      push_image:
+        allowed: true
+        image_name: elite-drive
+        tag_policy: EXACT_SOURCE_SHA_ONLY
+      delete_repository: false
+      delete_image: false
+      mutate_iam: false
+    cloud_run:
+      read_service: true
+      deploy: false
+      mutate_service: false
+
+blocking_decisions: []
+execution_ready: true
