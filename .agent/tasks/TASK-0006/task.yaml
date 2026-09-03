@@ -1,0 +1,215 @@
+protocol_version: 3
+
+task_id: TASK-0006
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_follow_up
+  task_id: TASK-0005
+  gap_id: IMAGE_PID1_SIGNAL_PORTABILITY
+
+architect_binding:
+  target_repository: phatnguyen03022001/elite-drive
+
+target:
+  repository: phatnguyen03022001/elite-drive
+  branch:
+    name: dev
+    role: primary_working_integration
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "76f2d3877d1698f91eb5a6117e2301ed49480379"
+
+execution_skills:
+  required:
+    - executor
+    - simplicity
+    - reliability
+    - verification
+  recommended: []
+
+authority_sources:
+  - source: ".agent/tasks/TASK-0005/review.yaml@dev"
+    role: "Accepted backend Docker/OrbStack container contract and observed Node-as-PID1 TERM defect corrected locally only through Compose init:true."
+    precedence: 1
+  - source: "server/Dockerfile@dev"
+    role: "Current production-capable backend image definition."
+    precedence: 2
+  - source: "compose.yaml@dev"
+    role: "Canonical local topology and current Compose-only init:true workaround."
+    precedence: 3
+  - source: "vercel.json@dev"
+    role: "Automatic Vercel Git deployments are disabled on the primary working branch and must remain disabled."
+    precedence: 4
+  - source: "Operator branch policy on 2026-09-03"
+    role: "dev is the primary working branch. main is frozen/read-only until the operator explicitly requests promotion or release work."
+    precedence: 5
+  - source: "phatnguyen03022001/agent-skills@76f2d3877d1698f91eb5a6117e2301ed49480379"
+    role: "Pinned execution and verification authority."
+    precedence: 6
+
+structure_authority:
+  status: RESOLVED
+  source: "Existing Dockerfile and root compose.yaml"
+  rationale: "The defect is image PID1/signal portability. The smallest correction is an image-native init process plus removal of the redundant Compose-only init flag; no application lifecycle redesign or deployment framework is justified."
+
+objective: "Make the accepted Elite Drive backend OCI image handle TERM correctly as a standalone container by carrying its own minimal init/signal-forwarding boundary, eliminating reliance on Compose init:true while preserving the canonical two-container OrbStack topology and all application behavior."
+
+scope:
+  required_changes:
+    - "Modify the existing backend image with the smallest standard image-native init/signal-forwarding mechanism. Prefer the Debian tini package already compatible with node:24-bookworm-slim unless fresh execution evidence proves a simpler equivalent."
+    - "Make the image entrypoint invoke the init process and keep the existing Node compiled application command as its child."
+    - "Remove compose.yaml init:true from the app service after the image itself owns PID1/signal forwarding."
+    - "Do not change container names, project name, ports, Mongo networking, database URL, persistent volume identity, or default local development environment behavior."
+    - "Build and run the canonical project directly through Agent Runtime and OrbStack. Prove elite-drive contains the image-native init as PID1 with Node as its child and no extra helper/init container."
+    - "Prove a controlled docker/compose stop delivers TERM through the image-native init and the app container exits without forced SIGKILL; require an exit consistent with SIGTERM or clean graceful shutdown and no duplicate/orphan process/container."
+    - "Restart/start the canonical project and require /health/live and /health/ready database=ok to recover."
+    - "Run docker compose down and preserve elite-drive-mongo-data. Remove any task-built disposable image/tag or other task-owned Docker residue without host-wide prune."
+    - "Run the normal authorized backend verification surface and require Backend CI for the exact implementation SHA to complete conclusion=success with every required gate successful."
+    - "Publish exactly one implementation commit on dev, then a separate report-only child, and stop at Governing Architect review."
+  allowed_existing_files_or_components:
+    - server/Dockerfile
+    - compose.yaml
+    - server/package.json
+    - server/package-lock.json
+    - .github/workflows/backend-ci.yml
+    - vercel.json
+    - .agent/tasks/TASK-0006/task.yaml
+  expected_files_are_restrictive: false
+
+invariants:
+  - "dev is the only writable working branch for this task."
+  - "main remains exactly 7b4b45fdf3f9ade55f7f6ecf549a02e0d41e3cbf and is not mutated, merged, rebased, reconciled, or promoted."
+  - "Branch topology remains exactly {dev, main}."
+  - "Vercel automatic Git deployments remain disabled."
+  - "Compose project remains elite-drive with exactly canonical containers elite-drive and elite-drive-mongo when running."
+  - "No helper/init/worker container is added. An init process inside elite-drive is allowed and required by this task."
+  - "m3-repoworker and /Users/tienphat/Developer/.agent-scratch are not used or referenced."
+  - "No buildx, --platform, cross-build, emulation, multi-arch publication, registry push, Cloud Run, Cloud Build, Artifact Registry, deployment automation, frontend containerization, Kubernetes, Terraform, or alternate orchestrator is introduced."
+  - "TASK-0004 Cloudinary production fail-closed behavior remains intact."
+
+forbidden_changes:
+  - "Do not mutate main under any circumstance."
+  - "Do not add application signal handlers, shutdown-hook abstractions, or source-level lifecycle redesign unless image-native init is proven insufficient and execution blocks for Architect authority."
+  - "Do not add a new Compose file, wrapper script, Makefile/task-runner framework, worker/sandbox layer, or deployment DSL."
+  - "Do not change booking, auth, payment, upload, Prisma schema, public API, frontend, or GitHub Actions behavior."
+  - "Do not run host-wide docker system prune, volume prune, or network prune."
+
+gap_policy:
+  local_auto_fix: true
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  dependency_change: forbidden
+  public_contract_change: forbidden
+  blocking_gap_behavior: BLOCKED
+
+structure_policy:
+  expected_new_files:
+    - .agent/tasks/TASK-0006/report.yaml
+  unlisted_new_files:
+    allowed: false
+    max: 0
+    within: []
+    purpose: ""
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+continuation_policy:
+  mode: MANUAL
+  stop_conditions:
+    - BLOCKED
+    - STALE_STATE
+    - AUTHORITY_REQUIRED
+    - CURRENT_PHASE_CAPABILITY_UNAVAILABLE
+    - REVIEW_REQUIRED
+    - USER_STOP
+
+capability_requirements:
+  EXECUTION:
+    - exact_remote_ref_read
+    - repository_content_read
+    - repository_content_write
+    - agent_runtime_terminal_exec
+    - local_docker_cli
+    - docker_compose_v2
+    - orbstack_docker_context
+    - github_actions_run_read
+    - non_force_git_push
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "PID1/signal forwarding belongs to the image rather than Compose."
+    evidence_required: "Dockerfile contains the minimal image-native init entrypoint; compose.yaml no longer uses init:true; running elite-drive process inventory proves init PID1 and Node child without another container."
+  - id: AC-2
+    requirement: "Standalone container TERM behavior no longer requires forced SIGKILL."
+    evidence_required: "Controlled stop of elite-drive exits from TERM/clean shutdown within the normal grace period, not 137, with no duplicate/orphan app process or container."
+  - id: AC-3
+    requirement: "Canonical local topology and health remain intact."
+    evidence_required: "Running inventory is exactly {elite-drive, elite-drive-mongo}; Mongo is usable; /health/live succeeds and /health/ready returns database=ok before and after restart."
+  - id: AC-4
+    requirement: "Local lifecycle cleanup remains bounded."
+    evidence_required: "compose down removes project containers/network, preserves elite-drive-mongo-data, and no task-owned Docker residue remains; no host-wide prune is used."
+  - id: AC-5
+    requirement: "Existing backend quality gates remain green."
+    evidence_required: "Authorized local backend verification passes and Backend CI for exact implementation SHA completes conclusion=success with all required steps successful."
+  - id: AC-6
+    requirement: "Publication and branch authority remain bounded."
+    evidence_required: "Exactly one implementation commit on dev changes only server/Dockerfile and compose.yaml; report is a separate report-only child; main remains exact frozen SHA and topology exactly {dev, main}."
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Fresh refs; require dev exact handoff base, TASK-0005 review ACCEPTED, vercel.json deploymentEnabled=false on dev, main exactly frozen SHA, topology {dev, main}, local dev checkout exact/clean."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Verify Agent Runtime, Docker CLI, Compose v2 and OrbStack context; prove no m3-repoworker or .agent-scratch use."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Reproduce/confirm the accepted image-level PID1 issue boundary from TASK-0005 evidence, then implement the smallest image-native init correction and remove Compose init:true."
+      required: true
+    - id: CHECK-4
+      command_or_check: "Fresh build; inspect image entrypoint/cmd and running process tree to prove image init PID1 plus Node child, without an extra container."
+      required: true
+    - id: CHECK-5
+      command_or_check: "Run canonical two-container project; require Mongo readiness and host health/live + health/ready database=ok."
+      required: true
+    - id: CHECK-6
+      command_or_check: "Controlled stop elite-drive within normal grace period; require non-137 exit caused by TERM/clean shutdown and no orphan/duplicate; restart/start and require readiness recovery."
+      required: true
+    - id: CHECK-7
+      command_or_check: "compose down; prove containers/network removed, persistent Mongo volume preserved, and task-owned image/resources cleaned without host-wide prune."
+      required: true
+    - id: CHECK-8
+      command_or_check: "Run authorized backend verification; require PASS and exact implementation diff only server/Dockerfile + compose.yaml."
+      required: true
+    - id: CHECK-9
+      command_or_check: "Publish one implementation commit to dev non-force; require exact-SHA Backend CI completed success with every required gate successful."
+      required: true
+    - id: CHECK-10
+      command_or_check: "Publish report-only child; then perform fresh post-publication read-back proving local HEAD==origin/dev==report SHA, clean worktree, frozen main unchanged, topology {dev, main}, Vercel kill switch still present on dev, and no task-owned Docker residue."
+      required: true
+  authoritative_verification:
+    required: true
+    mechanism: "Direct local OrbStack image/process/lifecycle evidence plus exact-SHA GitHub Actions Backend CI"
+    expected_signal: "Image-native init owns PID1; TERM exits without forced kill; health/restart/cleanup pass; exact implementation CI is fully green."
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+release_authority:
+  create_version_tag: false
+  mutate_repository_metadata: false
+  publish_release: false
+
+blocking_decisions: []
+execution_ready: true
