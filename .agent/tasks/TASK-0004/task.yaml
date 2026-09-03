@@ -144,6 +144,7 @@ capability_requirements:
     - exact_remote_ref_read
     - repository_content_read
     - repository_content_write
+    - agent_runtime_terminal_exec
     - github_actions_run_read
     - non_force_git_push
 
