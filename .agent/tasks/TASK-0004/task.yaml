@@ -1,0 +1,210 @@
+protocol_version: 3
+
+task_id: TASK-0004
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_observed_production_safety_gap
+  task_id: TASK-0003
+  gap_id: PRODUCTION_UPLOAD_DURABILITY_FAIL_CLOSED
+
+architect_binding:
+  target_repository: phatnguyen03022001/elite-drive
+
+target:
+  repository: phatnguyen03022001/elite-drive
+  branch:
+    name: dev
+    role: integration
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "76f2d3877d1698f91eb5a6117e2301ed49480379"
+
+execution_skills:
+  required:
+    - executor
+    - simplicity
+    - reliability
+    - verification
+  recommended: []
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+authority_sources:
+  - source: ".agent/tasks/TASK-0003/review.yaml@f1e79cdc72c956a6a81197fc16d558abbb115a4b"
+    role: "Accepted predecessor review establishing the current dev lineage and green Backend CI verification surface."
+    precedence: 1
+  - source: "server/src/config/env-contract.ts@f1e79cdc72c956a6a81197fc16d558abbb115a4b"
+    role: "Current startup environment contract. It warns but does not reject production when CLOUDINARY_ENABLED is false, explicitly identifying the resulting local filesystem storage as ephemeral."
+    precedence: 2
+  - source: "server/src/config/env-contract.spec.ts@f1e79cdc72c956a6a81197fc16d558abbb115a4b"
+    role: "Current contract tests model production with CLOUDINARY_ENABLED=false and therefore encode the unsafe production fallback as valid startup configuration."
+    precedence: 3
+  - source: "server/src/modules/upload/upload.service.ts@f1e79cdc72c956a6a81197fc16d558abbb115a4b"
+    role: "Current upload routing: Cloudinary when enabled, otherwise local filesystem fallback. The fallback is valid for local development but is not durable production storage."
+    precedence: 4
+  - source: "server/src/modules/upload/cloudinary-upload.service.ts@f1e79cdc72c956a6a81197fc16d558abbb115a4b"
+    role: "Existing durable provider implementation and credential boundary. No new storage abstraction is required for this correction."
+    precedence: 5
+  - source: "server/src/app.module.ts@f1e79cdc72c956a6a81197fc16d558abbb115a4b"
+    role: "ConfigModule binds validateEnvironment at application startup, making the environment contract the existing fail-closed control point."
+    precedence: 6
+  - source: "server/.env.example@f1e79cdc72c956a6a81197fc16d558abbb115a4b"
+    role: "Current operator-facing configuration text incorrectly describes Cloudinary as optional without distinguishing the production durability requirement."
+    precedence: 7
+  - source: "phatnguyen03022001/agent-skills@76f2d3877d1698f91eb5a6117e2301ed49480379"
+    role: "Pinned reusable execution, simplicity, reliability, verification, and task-governance authority."
+    precedence: 8
+
+structure_authority:
+  status: RESOLVED
+  source: "Existing validateEnvironment startup gate plus existing CloudinaryUploadService provider path"
+  rationale: "This is a bounded production-safety correction. The repository already has the required provider and startup validation seam; adding StoragePort, a new provider adapter, R2/S3, Docker persistence, or another abstraction would be unnecessary scope expansion."
+
+objective: "Make Elite Drive fail closed at startup when production would otherwise use ephemeral local filesystem upload storage, while preserving the existing local-development fallback and existing Cloudinary implementation without redesigning storage."
+
+scope:
+  required_changes:
+    - "Modify the existing environment contract so NODE_ENV=production is rejected unless CLOUDINARY_ENABLED is explicitly true. Missing, false, malformed, or otherwise disabled Cloudinary configuration must not be accepted as a valid production startup state."
+    - "Preserve the existing Cloudinary provider credential checks: when CLOUDINARY_ENABLED=true, CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET remain required."
+    - "Preserve development/test behavior: Cloudinary may remain disabled outside production and UploadService may continue using the existing local filesystem fallback there."
+    - "Remove or correct production diagnostics/documentation that describe ephemeral local filesystem fallback as a supported production operating mode."
+    - "Update the focused environment-contract tests so they prove production with Cloudinary disabled is rejected, production with Cloudinary enabled but incomplete credentials is rejected, production with complete Cloudinary configuration is accepted, and non-production with Cloudinary disabled remains accepted."
+    - "Update server/.env.example so Cloudinary is documented as optional for local development but mandatory for production, while UPLOAD_DIR/UPLOAD_PUBLIC_BASE_URL are clearly local-fallback settings rather than a production durability mechanism."
+    - "Do not change UploadService or CloudinaryUploadService behavior unless execution proves the startup contract cannot enforce the requirement; such a need is outside this revision and must fail closed rather than expand scope."
+    - "Run focused environment-contract verification before publication, then publish one bounded implementation commit on dev. The implementation push must trigger Backend CI; require the exact implementation-SHA Backend CI run to complete successfully before publishing the separate report-only child."
+    - "Publish .agent/tasks/TASK-0004/report.yaml as a separate report-only child only after authoritative verification passes, then stop at Governing Architect review. Do not mutate main."
+  allowed_existing_files_or_components:
+    - server/src/config/env-contract.ts
+    - server/src/config/env-contract.spec.ts
+    - server/.env.example
+    - .agent/tasks/TASK-0004/task.yaml
+  expected_files_are_restrictive: true
+
+invariants:
+  - "The existing CloudinaryUploadService remains the production image-storage provider for this task; no provider migration or storage-interface redesign occurs."
+  - "Local filesystem upload fallback remains available outside production for current development/test workflows."
+  - "Production must never validate successfully while uploads would route to local filesystem fallback."
+  - "Existing environment validation for DATABASE_URL, JWT/OTP secrets, PLATFORM_USER_ID, Brevo, MoMo, ports, BCRYPT_ROUNDS, URL syntax, and unknown managed keys remains intact except for the smallest consistency edits caused by the Cloudinary production rule."
+  - "No application endpoint, upload API contract, media locator format, KYC security behavior, database schema, payment behavior, email behavior, frontend behavior, Docker/Compose topology, deployment mechanism, or dependency set changes."
+  - "The authoritative implementation-candidate Backend CI run completes successfully; a partial or local-only green result is insufficient."
+  - "main remains 89e298c5268704d0d9fdeb9f574c6d896aaa35ab and branch topology remains exactly {dev, main}."
+
+forbidden_changes:
+  - "Do not add StoragePort, repository/provider abstractions, object-storage facades, adapters, queues, workers, background migration logic, or a second image-storage provider."
+  - "Do not introduce Cloudflare R2, S3, GCS, mounted volumes, persistent Docker volumes for uploads, or production local-disk persistence."
+  - "Do not modify server/src/modules/upload/upload.service.ts, server/src/modules/upload/cloudinary-upload.service.ts, upload controllers, upload DTOs, or KYC media behavior in this revision."
+  - "Do not add or update package dependencies or lockfiles."
+  - "Do not modify compose.yaml, Dockerfiles, Cloud Run, Cloud Build, Artifact Registry, GitHub Actions workflow definitions, Vercel configuration, or deployment automation."
+  - "Do not weaken existing tests or environment validation to obtain green status."
+  - "Do not merge, rebase, force-push, reconcile dev/main divergence, or mutate main."
+
+gap_policy:
+  local_auto_fix: true
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: forbidden
+  public_contract_change: forbidden
+  blocking_gap_behavior: BLOCKED
+
+structure_policy:
+  expected_new_files:
+    - .agent/tasks/TASK-0004/report.yaml
+  unlisted_new_files:
+    allowed: false
+    max: 0
+    within: []
+    purpose: ""
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+continuation_policy:
+  mode: MANUAL
+  stop_conditions:
+    - BLOCKED
+    - STALE_STATE
+    - AUTHORITY_REQUIRED
+    - CURRENT_PHASE_CAPABILITY_UNAVAILABLE
+    - REVIEW_REQUIRED
+    - USER_STOP
+
+capability_requirements:
+  EXECUTION:
+    - exact_remote_ref_read
+    - repository_content_read
+    - repository_content_write
+    - github_actions_run_read
+    - non_force_git_push
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Production cannot boot with ephemeral upload storage."
+    evidence_required: "Focused tests prove NODE_ENV=production with CLOUDINARY_ENABLED missing or false is rejected by validateEnvironment with a deterministic non-secret-bearing configuration error."
+  - id: AC-2
+    requirement: "The existing durable-provider credential gate remains fail closed."
+    evidence_required: "Focused tests prove production with CLOUDINARY_ENABLED=true but any required Cloudinary credential missing is rejected, while a production configuration with all required Cloudinary credentials and existing core production keys is accepted."
+  - id: AC-3
+    requirement: "Local development fallback is preserved."
+    evidence_required: "Focused tests prove a non-production configuration with CLOUDINARY_ENABLED=false remains valid; no UploadService or CloudinaryUploadService implementation file changes."
+  - id: AC-4
+    requirement: "Operator-facing configuration matches runtime truth."
+    evidence_required: "server/.env.example states Cloudinary is required in production and local filesystem upload settings are local-development fallback only; no text implies ephemeral local storage is an acceptable production mode."
+  - id: AC-5
+    requirement: "Existing backend behavior remains regression-safe."
+    evidence_required: "Backend CI run triggered by the exact implementation commit completes with conclusion=success and all required quality, unit, environment-sync, Mongo integration, production-dependency-audit, and build gates successful."
+  - id: AC-6
+    requirement: "Correction remains minimal and publication bounded."
+    evidence_required: "Implementation diff is restricted to server/src/config/env-contract.ts, server/src/config/env-contract.spec.ts, and server/.env.example; report is a separate report-only child; main remains unchanged and topology exactly {dev, main}."
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Refresh refs; require exact TASK-0004 handoff base, main unchanged, topology exactly {dev, main}; resolve accepted TASK-0003 review and pinned skills."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Re-resolve current env-contract, focused spec, AppModule startup binding, upload routing, Cloudinary provider, and .env.example. Establish pre-change evidence that the current contract treats production CLOUDINARY_ENABLED=false as warning-only/valid rather than fail-closed."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Run the focused environment-contract test surface with a test that would fail under the current unsafe production rule, then apply the smallest contract/spec/example correction inside authorized files."
+      required: true
+    - id: CHECK-4
+      command_or_check: "Require focused environment-contract tests PASS after correction and statically verify no UploadService, CloudinaryUploadService, dependency, lockfile, Docker/Compose, workflow, frontend, or deployment file changed."
+      required: true
+    - id: CHECK-5
+      command_or_check: "Publish exactly one implementation commit to dev non-force and identify the Backend CI run whose head_sha equals that implementation commit."
+      required: true
+    - id: CHECK-6
+      command_or_check: "Wait for the exact implementation-candidate Backend CI run to complete and require conclusion=success; inspect required steps and fail closed on any failed/skipped required quality/integration/audit/build gate."
+      required: true
+    - id: CHECK-7
+      command_or_check: "Verify final implementation diff scope, report-only child, refreshed refs, unchanged main, and exact {dev, main} topology."
+      required: true
+  authoritative_verification:
+    required: true
+    mechanism: "GitHub Actions Backend CI run triggered by the exact implementation commit"
+    expected_signal: "completed conclusion=success with required Backend quality, environment, integration, dependency-audit, and build steps successful"
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+release_authority:
+  create_version_tag: false
+  mutate_repository_metadata: false
+  publish_release: false
+
+blocking_decisions: []
+execution_ready: true
