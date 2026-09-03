@@ -67,7 +67,7 @@ The payment provider integration is disabled by default. Local development uses 
 ├── server/                  # NestJS API
 │   ├── prisma/              # Prisma schema and data tooling
 │   └── src/                 # Application source
-├── docker/mongodb/          # Optional local MongoDB container
+├── compose.yaml             # Canonical local MongoDB Compose project
 └── docs/                    # Architecture and release documentation
 ```
 
@@ -85,6 +85,20 @@ The payment provider integration is disabled by default. Local development uses 
 git clone https://github.com/phatnguyen03022001/elite-drive.git
 cd elite-drive
 ```
+
+### Local MongoDB
+
+Elite Drive uses one Compose project named `elite-drive`. From the repository root:
+
+```bash
+docker compose up -d --wait
+docker compose ps
+docker compose logs -f mongo
+docker compose down
+docker compose down -v  # Full local MongoDB data reset
+```
+
+The persistent service container is `elite-drive-mongo`; MongoDB data lives in the Docker-managed `elite-drive-mongo-data` volume. The default local connection remains `mongodb://localhost:27017/elitedrive?replicaSet=rs0&directConnection=true`.
 
 ### Backend
 
