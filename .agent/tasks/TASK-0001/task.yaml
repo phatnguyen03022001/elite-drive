@@ -1,0 +1,209 @@
+protocol_version: 3
+
+task_id: TASK-0001
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: operator_approved_infrastructure_baseline
+  task_id: ""
+  gap_id: ORBSTACK_SINGLE_APP_TOPOLOGY
+
+architect_binding:
+  target_repository: phatnguyen03022001/elite-drive
+
+target:
+  repository: phatnguyen03022001/elite-drive
+  branch:
+    name: dev
+    role: integration
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "76f2d3877d1698f91eb5a6117e2301ed49480379"
+
+execution_skills:
+  required:
+    - executor
+    - simplicity
+    - reliability
+    - verification
+  recommended: []
+
+authority_sources:
+  - source: "Operator-approved Elite Drive container direction on 2026-09-03"
+    role: "One application must appear in OrbStack as one coherent Compose project named elite-drive; the future primary application container is elite-drive and supporting containers use elite-drive-<service>. Avoid random project/container names and disposable local-container garbage."
+    precedence: 1
+  - source: "docs/branch-workflow.md@dev"
+    role: "dev is the normal integration branch; main is stable/production authority."
+    precedence: 2
+  - source: "docker/mongodb/docker-compose.yml@dev"
+    role: "Current local MongoDB topology to normalize."
+    precedence: 3
+  - source: "phatnguyen03022001/agent-skills@76f2d3877d1698f91eb5a6117e2301ed49480379"
+    role: "Pinned reusable execution, simplicity, reliability, verification, and task-governance authority."
+    precedence: 4
+
+structure_authority:
+  status: RESOLVED
+  source: "Existing Docker Compose local-Mongo flow, collapsed to one repository-root Compose project."
+  rationale: "The repository already uses Docker only for local MongoDB. This task changes naming, ownership, and cleanup semantics without introducing a production application image or another orchestration layer."
+
+objective: "Normalize Elite Drive local Docker/OrbStack ownership so the repository has exactly one Compose application/project named elite-drive, local supporting containers use the elite-drive-<service> namespace, the Mongo replica-set bootstrap does not leave a separate mongo-init container behind, and normal start/stop/reset flows leave no orphaned project/container artifacts."
+
+scope:
+  required_changes:
+    - "Replace the nested docker/mongodb Compose entry point with one canonical repository-root Compose file whose explicit Compose project name is elite-drive."
+    - "Keep TASK-0001 local-development-only. Do not add the production backend Dockerfile, frontend Dockerfile, Cloud Run configuration, Artifact Registry configuration, Cloud Build configuration, or deployment automation."
+    - "Define the local MongoDB service under the single elite-drive project with deterministic container identity elite-drive-mongo."
+    - "Remove the separate mongo-init one-shot container. Replica-set initialization must become idempotent without leaving an additional exited bootstrap container visible in OrbStack after startup. Prefer the smallest Compose/Mongo-native mechanism; do not add a bootstrap service, daemon, scheduler, or helper container under another name."
+    - "Stop using repository bind-mounted docker/mongodb/mongo-data as implicit runtime state. Use one explicit Docker-managed named volume with deterministic Elite Drive ownership so database runtime state does not dirty the Git checkout."
+    - "Provide a normal lifecycle where startup creates/uses only the elite-drive project and its intended service containers, ordinary stop/down removes runtime containers and networks, and an explicit reset path can additionally remove the Elite Drive Mongo data volume."
+    - "Inspect the operator Mac through Agent Runtime before cleanup. Remove only stale Docker/Compose resources that are unambiguously owned by this Elite Drive legacy topology. Never delete unrelated containers, images, volumes, projects, or networks and never use broad Docker prune commands."
+    - "After migration, verify docker compose ls / docker ps -a / relevant volume and network listings show no legacy Elite Drive Compose project, no mongo-init container, no orphaned Elite Drive service container, and no random project/container naming."
+    - "Document the canonical local Docker commands minimally in README or the existing local-development documentation: start, status/logs if needed, stop, and full data reset."
+    - "Preserve all current application runtime behavior outside local Mongo container ownership. No application feature, schema, authentication, payment, upload, frontend, or production-hosting behavior may change."
+    - "Publish one bounded implementation lineage on dev followed by a separate .agent/tasks/TASK-0001/report.yaml evidence commit, then stop at Governing Architect review. Do not mutate main."
+
+naming_contract:
+  compose_project: elite-drive
+  future_primary_application_container: elite-drive
+  supporting_container_pattern: elite-drive-<service>
+  task_0001_expected_persistent_service_container:
+    - elite-drive-mongo
+  forbidden_examples:
+    - mongodb-mongo-1
+    - docker-mongo-1
+    - elite-drive-mongo-init
+    - random/hash-suffixed manually named Elite Drive projects
+
+invariants:
+  - "There is exactly one canonical Compose project for this repository: elite-drive."
+  - "TASK-0001 leaves exactly one persistent local service container when the local database stack is running: elite-drive-mongo."
+  - "No mongo-init/helper/bootstrap container remains after startup."
+  - "No broad docker system prune, docker container prune, docker volume prune, or equivalent host-wide cleanup is used."
+  - "No repository runtime-data directory is introduced or retained for MongoDB."
+  - "Local Mongo data persistence is intentional Docker-managed state and can be removed only by the explicit Elite Drive reset operation."
+  - "The task does not containerize frontend/backend application processes yet; the future primary app container name elite-drive is reserved by contract for the later OCI/container task."
+  - "No production deployment provider or cloud service becomes required for local development."
+  - "main is not modified."
+  - "Branch topology remains exactly {dev, main}; existing branch divergence is not resolved, merged, rebased, force-pushed, or otherwise changed in TASK-0001."
+
+forbidden_changes:
+  - "Do not add Apple Sandbox, Kubernetes, Helm, Terraform, PM2, a Docker management framework, a custom container registry abstraction, or another local orchestrator."
+  - "Do not add Cloud Build, GitHub Actions deployment, provider auto-deploy, Cloud Run, Artifact Registry, or production image publication in this task."
+  - "Do not combine Next.js and NestJS processes merely to satisfy the future primary-container naming contract. Application container boundaries are outside TASK-0001."
+  - "Do not delete unrelated operator Docker resources or use host-wide prune commands."
+  - "Do not modify application source or Prisma schema."
+  - "Do not mutate main, create/delete branches, rewrite history, or resolve existing dev/main divergence."
+
+gap_policy:
+  local_auto_fix: true
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: forbidden
+  public_contract_change: forbidden
+  blocking_gap_behavior: BLOCKED
+
+structure_policy:
+  expected_new_files:
+    - compose.yaml
+    - .agent/tasks/TASK-0001/report.yaml
+  expected_removed_files:
+    - docker/mongodb/docker-compose.yml
+  unlisted_new_files:
+    allowed: false
+    max: 0
+    within: []
+    purpose: ""
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+continuation_policy:
+  mode: MANUAL
+  stop_conditions:
+    - BLOCKED
+    - STALE_STATE
+    - AUTHORITY_REQUIRED
+    - CURRENT_PHASE_CAPABILITY_UNAVAILABLE
+    - REVIEW_REQUIRED
+    - USER_STOP
+
+capability_requirements:
+  EXECUTION:
+    - exact_remote_ref_read
+    - repository_content_read
+    - repository_content_write
+    - agent_runtime_terminal_exec
+    - local_docker_cli
+    - docker_compose_v2
+    - orbstack_docker_context
+    - non_force_git_push
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Elite Drive owns one deterministic OrbStack/Compose project."
+    evidence_required: "On the operator Mac, canonical root Compose config resolves project name elite-drive; docker compose ls shows one Elite Drive project and no legacy Elite Drive project name."
+  - id: AC-2
+    requirement: "The local Mongo service has deterministic clean identity without helper-container garbage."
+    evidence_required: "After clean startup, the only persistent Elite Drive database service container is elite-drive-mongo, it reaches healthy/usable replica-set state, and no mongo-init/bootstrap container remains in docker ps -a."
+  - id: AC-3
+    requirement: "Repository-local Docker runtime data does not dirty the checkout."
+    evidence_required: "MongoDB uses a deterministic Docker-managed named volume; no docker/mongodb/mongo-data or replacement runtime-data directory is created; git status remains clean after start/use/stop."
+  - id: AC-4
+    requirement: "Lifecycle cleanup is bounded and leaves no orphaned Elite Drive runtime resources."
+    evidence_required: "Normal down removes the Elite Drive runtime containers/network without deleting the intentional data volume; explicit reset additionally removes only the Elite Drive Mongo data volume; post-cleanup listings show no orphaned Elite Drive container/project/network."
+  - id: AC-5
+    requirement: "Cleanup never threatens unrelated operator Docker resources."
+    evidence_required: "Executor records pre/post Docker resource inventory relevant to Elite Drive and proves no host-wide prune command or unrelated-resource deletion occurred."
+  - id: AC-6
+    requirement: "Existing local application behavior remains intact."
+    evidence_required: "Mongo-backed application/database connectivity smoke passes using the canonical local connection contract, with no application source/schema modification and no production Docker/deployment change."
+  - id: AC-7
+    requirement: "Publication is bounded."
+    evidence_required: "Implementation changes only authorized Compose/docs paths plus removal of legacy nested Compose; report is a separate report-only child on dev; main and branch topology remain unchanged."
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Refresh GitHub refs; require exact TASK-0001 handoff base, topology exactly {dev, main}, unchanged main, and resolve pinned agent-skills authority. Inspect local git branch/worktree and Docker/OrbStack inventory before any mutation."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Validate canonical Compose config and exact project/container/volume naming without starting services."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Start the canonical Elite Drive local database stack through Docker Compose on OrbStack; prove Mongo health and replica-set usability with no helper container remaining."
+      required: true
+    - id: CHECK-4
+      command_or_check: "Run a bounded application/database connectivity smoke using the canonical local Mongo endpoint."
+      required: true
+    - id: CHECK-5
+      command_or_check: "Exercise normal down and explicit reset semantics; inspect containers/projects/networks/volumes and git status after cleanup; prove no unrelated Docker resource was touched."
+      required: true
+    - id: CHECK-6
+      command_or_check: "Verify final diff, no production/containerization scope spill, report-only lineage, unchanged main, and exact {dev, main} topology."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: ""
+    expected_signal: ""
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+release_authority:
+  create_version_tag: false
+  mutate_repository_metadata: false
+  publish_release: false
+
+blocking_decisions: []
+execution_ready: true
