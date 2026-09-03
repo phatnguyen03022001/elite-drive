@@ -1,0 +1,190 @@
+protocol_version: 3
+
+task_id: TASK-0006
+task_revision: 1
+report_revision: 1
+state: REPORTED
+
+task_source:
+  path: .agent/tasks/TASK-0006/task.yaml
+
+execution:
+  repository: phatnguyen03022001/elite-drive
+  branch:
+    name: dev
+    role: primary_working_integration
+  authorized_base_head: "0bf725a930e6a12df7135dce891bd525a48d5fe8"
+  pre_execution_head: "0bf725a930e6a12df7135dce891bd525a48d5fe8"
+  final_execution_head: "18c812f2b8a898eaac26439e10a6fc56747b2f32"
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  authorized_revision: "76f2d3877d1698f91eb5a6117e2301ed49480379"
+  observed_revision: "76f2d3877d1698f91eb5a6117e2301ed49480379"
+
+execution_skills_used:
+  required:
+    - executor
+    - simplicity
+    - reliability
+    - verification
+  recommended: []
+  external:
+    - superpowers:using-superpowers
+    - superpowers:systematic-debugging
+    - superpowers:test-driven-development
+    - superpowers:verification-before-completion
+
+pre_execution_checks:
+  protocol_version_supported: true
+  handoff_type_confirmed: true
+  task_at_base_confirmed: true
+  task_identity_confirmed: true
+  architect_binding_confirmed: true
+  repository_confirmed: true
+  branch_confirmed: true
+  base_head_confirmed: true
+  skill_revision_confirmed: true
+  required_execution_skills_available: true
+  structure_authority_confirmed: true
+  working_tree_clean: true
+
+capability_preflight:
+  phase: EXECUTION
+  required:
+    - exact_remote_ref_read
+    - repository_content_read
+    - repository_content_write
+    - agent_runtime_terminal_exec
+    - local_docker_cli
+    - docker_compose_v2
+    - orbstack_docker_context
+    - github_actions_run_read
+    - non_force_git_push
+  available:
+    - exact_remote_ref_read
+    - repository_content_read
+    - repository_content_write
+    - agent_runtime_terminal_exec
+    - local_docker_cli
+    - docker_compose_v2
+    - orbstack_docker_context
+    - github_actions_run_read
+    - non_force_git_push
+  missing: []
+  passed: true
+
+authoritative_verification:
+  required: true
+  performed: true
+  result: PASS
+  evidence: >-
+    Direct Agent Runtime execution in /Users/tienphat/Developer/elite-drive proved a fresh no-cache host-native OrbStack image build, image-owned tini entrypoint, tini as PID 1 with Node as its direct child, exact two-container canonical topology, Mongo rs0 PRIMARY readiness, host liveness/readiness with database=ok, controlled TERM exit 143 without forced SIGKILL, start/restart readiness recovery, and bounded compose-down cleanup preserving elite-drive-mongo-data. GitHub Actions Backend CI run 33727726300 was triggered by exact implementation SHA 18c812f2b8a898eaac26439e10a6fc56747b2f32 and completed conclusion=success; every required Backend quality step completed successfully with no skipped required gate.
+
+local_hygiene:
+  result: PASS
+  run_root: "/Users/tienphat/Developer/elite-drive"
+  cleanup_performed: true
+  retained:
+    - elite-drive-mongo-data
+  evidence: >-
+    Execution remained directly in the operator-designated checkout and never used m3-repoworker, /Users/tienphat/Developer/.agent-scratch, or an intermediary worker/sandbox/execution repository. The disposable integration database was dropped, canonical project containers and network were removed, and task-built image elite-drive:local was removed without any host-wide prune. The pre-existing canonical persistent volume elite-drive-mongo-data was intentionally preserved.
+
+changed_files:
+  - path: server/Dockerfile
+    summary: "Installed Debian tini in the existing image and made /usr/bin/tini -- the image ENTRYPOINT while preserving node dist/main as the runtime child command."
+    new_file: false
+    in_scope: true
+    structure_authorized: true
+  - path: compose.yaml
+    summary: "Removed the app service init:true flag because PID1 and signal forwarding are now owned by the OCI image itself."
+    new_file: false
+    in_scope: true
+    structure_authorized: true
+
+commits_created:
+  - sha: "18c812f2b8a898eaac26439e10a6fc56747b2f32"
+    message: "fix(TASK-0006): make image own PID1 signal handling"
+
+pushed: true
+promoted_to_main: false
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PASS
+    evidence: >-
+      server/Dockerfile now installs Debian tini and declares ENTRYPOINT ["/usr/bin/tini", "--"] while retaining CMD ["node", "dist/main"]. compose.yaml no longer contains init:true. Image inspection showed entrypoint=[/usr/bin/tini,--], cmd=[node,dist/main], user=node; running /proc evidence showed tini as PID 1 and Node as child PID 6 with PPID 1. Docker HostConfig.Init was null, proving Compose did not inject an init process, and the running project contained only elite-drive and elite-drive-mongo.
+  - criterion_id: AC-2
+    status: PASS
+    evidence: >-
+      Controlled `docker compose stop app` stopped elite-drive with exit code 143 inside the normal stop path. Exit 137 was explicitly rejected, no forced SIGKILL was required, project inventory still contained exactly the stopped app plus running Mongo container, and no duplicate/orphan app container was present.
+  - criterion_id: AC-3
+    status: PASS
+    evidence: >-
+      Canonical running inventory was exactly {elite-drive, elite-drive-mongo}; Mongo rs0 returned myState=1. Host GET /health/live returned {status:ok} and GET /health/ready returned {status:ready,database:ok}. After controlled stop, `docker compose start app` recovered both endpoints, and a subsequent `docker compose restart app` again recovered database-ready health.
+  - criterion_id: AC-4
+    status: PASS
+    evidence: >-
+      `docker compose down --remove-orphans` removed elite-drive, elite-drive-mongo, and elite-drive_default. The disposable elitedrive_integration database was dropped, elite-drive-mongo-data remained inspectable, and task-built elite-drive:local image ID sha256:e5b3261f5a9cbc00b882c4591852947a91eea502139153fb1e80325f894594bf was explicitly removed. No host-wide Docker prune was used and pre-existing registry images were left untouched.
+  - criterion_id: AC-5
+    status: PASS
+    evidence: >-
+      Local backend verification completed exit 0 for npm ci, typecheck, 32/32 unit suites with 166/166 tests, 16/16 env-sync tests, Prisma integration schema preparation, 7/7 real Mongo integration suites with 26/26 tests, the production dependency audit reporting gate, and Nest build. The current host Node v26.5.0 emitted the repository engine warning requiring Node 24, so exact runtime-version authority came from Backend CI: run 33727726300 used the workflow Node 24 setup for exact implementation SHA 18c812f2b8a898eaac26439e10a6fc56747b2f32 and completed success with every required step successful and none skipped.
+  - criterion_id: AC-6
+    status: PASS
+    evidence: >-
+      Implementation SHA 18c812f2b8a898eaac26439e10a6fc56747b2f32 is the single implementation commit and direct child of exact base 0bf725a930e6a12df7135dce891bd525a48d5fe8; it changes exactly server/Dockerfile and compose.yaml. Immediately before report materialization, local HEAD=origin/dev=the implementation SHA, main remained exactly 7b4b45fdf3f9ade55f7f6ecf549a02e0d41e3cbf, remote topology was exactly {dev, main}, vercel.json still had deploymentEnabled=false, and the implementation worktree was clean. This report is the separate report-only child.
+
+executor_checks:
+  - check_id: CHECK-1
+    result: PASS
+    evidence: >-
+      Fresh GitHub and local refs proved dev at exact authorized base 0bf725a930e6a12df7135dce891bd525a48d5fe8, main frozen at 7b4b45fdf3f9ade55f7f6ecf549a02e0d41e3cbf, topology exactly {dev, main}, TASK-0005 review ACCEPTED, TASK-0006 revision 1 APPROVED/execution_ready, and vercel.json deploymentEnabled=false. The local checkout was clean but behind origin/dev, so it was advanced only with `git merge --ff-only origin/dev` to the exact base before implementation mutation.
+  - check_id: CHECK-2
+    result: PASS
+    evidence: >-
+      Agent Runtime terminal capability was live; Docker client/server were 29.4.0, the modern `docker compose` plugin was v5.1.2, Docker context was orbstack, GitHub Actions reads worked, and non-force push capability passed dry-run. No m3-repoworker, .agent-scratch, buildx, --platform, cross-build, emulation, or intermediary repository was used.
+  - check_id: CHECK-3
+    result: PASS
+    evidence: >-
+      Accepted TASK-0005 evidence was re-read and confirmed the boundary: direct Node-as-PID1 required forced exit 137 while the Compose-only init:true workaround exited 143. The correction was limited to moving the same responsibility into the image with Debian tini and removing Compose init:true; no application lifecycle or signal-handler source code changed.
+  - check_id: CHECK-4
+    result: PASS
+    evidence: >-
+      Fresh `docker compose build --no-cache app` completed exit 0 on the native OrbStack context. Image metadata showed entrypoint=[/usr/bin/tini,--], cmd=[node,dist/main], user=node and tini 0.19.0. Runtime /proc inspection proved tini PID 1 and Node its direct child, with no third container and no Compose-injected init.
+  - check_id: CHECK-5
+    result: PASS
+    evidence: >-
+      Canonical running inventory was exactly {elite-drive, elite-drive-mongo}; Mongo reported replica-set PRIMARY state 1; /health/live and /health/ready both passed with readiness database=ok.
+  - check_id: CHECK-6
+    result: PASS
+    evidence: >-
+      Controlled Compose stop produced exit 143 rather than 137, left no duplicate/orphan app container, and retained only Mongo as running. `docker compose start app` recovered readiness and a subsequent `docker compose restart app` recovered readiness again.
+  - check_id: CHECK-7
+    result: PASS
+    evidence: >-
+      The disposable integration database was dropped. `docker compose down --remove-orphans` removed both canonical project containers and elite-drive_default, elite-drive-mongo-data remained present, and elite-drive:local was deleted. No host-wide prune or unrelated Docker cleanup was performed.
+  - check_id: CHECK-8
+    result: PASS
+    evidence: >-
+      Authorized local backend verification passed typecheck, 166/166 unit tests, 16/16 env-sync tests, 26/26 real Mongo integration tests, production dependency audit reporting gate, and Nest build. `git diff --check` passed and implementation scope was exactly server/Dockerfile plus compose.yaml with 2 insertions and 2 deletions.
+  - check_id: CHECK-9
+    result: PASS
+    evidence: >-
+      Exactly one implementation commit 18c812f2b8a898eaac26439e10a6fc56747b2f32 was pushed non-force to dev after a fresh remote boundary check. Backend CI run 33727726300 had head_sha exactly equal to that SHA, status completed, conclusion success, and all required Backend quality steps completed success with none skipped.
+  - check_id: CHECK-10
+    result: PASS
+    evidence: >-
+      Immediately before report materialization, local HEAD=origin/dev=18c812f2b8a898eaac26439e10a6fc56747b2f32, origin/main=7b4b45fdf3f9ade55f7f6ecf549a02e0d41e3cbf, remote heads remained exactly {dev, main}, implementation worktree was clean, vercel.json still disabled Git deployment, canonical persistent Mongo volume remained, and no task-owned project container/network/image remained. This authorized report-only child is followed by the required fresh post-publication read-back before the terminal NEEDS_REVIEW decision.
+
+discovered_gaps: []
+structural_observations:
+  - "The operator host currently exposes Node v26.5.0 while server/package.json requires >=24 <25; local verification still passed, and exact Node 24 compatibility was independently proven by Backend CI run 33727726300."
+deviations_from_task: []
+blockers: []
+
+working_tree_after:
+  clean: true
+  summary: "The implementation worktree was clean at the report materialization boundary. Report publication adds only .agent/tasks/TASK-0006/report.yaml as the separate canonical report-only child; no implementation or temporary artifact is carried with it."
+
+result: NEEDS_REVIEW
