@@ -1,0 +1,22 @@
+# Dependency and build output
+node_modules
+dist
+coverage
+
+# Local/runtime state
+.env
+.env.*
+uploads
+logs
+*.log
+npm-debug.log*
+
+# Repository/editor metadata
+.git
+.gitignore
+.vscode
+.idea
+.DS_Store
+
+# Local scratch and generated dumps
+zcode

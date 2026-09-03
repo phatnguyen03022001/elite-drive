@@ -1,6 +1,30 @@
 name: elite-drive
 
 services:
+  app:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    image: elite-drive:local
+    container_name: elite-drive
+    init: true
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+    environment:
+      NODE_ENV: development
+      APP_PORT: "8000"
+      DATABASE_URL: mongodb://mongo:27017/elitedrive?replicaSet=rs0&directConnection=true
+      JWT_SECRET: ${JWT_SECRET:-local-compose-jwt-not-a-secret}
+      OTP_HASH_SECRET: ${OTP_HASH_SECRET:-local-compose-otp-not-a-secret}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      CLOUDINARY_ENABLED: "false"
+      BREVO_ENABLED: "false"
+      MOMO_ENABLED: "false"
+    ports:
+      - "8000:8000"
+
   mongo:
     image: mongo:8.0
     container_name: elite-drive-mongo
