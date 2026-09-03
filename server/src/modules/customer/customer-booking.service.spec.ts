@@ -14,6 +14,15 @@ const approvedCar = {
 };
 
 describe('CustomerBookingService', () => {
+  beforeAll(() => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-08-31T00:00:00.000Z'));
+  });
+
+  afterAll(() => {
+    jest.useRealTimers();
+  });
+
   it('does not insert a booking when the car already overlaps the requested period', async () => {
     const tx = {
       kYC: {
