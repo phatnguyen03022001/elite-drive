@@ -1,0 +1,214 @@
+protocol_version: 3
+
+task_id: TASK-0005
+task_revision: 1
+report_revision: 1
+state: REPORTED
+
+task_source:
+  path: .agent/tasks/TASK-0005/task.yaml
+
+execution:
+  repository: phatnguyen03022001/elite-drive
+  branch:
+    name: dev
+    role: integration
+  authorized_base_head: "1c689285ae03acbd57922cab7aaa08575d14d52c"
+  pre_execution_head: "1c689285ae03acbd57922cab7aaa08575d14d52c"
+  final_execution_head: "1980eaf7de53efd1d28b15042e33ece483024e76"
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  authorized_revision: "76f2d3877d1698f91eb5a6117e2301ed49480379"
+  observed_revision: "76f2d3877d1698f91eb5a6117e2301ed49480379"
+
+execution_skills_used:
+  required:
+    - executor
+    - simplicity
+    - reliability
+    - verification
+  recommended: []
+  external:
+    - superpowers:using-superpowers
+    - superpowers:brainstorming
+    - superpowers:systematic-debugging
+    - superpowers:verification-before-completion
+
+pre_execution_checks:
+  protocol_version_supported: true
+  handoff_type_confirmed: true
+  task_at_base_confirmed: true
+  task_identity_confirmed: true
+  architect_binding_confirmed: true
+  repository_confirmed: true
+  branch_confirmed: true
+  base_head_confirmed: true
+  skill_revision_confirmed: true
+  required_execution_skills_available: true
+  structure_authority_confirmed: true
+  working_tree_clean: true
+
+capability_preflight:
+  phase: EXECUTION
+  required:
+    - exact_remote_ref_read
+    - repository_content_read
+    - repository_content_write
+    - agent_runtime_terminal_exec
+    - local_docker_cli
+    - docker_compose_v2
+    - orbstack_docker_context
+    - github_actions_run_read
+    - non_force_git_push
+  available:
+    - exact_remote_ref_read
+    - repository_content_read
+    - repository_content_write
+    - agent_runtime_terminal_exec
+    - local_docker_cli
+    - docker_compose_v2
+    - orbstack_docker_context
+    - github_actions_run_read
+    - non_force_git_push
+  missing: []
+  passed: true
+
+operational_timing:
+  started_at_utc: "2026-09-03T06:37:53Z"
+  terminal_decision_at_utc: "2026-09-03T06:55:34Z"
+
+authoritative_verification:
+  required: true
+  performed: true
+  result: PASS
+  evidence: >-
+    Direct Agent Runtime execution in /Users/tienphat/Developer/elite-drive proved a fresh host-platform OrbStack image build, exact two-container canonical topology, Mongo rs0 PRIMARY readiness, host liveness/readiness with database=ok, restart recovery, TERM behavior without runaway/duplicate containers, and compose-down cleanup preserving elite-drive-mongo-data. GitHub Actions Backend CI run 33725249610 was triggered by exact implementation SHA 1980eaf7de53efd1d28b15042e33ece483024e76 and completed conclusion=success; every required Backend quality step completed successfully.
+
+local_hygiene:
+  result: PASS
+  run_root: "/Users/tienphat/Developer/elite-drive"
+  cleanup_performed: true
+  retained: []
+  evidence: >-
+    Execution remained directly in the operator-designated checkout and never used m3-repoworker, /Users/tienphat/Developer/.agent-scratch, or an intermediary execution repository. Final compose project containers and network were removed, disposable integration database elitedrive_integration was dropped, and task-built image tag elite-drive:local was removed. The canonical persistent volume elite-drive-mongo-data was intentionally preserved exactly as required by TASK-0005.
+
+changed_files:
+  - path: compose.yaml
+    summary: "Added the single canonical backend app service named elite-drive, wired it to the existing healthy Mongo service over Compose networking, preserved project/Mongo/volume identities, exposed port 8000, and enabled Docker's built-in init for correct TERM forwarding without adding another container."
+    new_file: false
+    in_scope: true
+    structure_authorized: true
+  - path: server/Dockerfile
+    summary: "Added a Node 24 multi-stage backend image using lockfile installation, Prisma generation, Nest compilation, production-only runtime dependencies, non-root node execution, and no explicit platform forcing."
+    new_file: true
+    in_scope: true
+    structure_authorized: true
+  - path: server/.dockerignore
+    summary: "Excluded local secrets, dependency/build output, uploads, logs, editor/Git metadata, and generated scratch material from the server build context."
+    new_file: true
+    in_scope: true
+    structure_authorized: true
+  - path: server/.env.example
+    summary: "Corrected the stale nested Mongo Compose reference to the canonical root compose.yaml without changing production Cloudinary durability requirements."
+    new_file: false
+    in_scope: true
+    structure_authorized: true
+
+commits_created:
+  - sha: "1980eaf7de53efd1d28b15042e33ece483024e76"
+    message: "build(TASK-0005): containerize backend for OrbStack"
+
+pushed: true
+promoted_to_main: false
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PASS
+    evidence: >-
+      Root compose.yaml remains name: elite-drive and resolves exactly services app and mongo. Final running inventory contained exactly elite-drive (app) and elite-drive-mongo (mongo), with no helper/init/worker container; Docker init was an internal PID 1 process inside elite-drive, not another container.
+  - criterion_id: AC-2
+    status: PASS
+    evidence: >-
+      Fresh `docker build --no-cache -t elite-drive:local server` completed exit 0 on docker:orbstack without --platform/buildx/emulation. Final image metadata showed User=node, Cmd=[node,dist/main], NODE_ENV=production, arm64 host architecture, and no application secrets in Config.Env/history. server/.dockerignore excludes .env/.env.*, node_modules, dist, coverage, uploads, logs, Git/editor metadata, and zcode.
+  - criterion_id: AC-3
+    status: PASS
+    evidence: >-
+      The app DATABASE_URL uses mongodb://mongo:27017/elitedrive?replicaSet=rs0&directConnection=true rather than localhost. Existing Mongo health reached healthy and `rs.status()` proved ok=1, myState=1, set=rs0; application/Prisma schema and database behavior were not modified.
+  - criterion_id: AC-4
+    status: PASS
+    evidence: >-
+      With both canonical containers running, host GET /health/live returned {status:ok} and GET /health/ready returned {status:ready,database:ok}.
+  - criterion_id: AC-5
+    status: PASS
+    evidence: >-
+      Final Compose configuration recovered readiness after app restart. Controlled stop with Docker built-in init produced normal SIGTERM exit 143 rather than forced SIGKILL and left only the existing Mongo container, with no duplicate/orphan app. Subsequent start/restart recovered database-ready health. `docker compose down` removed elite-drive, elite-drive-mongo, and elite-drive_default while `docker volume inspect elite-drive-mongo-data` still succeeded. The task-built image tag was explicitly removed afterward.
+  - criterion_id: AC-6
+    status: PASS
+    evidence: >-
+      Every local command was executed through Agent Runtime with cwd rooted at /Users/tienphat/Developer/elite-drive (or its server child). No .agent-scratch path, m3-repoworker, worker/sandbox repository, buildx, cross-build, or emulation was used.
+  - criterion_id: AC-7
+    status: PASS
+    evidence: >-
+      server/.env.example now states that the local replica-set example matches canonical root compose.yaml; existing production Cloudinary-required documentation remains unchanged.
+  - criterion_id: AC-8
+    status: PASS
+    evidence: >-
+      Fresh local verification passed Node 24 npm ci, typecheck, 32/32 unit suites with 166/166 tests, 16/16 env-sync tests, Prisma db push, 7/7 Mongo integration suites with 26/26 tests, the repository production dependency audit reporting gate with exit 0, and Nest build. Backend CI run 33725249610 for exact implementation SHA completed success with all required install/typecheck/unit/env-sync/Mongo/integration/cleanup/audit/build steps successful.
+  - criterion_id: AC-9
+    status: PASS
+    evidence: >-
+      Implementation SHA 1980eaf7de53efd1d28b15042e33ece483024e76 is the single implementation commit and direct child of exact base 1c689285ae03acbd57922cab7aaa08575d14d52c; it changes exactly compose.yaml, server/Dockerfile, server/.dockerignore, and server/.env.example. Immediately before report materialization, origin/dev equaled the implementation SHA, main remained 89e298c5268704d0d9fdeb9f574c6d896aaa35ab, and remote topology was exactly {dev, main}. This report is the separate report-only child.
+
+executor_checks:
+  - check_id: CHECK-1
+    result: PASS
+    evidence: >-
+      Fresh refs established origin/dev at exact handoff base 1c689285ae03acbd57922cab7aaa08575d14d52c, main at 89e298c5268704d0d9fdeb9f574c6d896aaa35ab, topology exactly {dev, main}, TASK-0004 review ACCEPTED, canonical TASK-0005 revision 1 APPROVED/execution_ready, and a clean local dev checkout. The initially clean-behind local checkout was advanced only by `git merge --ff-only origin/dev` to the exact authorized base before mutation.
+  - check_id: CHECK-2
+    result: PASS
+    evidence: >-
+      Agent Runtime terminal was live; Docker client/server were 29.4.0, Docker Compose v2 was 5.1.2, Docker context was orbstack, GitHub Actions run reads worked, and non-force push capability passed dry-run. No forbidden execution layer was used.
+  - check_id: CHECK-3
+    result: PASS
+    evidence: >-
+      Re-resolved compose.yaml, server/package.json, server/.env.example, server/src/main.ts, server/src/health.controller.ts, server/src/config/env-contract.ts, and Backend CI authority. Implemented only Dockerfile/.dockerignore/root Compose/environment-comment surface; no booking/auth/payment/upload logic, Prisma schema, public API, CI workflow, deployment, or frontend behavior changed.
+  - check_id: CHECK-4
+    result: PASS
+    evidence: >-
+      Fresh direct OrbStack host-platform image build completed exit 0. Image inspection/history proved non-root runtime, compiled entrypoint, production NODE_ENV metadata, no embedded local secret environment material, and no explicit platform/cross-build behavior.
+  - check_id: CHECK-5
+    result: PASS
+    evidence: >-
+      Canonical running inventory was exactly {elite-drive, elite-drive-mongo}; Mongo rs0 reported PRIMARY; host /health/live and /health/ready both passed with readiness database=ok.
+  - check_id: CHECK-6
+    result: PASS
+    evidence: >-
+      App restart recovered readiness. The first diagnostic stop exposed Node-as-PID1 requiring forced exit 137; systematic debugging identified the lifecycle boundary and the smallest Compose-only correction `init: true`. Final controlled stop then exited on SIGTERM as 143, created no additional container, left no duplicate/orphan process/container, and restart/start recovered readiness.
+  - check_id: CHECK-7
+    result: PASS
+    evidence: >-
+      Final `docker compose down` removed both canonical containers and elite-drive_default; elite-drive-mongo-data remained inspectable. Disposable integration data was dropped and elite-drive:local was removed. No host-wide prune or unrelated Docker cleanup was performed.
+  - check_id: CHECK-8
+    result: PASS
+    evidence: >-
+      Fresh local backend verification passed typecheck, 166/166 unit tests, 16/16 env-sync tests, 26/26 real Mongo integration tests, production dependency audit reporting gate, and Nest build. `git diff --cached --check` passed and staged scope was exactly four authorized files.
+  - check_id: CHECK-9
+    result: PASS
+    evidence: >-
+      Exactly one implementation commit 1980eaf7de53efd1d28b15042e33ece483024e76 was pushed non-force to dev after a fresh remote boundary check. Backend CI run 33725249610 had head_sha exactly equal to that SHA and completed conclusion=success; every required Backend quality step completed success.
+  - check_id: CHECK-10
+    result: PASS
+    evidence: >-
+      Immediately before report materialization, local HEAD=origin/dev=1980eaf7de53efd1d28b15042e33ece483024e76, origin/main=89e298c5268704d0d9fdeb9f574c6d896aaa35ab, remote heads remained exactly {dev, main}, local implementation worktree was clean, Compose had no project containers, canonical Mongo volume remained, and task-built image tag was absent. The only next mutation is this authorized report-only child.
+
+discovered_gaps: []
+structural_observations: []
+deviations_from_task: []
+blockers: []
+
+working_tree_after:
+  clean: true
+  summary: "The implementation worktree was clean at the terminal decision boundary. Report publication adds only .agent/tasks/TASK-0005/report.yaml as the separate canonical report-only child; no implementation or temporary artifact is carried with it."
+
+result: NEEDS_REVIEW
