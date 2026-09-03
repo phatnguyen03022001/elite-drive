@@ -1,0 +1,253 @@
+protocol_version: 3
+
+task_id: TASK-0005
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: operator_approved_infrastructure_follow_up
+  task_id: TASK-0004
+  gap_id: LOCAL_APP_CONTAINER_SURFACE
+
+architect_binding:
+  target_repository: phatnguyen03022001/elite-drive
+
+target:
+  repository: phatnguyen03022001/elite-drive
+  branch:
+    name: dev
+    role: integration
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "76f2d3877d1698f91eb5a6117e2301ed49480379"
+
+execution_skills:
+  required:
+    - executor
+    - simplicity
+    - reliability
+    - verification
+  recommended: []
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+authority_sources:
+  - source: ".agent/tasks/TASK-0001/review.yaml@dev"
+    role: "Accepted OrbStack/Compose ownership contract: project elite-drive, primary application container elite-drive, supporting service containers elite-drive-<service>."
+    precedence: 1
+  - source: ".agent/tasks/TASK-0004/review.yaml@dev"
+    role: "Accepted production upload durability contract that makes Cloudinary mandatory only in production and preserves non-production local filesystem fallback."
+    precedence: 2
+  - source: "compose.yaml@dev"
+    role: "Current canonical root Compose project containing the accepted elite-drive-mongo service and persistent elite-drive-mongo-data volume."
+    precedence: 3
+  - source: "server/package.json@dev"
+    role: "Current backend runtime/build authority: Node >=24 <25, compiled Nest entrypoint dist/main, deterministic package-lock-backed npm install surface."
+    precedence: 4
+  - source: "server/src/main.ts@dev"
+    role: "Current runtime contract: bind 0.0.0.0, PORT/APP_PORT selection, fail startup on database connection failure."
+    precedence: 5
+  - source: "server/src/health.controller.ts@dev"
+    role: "Current liveness/readiness endpoints used for container smoke verification."
+    precedence: 6
+  - source: "Operator correction on 2026-09-03"
+    role: "m3-repoworker is explicitly out of system and must not be used, referenced, or introduced into the Elite Drive workflow. Direct local execution is Agent Runtime -> /Users/tienphat/Developer/elite-drive -> Docker/OrbStack."
+    precedence: 7
+  - source: "phatnguyen03022001/agent-skills@76f2d3877d1698f91eb5a6117e2301ed49480379"
+    role: "Pinned reusable execution, simplicity, reliability, verification, and task-governance authority."
+    precedence: 8
+
+structure_authority:
+  status: RESOLVED
+  source: "Existing backend package/runtime contract plus accepted root compose.yaml"
+  rationale: "This is a bounded containerization of an existing backend and existing Compose project. Plain Dockerfile, .dockerignore, and the current root Compose file are sufficient; no worker repository, execution framework, deployment framework, generated wrapper, or secondary Compose stack is justified."
+
+objective: "Materialize the Elite Drive backend as the primary local OrbStack application container named elite-drive inside the canonical elite-drive Compose project, alongside accepted supporting container elite-drive-mongo, using a minimal production-capable OCI image and direct Agent Runtime execution against the operator's actual repository checkout."
+
+scope:
+  required_changes:
+    - "Add the smallest production-capable backend Docker image definition for the existing NestJS server. Prefer server/Dockerfile and server/.dockerignore unless fresh repository evidence proves a different build context is materially simpler."
+    - "Use a multi-stage build or equivalently minimal image structure that installs from the canonical lockfile, generates Prisma client as needed, compiles the existing application, and excludes development/build-only material from the runtime image where practical without adding framework complexity."
+    - "Do not force an explicit Docker platform in this local task. Build for the host/default OrbStack platform; do not introduce --platform, buildx orchestration, cross-build, emulation, or multi-architecture publication logic."
+    - "Extend canonical root compose.yaml with exactly one primary application service whose persistent container identity is elite-drive. Preserve project name elite-drive and supporting Mongo container elite-drive-mongo."
+    - "The local app container must reach Mongo through Compose service networking rather than localhost and must wait for or otherwise fail cleanly until the accepted Mongo service is usable."
+    - "Local Compose execution may run the compiled image in non-production mode so CLOUDINARY_ENABLED=false local filesystem fallback remains usable without production provider credentials. The image itself must remain suitable for later production execution without embedding secrets or local-only paths."
+    - "Expose the existing backend local port with the smallest stable mapping consistent with current PORT/APP_PORT behavior. Do not change application source solely for containerization if existing runtime contract is sufficient."
+    - "Ensure build context hygiene excludes secrets and local/generated garbage such as .env files, node_modules, dist, coverage, uploads, logs, Git metadata, and similar non-image inputs."
+    - "Correct the stale server/.env.example comment that still references removed docker/mongodb/docker-compose.yml; it must point to the canonical root compose.yaml or otherwise describe the current local Mongo contract accurately."
+    - "Using direct Agent Runtime execution in /Users/tienphat/Developer/elite-drive, build the image and run the canonical Compose project in OrbStack. Prove the final running Elite Drive topology contains exactly the primary elite-drive application container plus accepted elite-drive-mongo supporting container, with no helper/init/worker container."
+    - "Verify GET /health/live succeeds from the host and GET /health/ready succeeds with database=ok while both canonical containers are running."
+    - "Verify the app container survives a controlled restart and returns to liveness/readiness without manual database repair. Exercise normal stop/TERM behavior sufficiently to prove no runaway process or duplicate container is left behind."
+    - "Verify docker compose down removes the Elite Drive app container and project network while preserving elite-drive-mongo-data by default; do not remove operator data volume unless a task-owned disposable reset is explicitly required for verification."
+    - "After local Docker/OrbStack verification, run the normal authorized backend verification surface and require the Backend CI run for the exact implementation SHA to complete with conclusion=success before publishing the report."
+    - "Publish exactly one bounded implementation commit on dev, then publish .agent/tasks/TASK-0005/report.yaml as a separate report-only child and stop at Governing Architect review. Do not mutate main."
+  allowed_existing_files_or_components:
+    - compose.yaml
+    - server/package.json
+    - server/package-lock.json
+    - server/prisma
+    - server/src
+    - server/.env.example
+    - .github/workflows/backend-ci.yml
+    - .agent/tasks/TASK-0005/task.yaml
+  expected_files_are_restrictive: false
+
+invariants:
+  - "The canonical Compose project name remains elite-drive."
+  - "The primary local application container identity is exactly elite-drive."
+  - "The accepted Mongo supporting container identity remains exactly elite-drive-mongo and its persistent data volume remains elite-drive-mongo-data."
+  - "No mongo-init/helper/bootstrap/worker container is introduced."
+  - "m3-repoworker is not used, referenced, invoked, cloned, mounted, depended on, or treated as an execution/sandbox/worker layer."
+  - "Execution occurs directly through Agent Runtime against /Users/tienphat/Developer/elite-drive and Docker/OrbStack."
+  - "No /Users/tienphat/Developer/.agent-scratch worktree or execution copy is used for this task."
+  - "No secret is copied into the image or committed to the repository."
+  - "No explicit --platform/buildx/cross-architecture publication behavior is added in this local-container task."
+  - "TASK-0004 production durability semantics remain intact; production still requires durable Cloudinary configuration."
+  - "No Cloud Run, Cloud Build, Artifact Registry, deployment pipeline, release promotion, frontend containerization, Kubernetes, Terraform, or alternate orchestrator is introduced."
+  - "main remains 89e298c5268704d0d9fdeb9f574c6d896aaa35ab and branch topology remains exactly {dev, main}."
+
+forbidden_changes:
+  - "Do not use or reference m3-repoworker in code, documentation, scripts, execution, or architecture."
+  - "Do not use /Users/tienphat/Developer/.agent-scratch."
+  - "Do not add a worker repository, worker service, sandbox framework, local execution daemon, Docker management abstraction, Makefile framework, task runner framework, or deployment DSL."
+  - "Do not add another Compose file when canonical root compose.yaml can express the required topology."
+  - "Do not add a frontend container."
+  - "Do not add Cloud Run, Cloud Build, Artifact Registry, registry push logic, GitHub Actions deployment, Terraform, Kubernetes, Helm, or provider deployment configuration."
+  - "Do not force linux/amd64, linux/arm64, multi-platform manifests, buildx builders, or emulation in this task."
+  - "Do not weaken TASK-0004 production Cloudinary fail-closed behavior to make local container startup easier."
+  - "Do not change booking, auth, payment, upload business behavior, Prisma schema, or public API contracts for containerization."
+  - "Do not run host-wide docker system prune, docker volume prune, docker network prune, or equivalent destructive cleanup."
+  - "Do not merge, rebase, force-push, reconcile dev/main divergence, or mutate main."
+
+gap_policy:
+  local_auto_fix: true
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: forbidden
+  public_contract_change: forbidden
+  blocking_gap_behavior: BLOCKED
+
+structure_policy:
+  expected_new_files:
+    - server/Dockerfile
+    - server/.dockerignore
+    - .agent/tasks/TASK-0005/report.yaml
+  unlisted_new_files:
+    allowed: false
+    max: 0
+    within: []
+    purpose: ""
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+continuation_policy:
+  mode: MANUAL
+  stop_conditions:
+    - BLOCKED
+    - STALE_STATE
+    - AUTHORITY_REQUIRED
+    - CURRENT_PHASE_CAPABILITY_UNAVAILABLE
+    - REVIEW_REQUIRED
+    - USER_STOP
+
+capability_requirements:
+  EXECUTION:
+    - exact_remote_ref_read
+    - repository_content_read
+    - repository_content_write
+    - agent_runtime_terminal_exec
+    - local_docker_cli
+    - docker_compose_v2
+    - orbstack_docker_context
+    - github_actions_run_read
+    - non_force_git_push
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Elite Drive has one canonical local application container identity."
+    evidence_required: "docker compose config resolves project elite-drive and app container elite-drive; clean running inventory contains exactly elite-drive and elite-drive-mongo for the project and no helper/worker/init container."
+  - id: AC-2
+    requirement: "The backend image is reproducible from repository inputs without embedding local secrets or garbage."
+    evidence_required: "Fresh local image build exits 0 using the canonical lockfile/build contract; .dockerignore excludes local secrets/generated directories; image inspection/history and build context evidence reveal no committed or copied .env secret material."
+  - id: AC-3
+    requirement: "The application container uses the accepted Compose database service correctly."
+    evidence_required: "Container configuration uses service-network database addressing rather than localhost; Mongo reaches accepted replica-set readiness and the app starts without changing Prisma schema or application database logic."
+  - id: AC-4
+    requirement: "Containerized backend is live and database-ready."
+    evidence_required: "Host smoke checks against running canonical project return success for /health/live and /health/ready, with ready response proving database=ok."
+  - id: AC-5
+    requirement: "Local lifecycle is clean and restart-safe."
+    evidence_required: "Controlled app restart returns to liveness/readiness; normal compose down removes elite-drive, elite-drive-mongo, and the project network while preserving elite-drive-mongo-data; no task-owned helper/orphan container or network remains."
+  - id: AC-6
+    requirement: "Local execution path remains direct and minimal."
+    evidence_required: "Executor report proves Agent Runtime operated directly in /Users/tienphat/Developer/elite-drive; no .agent-scratch or m3-repoworker path/resource was used or created."
+  - id: AC-7
+    requirement: "Current operator-facing local environment documentation matches canonical Compose truth."
+    evidence_required: "server/.env.example no longer references docker/mongodb/docker-compose.yml and accurately describes root compose.yaml/local Mongo behavior without weakening production Cloudinary requirements."
+  - id: AC-8
+    requirement: "Existing backend quality gates remain green."
+    evidence_required: "Required local backend verification passes and Backend CI triggered by exact implementation commit completes conclusion=success with all required quality, environment, Mongo integration, audit, cleanup, and build steps successful."
+  - id: AC-9
+    requirement: "Publication remains bounded."
+    evidence_required: "Exactly one implementation commit is published to dev; implementation diff contains only authorized Docker/Compose/environment-doc surface; report is a separate report-only child; main is unchanged and topology remains exactly {dev, main}."
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Refresh remote refs; require exact TASK-0005 handoff base, accepted TASK-0004 review, main unchanged, topology exactly {dev, main}; verify local /Users/tienphat/Developer/elite-drive is on dev, at exact base, and clean before mutation."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Verify actual Agent Runtime terminal, Docker CLI, Docker Compose v2, and OrbStack Docker context; verify no execution dependency on m3-repoworker or .agent-scratch."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Re-resolve package/runtime/health/Compose contracts and implement the smallest Dockerfile/.dockerignore/root-Compose correction without application behavior changes or explicit platform forcing."
+      required: true
+    - id: CHECK-4
+      command_or_check: "Build the backend image locally through OrbStack using host/default platform; require exit 0 and inspect final image metadata/history/context hygiene for accidental local secret or garbage inclusion."
+      required: true
+    - id: CHECK-5
+      command_or_check: "Start canonical project; require clean project inventory exactly {elite-drive, elite-drive-mongo}, accepted Mongo replica-set readiness, and successful host /health/live plus /health/ready database=ok smoke."
+      required: true
+    - id: CHECK-6
+      command_or_check: "Restart the elite-drive app container and require liveness/readiness to recover; exercise controlled stop/TERM and prove no duplicate/orphan app process/container appears."
+      required: true
+    - id: CHECK-7
+      command_or_check: "Run docker compose down; prove app/Mongo containers and project network are removed, elite-drive-mongo-data remains, and no task-owned Docker garbage remains. Do not run host-wide prune."
+      required: true
+    - id: CHECK-8
+      command_or_check: "Run the normal backend verification surface required by current repository authority; require all relevant tests/build checks pass and exact implementation diff remains within authorized Docker/Compose/environment-doc surface."
+      required: true
+    - id: CHECK-9
+      command_or_check: "Publish exactly one implementation commit to dev non-force; identify Backend CI run with head_sha exactly equal to implementation SHA and require completed conclusion=success with every required gate successful."
+      required: true
+    - id: CHECK-10
+      command_or_check: "Publish canonical report-only child; refresh refs and verify main unchanged, topology exactly {dev, main}, local worktree clean, no task-owned Docker resources left running, and no .agent-scratch/m3-repoworker usage."
+      required: true
+  authoritative_verification:
+    required: true
+    mechanism: "Direct local OrbStack lifecycle evidence plus GitHub Actions Backend CI run triggered by the exact implementation commit"
+    expected_signal: "Local canonical two-container topology and health/readiness/restart/cleanup all pass; exact implementation Backend CI completes conclusion=success."
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+release_authority:
+  create_version_tag: false
+  mutate_repository_metadata: false
+  publish_release: false
+
+blocking_decisions: []
+execution_ready: true
