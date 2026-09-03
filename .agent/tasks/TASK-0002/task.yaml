@@ -1,0 +1,184 @@
+protocol_version: 3
+
+task_id: TASK-0002
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: accepted_task_follow_up
+  task_id: TASK-0001
+  gap_id: GAP-001
+
+architect_binding:
+  target_repository: phatnguyen03022001/elite-drive
+
+target:
+  repository: phatnguyen03022001/elite-drive
+  branch:
+    name: dev
+    role: integration
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "76f2d3877d1698f91eb5a6117e2301ed49480379"
+
+execution_skills:
+  required:
+    - executor
+    - simplicity
+    - verification
+  recommended:
+    - reliability
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+authority_sources:
+  - source: ".agent/tasks/TASK-0001/review.yaml@b0ae72a9da16c708471e9be6564159a1287e7a5e"
+    role: "Accepted Architect disposition requiring follow-up for pre-existing time-sensitive CustomerBookingService tests before later phases rely on a full backend-suite green gate."
+    precedence: 1
+  - source: "server/src/modules/customer/customer-booking.service.spec.ts@b0ae72a9da16c708471e9be6564159a1287e7a5e"
+    role: "Exact failing test fixture: three booking cases use fixed 2026-09-01 through 2026-09-03 dates."
+    precedence: 2
+  - source: "server/src/modules/customer/customer-booking.service.ts@b0ae72a9da16c708471e9be6564159a1287e7a5e"
+    role: "Production booking behavior intentionally rejects start dates earlier than the current UTC day and is not defective evidence for this task."
+    precedence: 3
+  - source: "phatnguyen03022001/agent-skills@76f2d3877d1698f91eb5a6117e2301ed49480379"
+    role: "Pinned reusable execution, simplicity, verification, reliability, and task-governance authority."
+    precedence: 4
+
+structure_authority:
+  status: RESOLVED
+  source: "Existing Jest CustomerBookingService unit test file"
+  rationale: "The reproduced defect is test-clock nondeterminism. The smallest correction belongs entirely in the existing unit spec; no production clock abstraction or shared test framework is justified."
+
+objective: "Make the three CustomerBookingService booking tests time-deterministic so the backend unit suite remains green as wall-clock time advances, without changing production booking semantics or adding a clock abstraction/framework."
+
+scope:
+  required_changes:
+    - "Modify only server/src/modules/customer/customer-booking.service.spec.ts for implementation behavior."
+    - "Freeze Jest/system time within this describe scope to a fixed instant before the existing September 1-3, 2026 fixture dates, and reliably restore real timers/system time after the tests. Prefer the smallest existing Jest-native mechanism."
+    - "Preserve the existing booking fixture dates and assertions unless a minimal local adjustment is required for correct timer setup/cleanup."
+    - "Do not modify CustomerBookingService production code, DTOs, Prisma schema, shared date utilities, global Jest configuration, or application behavior."
+    - "Run the focused CustomerBookingService spec and then the full backend unit suite; the previously failing three cases and full suite must pass."
+    - "Run the normal backend build gate if it is reasonably available from the exact execution candidate; record any unrelated external/environment blocker truthfully rather than expanding scope."
+    - "Publish one bounded implementation commit on dev followed by a separate .agent/tasks/TASK-0002/report.yaml report-only commit, then stop at Governing Architect review. Do not mutate main."
+  allowed_existing_files_or_components:
+    - server/src/modules/customer/customer-booking.service.spec.ts
+    - .agent/tasks/TASK-0002/task.yaml
+  expected_files_are_restrictive: true
+
+invariants:
+  - "Production booking semantics remain byte-for-byte unchanged."
+  - "No production clock abstraction, dependency injection seam, shared fake-time helper, or new dependency is introduced."
+  - "The tests do not depend on the operator's current calendar date after correction."
+  - "No Docker/Compose, Cloud Run, Cloud Build, Artifact Registry, frontend, upload, or branch-reconciliation behavior changes."
+  - "Branch topology remains exactly {dev, main}; main remains 89e298c5268704d0d9fdeb9f574c6d896aaa35ab."
+
+forbidden_changes:
+  - "Do not weaken or remove the production past-booking guard."
+  - "Do not replace fixed dates with Date.now()+N style wall-clock-relative fixtures when Jest fake/system time can make the existing fixture deterministic."
+  - "Do not introduce a Clock service, date library, global test setup, or framework-level abstraction for three local tests."
+  - "Do not modify compose.yaml or any TASK-0001 artifact."
+  - "Do not merge, rebase, force-push, reconcile dev/main divergence, or mutate main."
+
+gap_policy:
+  local_auto_fix: true
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: forbidden
+  public_contract_change: forbidden
+  blocking_gap_behavior: BLOCKED
+
+structure_policy:
+  expected_new_files:
+    - .agent/tasks/TASK-0002/report.yaml
+  unlisted_new_files:
+    allowed: false
+    max: 0
+    within: []
+    purpose: ""
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+continuation_policy:
+  mode: MANUAL
+  stop_conditions:
+    - BLOCKED
+    - STALE_STATE
+    - AUTHORITY_REQUIRED
+    - CURRENT_PHASE_CAPABILITY_UNAVAILABLE
+    - REVIEW_REQUIRED
+    - USER_STOP
+
+capability_requirements:
+  EXECUTION:
+    - exact_remote_ref_read
+    - repository_content_read
+    - repository_content_write
+    - deterministic_node_test_execution
+    - non_force_git_push
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "The CustomerBookingService spec is independent of the real current date."
+    evidence_required: "The spec explicitly controls system time to a fixed instant before the existing booking fixture and restores timer state after execution."
+  - id: AC-2
+    requirement: "The reproduced three failures are closed without production behavior changes."
+    evidence_required: "Focused CustomerBookingService tests all pass and server/src/modules/customer/customer-booking.service.ts is unchanged from exact base."
+  - id: AC-3
+    requirement: "The backend unit-suite signal is trustworthy again."
+    evidence_required: "Full backend unit suite passes with all tests green on the exact candidate."
+  - id: AC-4
+    requirement: "Correction stays minimal."
+    evidence_required: "Implementation diff changes only server/src/modules/customer/customer-booking.service.spec.ts; no dependency/config/shared-helper changes."
+  - id: AC-5
+    requirement: "Publication remains bounded."
+    evidence_required: "Implementation is one bounded child of exact base, report is a separate report-only child on dev, main remains unchanged, topology exactly {dev, main}."
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Refresh refs; require exact TASK-0002 handoff base, main unchanged, topology exactly {dev, main}; resolve TASK-0002 and pinned skills."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Reproduce the date-sensitive CustomerBookingService failures on the exact base/current date before mutation."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Apply the smallest Jest-native fixed-system-time correction in customer-booking.service.spec.ts and run the focused spec."
+      required: true
+    - id: CHECK-4
+      command_or_check: "Run the full backend unit suite and require all tests green."
+      required: true
+    - id: CHECK-5
+      command_or_check: "Run normal backend build gate if available; verify production service byte identity and exact implementation diff scope."
+      required: true
+    - id: CHECK-6
+      command_or_check: "Publish bounded implementation then report-only child on dev; refresh refs and verify main/topology unchanged."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: ""
+    expected_signal: ""
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+release_authority:
+  create_version_tag: false
+  mutate_repository_metadata: false
+  publish_release: false
+
+blocking_decisions: []
+execution_ready: true
