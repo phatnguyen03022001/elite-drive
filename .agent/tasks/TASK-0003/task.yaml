@@ -1,0 +1,192 @@
+protocol_version: 3
+
+task_id: TASK-0003
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: accepted_task_follow_up
+  task_id: TASK-0002
+  gap_id: GAP-001
+
+architect_binding:
+  target_repository: phatnguyen03022001/elite-drive
+
+target:
+  repository: phatnguyen03022001/elite-drive
+  branch:
+    name: dev
+    role: integration
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "76f2d3877d1698f91eb5a6117e2301ed49480379"
+
+execution_skills:
+  required:
+    - executor
+    - simplicity
+    - reliability
+    - verification
+  recommended: []
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+authority_sources:
+  - source: ".agent/tasks/TASK-0002/review.yaml@a74cb4bc7c11ea8ce567f647bd878c4f8594f446"
+    role: "Accepted review identifying Backend CI failure caused by stale references to the Compose entry point removed by TASK-0001."
+    precedence: 1
+  - source: "compose.yaml@dev"
+    role: "Canonical root Compose contract established by accepted TASK-0001."
+    precedence: 2
+  - source: ".github/workflows/backend-ci.yml@dev"
+    role: "Current Backend CI workflow containing stale docker/mongodb/docker-compose.yml and mongo-init references."
+    precedence: 3
+  - source: "GitHub Actions run 33718836214"
+    role: "Fresh exact-candidate evidence: typecheck, unit tests, and env-sync pass; Start MongoDB replica set and cleanup fail because the removed nested Compose file is still referenced."
+    precedence: 4
+  - source: "phatnguyen03022001/agent-skills@76f2d3877d1698f91eb5a6117e2301ed49480379"
+    role: "Pinned reusable execution, simplicity, reliability, verification, and task-governance authority."
+    precedence: 5
+
+structure_authority:
+  status: RESOLVED
+  source: "Existing .github/workflows/backend-ci.yml consuming accepted root compose.yaml"
+  rationale: "This is a path/contract alignment correction. The existing workflow and canonical Compose file are sufficient; no new CI framework, helper script, duplicate Compose file, or deployment abstraction is justified."
+
+objective: "Restore Backend CI after TASK-0001 by making the existing workflow consume the canonical repository-root compose.yaml and current single-service Mongo topology, while preserving the workflow's existing quality/integration/build intent and avoiding duplicate Docker configuration."
+
+scope:
+  required_changes:
+    - "Modify only .github/workflows/backend-ci.yml for implementation behavior."
+    - "Replace every runtime reference to docker/mongodb/docker-compose.yml with the canonical repository-root compose.yaml."
+    - "Remove stale mongo-init assumptions from readiness/logging/cleanup behavior; the canonical Compose project has only service mongo and performs idempotent replica-set initialization through its healthcheck."
+    - "Keep the existing CI-specific Compose project isolation if still useful, but do not duplicate or fork compose.yaml merely for GitHub Actions."
+    - "Add compose.yaml to the Backend CI push path filter so future canonical Mongo/Compose changes exercise the backend integration pipeline."
+    - "Preserve the existing unit, env-sync, real Mongo integration, dependency-audit, and build gates; do not weaken or skip them to obtain green status."
+    - "Before publication, statically verify the workflow has no remaining docker/mongodb/docker-compose.yml or mongo-init references and that its Compose commands resolve from repository root."
+    - "Publish one bounded implementation commit on dev. The implementation push must trigger the existing Backend CI workflow; use that exact run as authoritative verification and require completed conclusion=success before publishing the separate report-only commit."
+    - "Publish .agent/tasks/TASK-0003/report.yaml as a separate report-only child only after the authoritative workflow run passes, then stop at Governing Architect review. Do not mutate main."
+  allowed_existing_files_or_components:
+    - .github/workflows/backend-ci.yml
+    - compose.yaml
+    - .agent/tasks/TASK-0003/task.yaml
+  expected_files_are_restrictive: true
+
+invariants:
+  - "compose.yaml remains the single canonical Compose definition for Elite Drive local/CI Mongo topology; no second Compose file is introduced."
+  - "Backend CI retains its existing test, integration, audit, and build semantics except for the smallest corrections required to consume canonical Compose."
+  - "No application source, Prisma schema, package dependency, Docker image definition, Cloud Run, Cloud Build, Artifact Registry, frontend, or production deployment behavior changes."
+  - "No mongo-init/helper/bootstrap container is reintroduced."
+  - "The authoritative implementation-candidate Backend CI run completes successfully; a partial run or locally green subset is insufficient."
+  - "main remains 89e298c5268704d0d9fdeb9f574c6d896aaa35ab and branch topology remains exactly {dev, main}."
+
+forbidden_changes:
+  - "Do not restore docker/mongodb/docker-compose.yml."
+  - "Do not add a CI-only Compose duplicate, shell orchestration framework, service wrapper, Docker management abstraction, or new dependency."
+  - "Do not remove/disable the real Mongo integration tests, production dependency audit, or final build step."
+  - "Do not change application behavior to make CI pass."
+  - "Do not add deployment automation, Cloud Build, Cloud Run, Artifact Registry, or GitHub Actions deployment."
+  - "Do not merge, rebase, force-push, reconcile dev/main divergence, or mutate main."
+
+gap_policy:
+  local_auto_fix: true
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: forbidden
+  public_contract_change: forbidden
+  blocking_gap_behavior: BLOCKED
+
+structure_policy:
+  expected_new_files:
+    - .agent/tasks/TASK-0003/report.yaml
+  unlisted_new_files:
+    allowed: false
+    max: 0
+    within: []
+    purpose: ""
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+continuation_policy:
+  mode: MANUAL
+  stop_conditions:
+    - BLOCKED
+    - STALE_STATE
+    - AUTHORITY_REQUIRED
+    - CURRENT_PHASE_CAPABILITY_UNAVAILABLE
+    - REVIEW_REQUIRED
+    - USER_STOP
+
+capability_requirements:
+  EXECUTION:
+    - exact_remote_ref_read
+    - repository_content_read
+    - repository_content_write
+    - github_actions_run_read
+    - non_force_git_push
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Backend CI consumes the accepted canonical Compose contract."
+    evidence_required: "All workflow Compose start/readiness/log/cleanup commands reference repository-root compose.yaml; no docker/mongodb/docker-compose.yml or mongo-init reference remains."
+  - id: AC-2
+    requirement: "Future canonical Compose changes exercise Backend CI."
+    evidence_required: "compose.yaml is included in the workflow push paths without broad unrelated trigger expansion."
+  - id: AC-3
+    requirement: "Quality gates are preserved."
+    evidence_required: "Workflow still contains and executes typecheck/Prisma generation, unit tests, env synchronization tests, Mongo readiness, disposable integration schema, real Mongo integration tests, production dependency audit, and build."
+  - id: AC-4
+    requirement: "The actual GitHub-hosted pipeline is green on the exact implementation candidate."
+    evidence_required: "Backend CI run triggered by the implementation commit completes with conclusion=success; all required job steps complete successfully, including Mongo start/readiness, integration, audit, and build."
+  - id: AC-5
+    requirement: "Correction remains minimal and publication bounded."
+    evidence_required: "Implementation diff changes only .github/workflows/backend-ci.yml; report is a separate report-only child on dev; main remains unchanged and topology exactly {dev, main}."
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Refresh refs; require exact TASK-0003 handoff base, main unchanged, topology exactly {dev, main}; resolve accepted TASK-0002 review and pinned skills."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Re-resolve run 33718836214 and current workflow/compose files; reproduce the stale path contract from immutable evidence without mutating application code."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Apply the smallest workflow-only correction; verify no stale nested Compose path or mongo-init reference remains, compose.yaml is in trigger paths, and workflow gates are otherwise preserved."
+      required: true
+    - id: CHECK-4
+      command_or_check: "Publish exactly one implementation commit to dev non-force and identify the Backend CI run whose head_sha equals that implementation commit."
+      required: true
+    - id: CHECK-5
+      command_or_check: "Wait for the exact implementation-candidate Backend CI run to complete and require conclusion=success; inspect job steps and fail closed on any failed/skipped required quality/integration/audit/build gate."
+      required: true
+    - id: CHECK-6
+      command_or_check: "Verify final implementation diff scope, report-only child, refreshed refs, unchanged main, and exact {dev, main} topology."
+      required: true
+  authoritative_verification:
+    required: true
+    mechanism: "GitHub Actions Backend CI run triggered by the exact implementation commit"
+    expected_signal: "completed conclusion=success with required Backend quality steps successful"
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+release_authority:
+  create_version_tag: false
+  mutate_repository_metadata: false
+  publish_release: false
+
+blocking_decisions: []
+execution_ready: true
