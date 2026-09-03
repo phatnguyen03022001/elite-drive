@@ -1,0 +1,166 @@
+protocol_version: 3
+
+task_id: TASK-0004
+task_revision: 1
+report_revision: 1
+state: REPORTED
+
+task_source:
+  path: .agent/tasks/TASK-0004/task.yaml
+
+execution:
+  repository: phatnguyen03022001/elite-drive
+  branch:
+    name: dev
+    role: integration
+  authorized_base_head: "5b538f5f1f6d876628182efa5b6a8442fecefd51"
+  pre_execution_head: "5b538f5f1f6d876628182efa5b6a8442fecefd51"
+  final_execution_head: "3b64bddbf5330ab18b8ae31fc6700b8463ca015c"
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  authorized_revision: "76f2d3877d1698f91eb5a6117e2301ed49480379"
+  observed_revision: "76f2d3877d1698f91eb5a6117e2301ed49480379"
+
+execution_skills_used:
+  required:
+    - executor
+    - simplicity
+    - reliability
+    - verification
+  recommended: []
+  external:
+    - superpowers:using-superpowers
+    - superpowers:executing-plans
+    - superpowers:using-git-worktrees
+    - superpowers:systematic-debugging
+    - superpowers:test-driven-development
+    - superpowers:verification-before-completion
+
+pre_execution_checks:
+  protocol_version_supported: true
+  handoff_type_confirmed: true
+  task_at_base_confirmed: true
+  task_identity_confirmed: true
+  architect_binding_confirmed: true
+  repository_confirmed: true
+  branch_confirmed: true
+  base_head_confirmed: true
+  skill_revision_confirmed: true
+  required_execution_skills_available: true
+  structure_authority_confirmed: true
+  working_tree_clean: true
+
+capability_preflight:
+  phase: EXECUTION
+  required:
+    - exact_remote_ref_read
+    - repository_content_read
+    - repository_content_write
+    - agent_runtime_terminal_exec
+    - github_actions_run_read
+    - non_force_git_push
+  available:
+    - exact_remote_ref_read
+    - repository_content_read
+    - repository_content_write
+    - agent_runtime_terminal_exec
+    - github_actions_run_read
+    - non_force_git_push
+  missing: []
+  passed: true
+
+operational_timing:
+  started_at_utc: "2026-09-03T06:09:46Z"
+  terminal_decision_at_utc: "2026-09-03T06:23:39Z"
+
+authoritative_verification:
+  required: true
+  performed: true
+  result: PASS
+  evidence: "GitHub Actions Backend CI run 33722856419 was triggered by exact implementation commit 3b64bddbf5330ab18b8ae31fc6700b8463ca015c, completed with conclusion=success, and its Backend quality job completed every required install, typecheck, unit, environment-sync, Mongo integration, cleanup, production dependency audit, and build step successfully."
+
+local_hygiene:
+  result: PASS
+  run_root: ""
+  cleanup_performed: true
+  retained: []
+  evidence: "Execution remained in the operator-designated local checkout, created no scratch worktree or persistent temporary repository artifact, and used a uniquely named temporary MongoDB container with tmpfs only for local integration verification. The container was removed after the run and no run-owned Docker container remained."
+
+changed_files:
+  - path: server/src/config/env-contract.ts
+    summary: "Changed the existing startup environment contract from warning-only production Cloudinary disablement to deterministic fail-closed validation, while preserving existing provider credential validation and non-production behavior."
+    new_file: false
+    in_scope: true
+    structure_authorized: true
+  - path: server/src/config/env-contract.spec.ts
+    summary: "Added focused production durability contract coverage for disabled, missing, malformed, incomplete, complete, and non-production Cloudinary configurations."
+    new_file: false
+    in_scope: true
+    structure_authorized: true
+  - path: server/.env.example
+    summary: "Documented Cloudinary as mandatory for production and local filesystem upload settings as a local-development fallback rather than a production durability mechanism."
+    new_file: false
+    in_scope: true
+    structure_authorized: true
+
+commits_created:
+  - sha: "3b64bddbf5330ab18b8ae31fc6700b8463ca015c"
+    message: "fix(TASK-0004): fail closed on production upload fallback"
+
+pushed: true
+promoted_to_main: false
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PASS
+    evidence: "Focused red-green evidence proves production with CLOUDINARY_ENABLED=false or with the flag missing is rejected with the non-secret-bearing error 'CLOUDINARY_ENABLED must be true in production'. Malformed enablement is also rejected by the existing boolean contract."
+  - criterion_id: AC-2
+    status: PASS
+    evidence: "Focused tests prove each required Cloudinary credential is independently required when enabled, and a production configuration with CLOUDINARY_ENABLED=true plus CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET and existing required production keys validates successfully."
+  - criterion_id: AC-3
+    status: PASS
+    evidence: "Focused tests prove NODE_ENV=development with CLOUDINARY_ENABLED=false and blank Cloudinary credentials remains valid. Implementation commit 3b64bddbf5330ab18b8ae31fc6700b8463ca015c does not modify UploadService or CloudinaryUploadService."
+  - criterion_id: AC-4
+    status: PASS
+    evidence: "server/.env.example states Cloudinary is required in production, explicitly says disabled Cloudinary uses an ephemeral local fallback that is not a production durability mode, and scopes UPLOAD_DIR/UPLOAD_PUBLIC_BASE_URL to non-production local fallback."
+  - criterion_id: AC-5
+    status: PASS
+    evidence: "Backend CI run 33722856419 is a push-triggered run on dev with head_sha=3b64bddbf5330ab18b8ae31fc6700b8463ca015c and completed conclusion=success. Required Backend quality steps for typecheck, unit tests, environment synchronization, Mongo integration, cleanup, production dependency audit, and build all completed successfully."
+  - criterion_id: AC-6
+    status: PASS
+    evidence: "Implementation commit 3b64bddbf5330ab18b8ae31fc6700b8463ca015c is a direct child of exact base 5b538f5f1f6d876628182efa5b6a8442fecefd51 and changes exactly server/src/config/env-contract.ts, server/src/config/env-contract.spec.ts, and server/.env.example. Immediately before report materialization, canonical dev equaled the implementation commit, main remained 89e298c5268704d0d9fdeb9f574c6d896aaa35ab, and topology remained exactly {dev, main}. This report is the separate report-only child."
+
+executor_checks:
+  - check_id: CHECK-1
+    result: PASS
+    evidence: "Fresh pre-mutation local and canonical remote checks established local HEAD and origin/dev at exact base 5b538f5f1f6d876628182efa5b6a8442fecefd51, main at 89e298c5268704d0d9fdeb9f574c6d896aaa35ab, topology exactly {dev, main}, clean local worktree, TASK-0004 revision 1 APPROVED/execution_ready, TASK-0003 review revision 1 ACCEPTED, pinned agent-skills revision resolved, Agent Runtime terminal available, GitHub Actions readable, and non-force push capability available."
+  - check_id: CHECK-2
+    result: PASS
+    evidence: "The exact authorized environment contract, focused spec, AppModule startup binding, UploadService routing, CloudinaryUploadService, and environment example were re-resolved. The base contract accepted production CLOUDINARY_ENABLED=false and emitted only an ephemeral-local-storage warning while UploadService routed disabled Cloudinary uploads to local filesystem storage."
+  - check_id: CHECK-3
+    result: PASS
+    evidence: "The original focused environment-contract suite passed 10/10 on the exact base. After adding the production rejection tests before implementation, the focused suite failed exactly on production disabled and missing Cloudinary because validateEnvironment did not throw. The smallest correction was then applied inside authorized files only."
+  - check_id: CHECK-4
+    result: PASS
+    evidence: "Final focused environment-contract verification passed 17/17. Fresh final-tree backend verification also passed typecheck, 32/32 unit suites with 166/166 tests, 16/16 environment-sync tests, 7/7 Mongo integration suites with 26/26 tests, the production dependency audit reporting script with exit 0, and Nest build with exit 0. Exact implementation diff scope contained only the three authorized files and no untracked files."
+  - check_id: CHECK-5
+    result: PASS
+    evidence: "Exactly one implementation commit, 3b64bddbf5330ab18b8ae31fc6700b8463ca015c, was published to dev non-force after a fresh remote boundary check. GitHub Actions instantiated Backend CI run 33722856419 with head_sha exactly equal to that implementation commit."
+  - check_id: CHECK-6
+    result: PASS
+    evidence: "Backend CI run 33722856419 completed with conclusion=success. The single Backend quality job reported success for install, typecheck/Prisma generation, Tests, Environment synchronization tests, Start MongoDB replica set, Wait for MongoDB PRIMARY, Prepare disposable integration schema, Real Mongo integration tests, Cleanup MongoDB, Production dependency audit, Build, and post-job cleanup. No required gate failed or was skipped."
+  - check_id: CHECK-7
+    result: PASS
+    evidence: "Implementation commit scope is exactly the three authorized files and its parent is the exact authorized base. Immediately before report materialization, canonical refs were dev=3b64bddbf5330ab18b8ae31fc6700b8463ca015c and main=89e298c5268704d0d9fdeb9f574c6d896aaa35ab with topology exactly {dev, main}. The report artifact is the sole change in the report-only child."
+
+discovered_gaps: []
+structural_observations: []
+deviations_from_task: []
+blockers: []
+
+working_tree_after:
+  clean: true
+  summary: "The implementation worktree was clean after the implementation commit and push. The report publication step adds only this canonical report artifact as the separate child; no implementation or temporary artifact is carried with it."
+
+result: NEEDS_REVIEW
