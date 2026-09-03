@@ -1,0 +1,144 @@
+protocol_version: 3
+
+task_id: TASK-0003
+task_revision: 1
+report_revision: 1
+state: REPORTED
+
+task_source:
+  path: .agent/tasks/TASK-0003/task.yaml
+
+execution:
+  repository: phatnguyen03022001/elite-drive
+  branch:
+    name: dev
+    role: integration
+  authorized_base_head: "0cb42bacfbdc30efd5452ec30bd2ae2455a3db31"
+  pre_execution_head: "0cb42bacfbdc30efd5452ec30bd2ae2455a3db31"
+  final_execution_head: "3b2dd1d6d46dd1c646c7ca7d4990c03066aea47c"
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  authorized_revision: "76f2d3877d1698f91eb5a6117e2301ed49480379"
+  observed_revision: "76f2d3877d1698f91eb5a6117e2301ed49480379"
+
+execution_skills_used:
+  required:
+    - executor
+    - simplicity
+    - reliability
+    - verification
+  recommended: []
+  external:
+    - superpowers:using-superpowers
+    - superpowers:executing-plans
+    - superpowers:using-git-worktrees
+    - superpowers:systematic-debugging
+    - superpowers:test-driven-development
+    - superpowers:verification-before-completion
+
+pre_execution_checks:
+  protocol_version_supported: true
+  handoff_type_confirmed: true
+  task_at_base_confirmed: true
+  task_identity_confirmed: true
+  architect_binding_confirmed: true
+  repository_confirmed: true
+  branch_confirmed: true
+  base_head_confirmed: true
+  skill_revision_confirmed: true
+  required_execution_skills_available: true
+  structure_authority_confirmed: true
+  working_tree_clean: true
+
+capability_preflight:
+  phase: EXECUTION
+  required:
+    - exact_remote_ref_read
+    - repository_content_read
+    - repository_content_write
+    - github_actions_run_read
+    - non_force_git_push
+  available:
+    - exact_remote_ref_read
+    - repository_content_read
+    - repository_content_write
+    - github_actions_run_read
+    - non_force_git_push
+  missing: []
+  passed: true
+
+authoritative_verification:
+  required: true
+  performed: true
+  result: PASS
+  evidence: "GitHub Actions Backend CI run 33719786402 was triggered by exact implementation commit 3b2dd1d6d46dd1c646c7ca7d4990c03066aea47c, completed with conclusion=success, and its Backend quality job completed every required quality, Mongo integration, cleanup, production dependency audit, and build step successfully."
+
+local_hygiene:
+  result: PASS
+  run_root: ""
+  cleanup_performed: false
+  retained: []
+  evidence: "Execution used GitHub canonical remote APIs only; no local implementation checkout, temporary worktree, or run-owned local artifact was created."
+
+changed_files:
+  - path: .github/workflows/backend-ci.yml
+    summary: "Aligned Backend CI Compose commands to repository-root compose.yaml, removed the stale mongo-init logging assumption, and added compose.yaml to the existing dev push path filter while preserving all existing quality, integration, audit, and build gates."
+    new_file: false
+    in_scope: true
+    structure_authorized: true
+
+commits_created:
+  - sha: "3b2dd1d6d46dd1c646c7ca7d4990c03066aea47c"
+    message: "ci(TASK-0003): align backend CI with root compose"
+
+pushed: true
+promoted_to_main: false
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PASS
+    evidence: "Exact candidate workflow uses docker compose -f compose.yaml from repository-root working-directory overrides for start, readiness exec, timeout logs, and cleanup. No docker/mongodb/docker-compose.yml or mongo-init reference remains. Canonical compose.yaml contains only the mongo service and its idempotent replica-set healthcheck."
+  - criterion_id: AC-2
+    status: PASS
+    evidence: "The existing Backend CI dev push path filter now includes compose.yaml in addition to server/** and .github/workflows/backend-ci.yml, with no unrelated trigger expansion."
+  - criterion_id: AC-3
+    status: PASS
+    evidence: "The candidate workflow preserves install, typecheck/Prisma generation, unit tests, environment synchronization tests, Mongo start/readiness, disposable integration schema, real Mongo integration tests, cleanup, production dependency audit, and build. Run 33719786402 completed all of those required steps successfully."
+  - criterion_id: AC-4
+    status: PASS
+    evidence: "Backend CI run 33719786402 is a push-triggered run on dev with head_sha=3b2dd1d6d46dd1c646c7ca7d4990c03066aea47c and completed conclusion=success. Its Backend quality job reports success for Tests, Environment synchronization tests, Start MongoDB replica set, Wait for MongoDB PRIMARY, Prepare disposable integration schema, Real Mongo integration tests, Cleanup MongoDB, Production dependency audit, and Build."
+  - criterion_id: AC-5
+    status: PASS
+    evidence: "Implementation commit 3b2dd1d6d46dd1c646c7ca7d4990c03066aea47c is a direct child of exact base 0cb42bacfbdc30efd5452ec30bd2ae2455a3db31. GitHub commit evidence shows exactly one implementation file changed, .github/workflows/backend-ci.yml, with 5 additions and 4 deletions. Immediately before this report publication, dev was exactly the implementation candidate, main remained 89e298c5268704d0d9fdeb9f574c6d896aaa35ab, topology remained exactly {dev, main}, and this report is the separate report-only child."
+
+executor_checks:
+  - check_id: CHECK-1
+    result: PASS
+    evidence: "Fresh canonical refs established dev=0cb42bacfbdc30efd5452ec30bd2ae2455a3db31 and main=89e298c5268704d0d9fdeb9f574c6d896aaa35ab with topology exactly {dev, main} before mutation. TASK-0003 revision 1 was APPROVED and execution_ready at the exact base, accepted TASK-0002 review revision 1 was state=ACCEPTED at a74cb4bc7c11ea8ce567f647bd878c4f8594f446, and required agent-skills were resolved at pinned revision 76f2d3877d1698f91eb5a6117e2301ed49480379. GitHub remote read/write, Actions run read, and non-force branch publication semantics were available."
+  - check_id: CHECK-2
+    result: PASS
+    evidence: "Immutable Backend CI run 33718836214 on TASK-0002 candidate 68e71ea04aade589b48f23074bee07ceab13adde reproduced the stale contract: typecheck, 32/32 unit suites with 159/159 tests, and 16/16 env-sync tests passed; Start MongoDB failed because docker/mongodb/docker-compose.yml did not exist, cleanup failed for the same path, and later Mongo integration/audit/build gates were skipped. Root compose.yaml at the authorized base was present and the removed nested Compose file was absent."
+  - check_id: CHECK-3
+    result: PASS
+    evidence: "The implementation changed only .github/workflows/backend-ci.yml: added compose.yaml to push paths, replaced all four stale nested Compose file references with compose.yaml, and removed mongo-init from timeout logging. Exact candidate content contains no docker/mongodb/docker-compose.yml or mongo-init reference and preserves every existing quality/integration/audit/build gate."
+  - check_id: CHECK-4
+    result: PASS
+    evidence: "Exactly one implementation commit, 3b2dd1d6d46dd1c646c7ca7d4990c03066aea47c, was published to dev after a fresh exact-base ref check. GitHub Actions created Backend CI run 33719786402 with head_sha exactly equal to that implementation commit."
+  - check_id: CHECK-5
+    result: PASS
+    evidence: "Run 33719786402 completed with conclusion=success. The single Backend quality job completed successfully with no required gate skipped or failed: install, typecheck/Prisma generation, unit tests, env-sync, Mongo start, PRIMARY readiness, disposable integration schema, real Mongo integration tests, cleanup, production dependency audit, and build all report success."
+  - check_id: CHECK-6
+    result: PASS
+    evidence: "GitHub commit evidence for 3b2dd1d6d46dd1c646c7ca7d4990c03066aea47c shows only .github/workflows/backend-ci.yml changed. Immediately before report publication, canonical refs were dev=3b2dd1d6d46dd1c646c7ca7d4990c03066aea47c and main=89e298c5268704d0d9fdeb9f574c6d896aaa35ab with topology exactly {dev, main}. This canonical report is published as the separate report-only child."
+
+discovered_gaps: []
+structural_observations: []
+deviations_from_task: []
+blockers: []
+
+working_tree_after:
+  clean: true
+  summary: "GitHub-only execution created no local working tree mutation or temporary artifact; canonical remote implementation state was cleanly bounded before this separate report artifact was published."
+
+result: NEEDS_REVIEW
