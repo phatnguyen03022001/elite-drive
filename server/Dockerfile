@@ -3,7 +3,7 @@ FROM node:24-bookworm-slim AS base
 WORKDIR /app
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends openssl \
+    && apt-get install -y --no-install-recommends openssl tini \
     && rm -rf /var/lib/apt/lists/*
 
 FROM base AS build
@@ -33,4 +33,5 @@ USER node
 
 EXPOSE 8000
 
+ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["node", "dist/main"]
