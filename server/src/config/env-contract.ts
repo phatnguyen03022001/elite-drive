@@ -144,11 +144,6 @@ export function collectEnvironmentWarnings(env: EnvRecord): string[] {
     }
   }
 
-  if (production && !isEnabled(env, 'CLOUDINARY_ENABLED')) {
-    warnings.push(
-      'CLOUDINARY_ENABLED=false in production; uploads use ephemeral local filesystem storage',
-    );
-  }
   if (production && !isEnabled(env, 'BREVO_ENABLED')) {
     warnings.push(
       'BREVO_ENABLED=false in production; OTP email delivery is unavailable',
@@ -204,6 +199,10 @@ export function validateEnvironment(config: EnvRecord): EnvRecord {
     if (value && value !== 'true' && value !== 'false') {
       errors.push(`${key} must be either true or false`);
     }
+  }
+
+  if (production && !isEnabled(config, 'CLOUDINARY_ENABLED')) {
+    errors.push('CLOUDINARY_ENABLED must be true in production');
   }
 
   for (const key of ['PORT', 'APP_PORT']) {

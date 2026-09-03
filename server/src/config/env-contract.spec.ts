@@ -12,12 +12,66 @@ const validProduction = () => ({
   OTP_HASH_SECRET: 'a-production-otp-secret-that-is-not-a-placeholder',
   FRONTEND_URL: 'https://elite-drive-iota.vercel.app',
   PLATFORM_USER_ID: '000000000000000000000001',
-  CLOUDINARY_ENABLED: 'false',
+  CLOUDINARY_ENABLED: 'true',
+  CLOUDINARY_CLOUD_NAME: 'elite-drive-test',
+  CLOUDINARY_API_KEY: 'cloudinary-test-key',
+  CLOUDINARY_API_SECRET: 'cloudinary-test-secret',
   BREVO_ENABLED: 'false',
   MOMO_ENABLED: 'false',
 });
 
 describe('environment contract', () => {
+  it('rejects production startup when Cloudinary is disabled', () => {
+    expect(() =>
+      validateEnvironment({ ...validProduction(), CLOUDINARY_ENABLED: 'false' }),
+    ).toThrow('CLOUDINARY_ENABLED must be true in production');
+  });
+
+  it('rejects production startup when the Cloudinary flag is missing', () => {
+    const env = validProduction();
+    delete (env as Partial<typeof env>).CLOUDINARY_ENABLED;
+
+    expect(() => validateEnvironment(env)).toThrow(
+      'CLOUDINARY_ENABLED must be true in production',
+    );
+  });
+
+  it('rejects malformed Cloudinary enablement in production', () => {
+    expect(() =>
+      validateEnvironment({ ...validProduction(), CLOUDINARY_ENABLED: 'yes' }),
+    ).toThrow('CLOUDINARY_ENABLED must be either true or false');
+  });
+
+  it.each<[string, Record<string, string>]>([
+    ['CLOUDINARY_CLOUD_NAME', { CLOUDINARY_CLOUD_NAME: '' }],
+    ['CLOUDINARY_API_KEY', { CLOUDINARY_API_KEY: '' }],
+    ['CLOUDINARY_API_SECRET', { CLOUDINARY_API_SECRET: '' }],
+  ])(
+    'rejects production when required Cloudinary credential %s is missing',
+    (missingKey, override) => {
+      expect(() =>
+        validateEnvironment({ ...validProduction(), ...override }),
+      ).toThrow(`${missingKey} is required`);
+    },
+  );
+
+  it('accepts production with Cloudinary enabled and complete credentials', () => {
+    expect(() => validateEnvironment(validProduction())).not.toThrow();
+  });
+
+  it('preserves local filesystem fallback outside production', () => {
+    expect(() =>
+      validateEnvironment({
+        ...validProduction(),
+        NODE_ENV: 'development',
+        CLOUDINARY_ENABLED: 'false',
+        CLOUDINARY_CLOUD_NAME: '',
+        CLOUDINARY_API_KEY: '',
+        CLOUDINARY_API_SECRET: '',
+      }),
+    ).not.toThrow();
+  });
+
   it('fails production startup when a required core key is missing', () => {
     const env = validProduction();
     delete (env as Partial<typeof env>).JWT_SECRET;
@@ -42,7 +96,6 @@ describe('environment contract', () => {
   });
 
   it.each<[string, Record<string, string>, string]>([
-    ['Cloudinary', { CLOUDINARY_ENABLED: 'true' }, 'CLOUDINARY_CLOUD_NAME'],
     ['Brevo', { BREVO_ENABLED: 'true' }, 'BREVO_API_KEY'],
     ['MoMo', { MOMO_ENABLED: 'true' }, 'MOMO_PARTNER_CODE'],
   ])('fails when %s is enabled without required configuration', (_name, override, missingKey) => {
@@ -54,7 +107,10 @@ describe('environment contract', () => {
   it('warns when disabled provider credentials are present', () => {
     const warnings = collectEnvironmentWarnings({
       ...validProduction(),
+      CLOUDINARY_ENABLED: 'false',
+      CLOUDINARY_CLOUD_NAME: '',
       CLOUDINARY_API_KEY: 'configured-secret-value',
+      CLOUDINARY_API_SECRET: '',
     });
 
     expect(warnings).toContain(
